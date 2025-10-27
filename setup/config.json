@@ -1,0 +1,61 @@
+{
+  "team": {
+    "name": "Denham Venom",
+    "number": "8044"
+  },
+  "spreadsheets": {
+    "partsDirectory": {
+      "name": "Denham Venom Parts Directory",
+      "sheets": [
+        {
+          "name": "Parts",
+          "headers": ["Part ID", "Part Name", "Category", "Quantity Per", "Cost", "Supplier", "Order Link", "Location/Bin", "Notes", "Status"],
+          "protectedColumns": ["Part ID", "Part Name", "Category"],
+          "formulas": {
+            "Status": "Active"
+          }
+        },
+        {
+          "name": "Categories",
+          "headers": ["Category Name", "Code", "Sort Order"]
+        }
+      ]
+    },
+    "partsOrders": {
+      "name": "Denham Venom Parts Orders",
+      "sheets": [
+        {
+          "name": "Orders",
+          "headers": ["Order #", "Date", "Student Name", "Part ID", "Part Name", "Category", "Quantity", "Priority", "Unit Cost", "Total Cost", "Status", "Notes", "Monday ID"],
+          "formulas": {
+            "Date": "=TODAY()",
+            "Part Name": "=IFERROR(VLOOKUP(D:D,'[Parts Directory]Parts'!A:B,2,FALSE),\"\")",
+            "Category": "=IFERROR(VLOOKUP(D:D,'[Parts Directory]Parts'!A:C,3,FALSE),\"\")",
+            "Unit Cost": "=IFERROR(VLOOKUP(D:D,'[Parts Directory]Parts'!A:E,5,FALSE),0)",
+            "Total Cost": "=G:G*I:I"
+          }
+        },
+        {
+          "name": "Students",
+          "headers": ["Name", "Active"]
+        },
+        {
+          "name": "New Parts",
+          "headers": ["Date", "Student Name", "Part Name", "Category", "Estimated Cost", "Where to Buy", "Link", "Importance", "Status"]
+        }
+      ]
+    }
+  },
+  "categories": [
+    {"name": "Fasteners", "code": "FAST"},
+    {"name": "Electronics and Sensors", "code": "ELEC"},
+    {"name": "Raw Stock", "code": "STOCK"},
+    {"name": "Movement", "code": "MOVE"},
+    {"name": "Build Site Equipment", "code": "BSITE"},
+    {"name": "Pneumatics", "code": "PNEU"},
+    {"name": "Business, Outreach, Media", "code": "BUSI"},
+    {"name": "Machining Tools", "code": "MACH"},
+    {"name": "Safety Equipment", "code": "SAFE"},
+    {"name": "Wiring, Cables, Connectors", "code": "WIRE"}
+  ]
+}

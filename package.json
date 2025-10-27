@@ -1,0 +1,25 @@
+{
+  "name": "denham venom",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node setup/createSheets.js",
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "deploy": "clasp deploy",
+    "open": "clasp open --webapp",
+    "logs": "clasp logs --tail",
+    "watch": "clasp push --watch",
+    "init-data": "node setup/populateData.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["robotics", "parts", "inventory", "frc"],
+  "author": "Denham Venom Robotics",
+  "license": "ISC",
+  "description": "Parts ordering system for Denham Venom Robotics Team",
+  "dependencies": {
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0"
+  }
+}
