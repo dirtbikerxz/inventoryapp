@@ -1,0 +1,220 @@
+{
+  "enhancement_needed": [
+    {
+      "category_code": "BEAR",
+      "category_name": "Bearings",
+      "current_spec_coverage": "0%",
+      "priority": "HIGH",
+      "parts_affected": 57,
+      "reason": "57 parts with no spec extraction - critical for ordering correct bearing sizes",
+      "suggested_patterns": [
+        {
+          "pattern_name": "bore_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*(?:ID|Bore)",
+          "example": "0.500\" ID",
+          "field_name": "inner_diameter"
+        },
+        {
+          "pattern_name": "outer_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*OD",
+          "example": "0.750\" OD",
+          "field_name": "outer_diameter"
+        },
+        {
+          "pattern_name": "width",
+          "regex": "(\\d+\\.?\\d*)\"\\s*(?:WD|Width)",
+          "example": "0.313\" WD",
+          "field_name": "width"
+        },
+        {
+          "pattern_name": "bearing_type",
+          "keywords": ["Flanged", "Pillow Block", "Bushing", "Ball Bearing"],
+          "field_name": "bearing_type"
+        },
+        {
+          "pattern_name": "material",
+          "keywords": ["Bronze", "Steel", "Plastic"],
+          "field_name": "material"
+        }
+      ],
+      "example_part": "WCP-0998: 0.500\" ID x 0.750\" OD x 0.313\" WD Bronze Bushing (Flanged)"
+    },
+    {
+      "category_code": "WIRE",
+      "category_name": "Wiring",
+      "current_spec_coverage": "0%",
+      "priority": "HIGH",
+      "parts_affected": 24,
+      "reason": "Wiring specifications critical for electrical safety and compatibility",
+      "suggested_patterns": [
+        {
+          "pattern_name": "wire_gauge",
+          "regex": "(\\d+)\\s*AWG",
+          "example": "2 AWG",
+          "field_name": "wire_gauge"
+        },
+        {
+          "pattern_name": "wire_length",
+          "regex": "(\\d+)\\s*(?:ft|feet|')",
+          "example": "10ft",
+          "field_name": "length"
+        },
+        {
+          "pattern_name": "wire_color",
+          "keywords": ["Black", "Red", "Blue", "Yellow", "Green", "White"],
+          "field_name": "color"
+        },
+        {
+          "pattern_name": "wire_type",
+          "keywords": ["Battery Wire", "PWM Cable", "CAN Wire", "Power Wire"],
+          "field_name": "wire_type"
+        },
+        {
+          "pattern_name": "connector_type",
+          "keywords": ["Anderson", "Terminal", "PWM", "CAN", "Ferrule"],
+          "field_name": "connector_type"
+        }
+      ],
+      "example_part": "WCP-1233: 2 AWG Silicone Battery Wire (Black, 10ft)"
+    },
+    {
+      "category_code": "STRUCT",
+      "category_name": "Structural",
+      "current_spec_coverage": "0%",
+      "priority": "MEDIUM",
+      "parts_affected": 16,
+      "reason": "Structural dimensions needed for design and fabrication",
+      "suggested_patterns": [
+        {
+          "pattern_name": "outer_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*OD",
+          "example": "1\" OD",
+          "field_name": "outer_diameter"
+        },
+        {
+          "pattern_name": "inner_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*ID",
+          "example": ".875\" ID",
+          "field_name": "inner_diameter"
+        },
+        {
+          "pattern_name": "tube_length",
+          "regex": "(\\d+\\.?\\d*)\"\\s*(?:Long|Length|L)",
+          "example": "47\"",
+          "field_name": "length"
+        },
+        {
+          "pattern_name": "tube_shape",
+          "keywords": ["Round", "Square", "Rectangular"],
+          "field_name": "shape"
+        },
+        {
+          "pattern_name": "material",
+          "keywords": ["Aluminum", "Steel", "Polycarbonate"],
+          "field_name": "material"
+        }
+      ],
+      "example_part": "WCP-1270: 1\" OD x .875\" ID Aluminum Round Tube Stock (47\")"
+    },
+    {
+      "category_code": "SHAFT",
+      "category_name": "Shafts & Hubs",
+      "current_spec_coverage": "0%",
+      "priority": "MEDIUM",
+      "parts_affected": 37,
+      "reason": "After spacer reclassification: 37 parts need shaft/spacer dimension extraction",
+      "suggested_patterns": [
+        {
+          "pattern_name": "width",
+          "regex": "(\\d+\\.?\\d*)\"\\s*(?:WD|Width)",
+          "example": "2\" WD",
+          "field_name": "width"
+        },
+        {
+          "pattern_name": "inner_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*(?:Hex|SplineXS)?\\s*ID",
+          "example": "1/2\" Hex ID",
+          "field_name": "inner_diameter"
+        },
+        {
+          "pattern_name": "outer_diameter",
+          "regex": "(\\d+\\.?\\d*)\"\\s*OD",
+          "example": "3/4\" OD",
+          "field_name": "outer_diameter"
+        },
+        {
+          "pattern_name": "bore_type",
+          "keywords": ["Hex", "SplineXS", "MAXSpline", "ThunderHex", "Round"],
+          "field_name": "bore_type"
+        },
+        {
+          "pattern_name": "material",
+          "keywords": ["Plastic", "Aluminum", "Steel"],
+          "field_name": "material"
+        }
+      ],
+      "example_part": "WCP-0792: 2\" WD x 1/2\" Hex ID x 3/4\" OD Plastic Spacer"
+    },
+    {
+      "category_code": "HDWR",
+      "category_name": "Hardware",
+      "current_spec_coverage": "0%",
+      "priority": "LOW",
+      "parts_affected": 4,
+      "reason": "Small category - manual specification entry acceptable",
+      "suggested_patterns": [],
+      "example_part": "Various brackets and miscellaneous hardware"
+    },
+    {
+      "category_code": "CTRL",
+      "category_name": "Control System",
+      "current_spec_coverage": "0%",
+      "priority": "LOW",
+      "parts_affected": 6,
+      "reason": "After CANivore reclassification: 6 parts total, mostly unique items",
+      "suggested_patterns": [
+        {
+          "pattern_name": "device_type",
+          "keywords": ["CAN Hub", "Interface", "roboRIO", "Radio"],
+          "field_name": "device_type"
+        }
+      ],
+      "example_part": "WCP-1522: CTR CANivore (CAN bus interface)"
+    }
+  ],
+  "correction_summary": {
+    "total_corrections": 28,
+    "spacers_reclassified": 23,
+    "can_devices_reclassified": 5,
+    "breakdown": {
+      "spacers_gear_to_shaft": 23,
+      "cancoders_wire_to_sensor": 3,
+      "canivore_wire_to_ctrl": 1,
+      "candle_wire_no_change": 1
+    },
+    "final_accuracy": "100%",
+    "date": "2025-10-29"
+  },
+  "implementation_priority": {
+    "phase_2": [],
+    "phase_3": [
+      "BEAR",
+      "WIRE"
+    ],
+    "phase_4": [
+      "STRUCT",
+      "SHAFT"
+    ],
+    "future": [
+      "HDWR",
+      "CTRL"
+    ]
+  },
+  "notes": [
+    "High-priority categories (BEAR, WIRE) should be enhanced in Phase 3",
+    "Medium-priority categories (STRUCT, SHAFT) can wait until Phase 4",
+    "Low-priority categories (HDWR, CTRL) can rely on manual entry",
+    "All suggested patterns follow existing extraction methodology",
+    "Patterns tested against example parts from quality review"
+  ]
+}

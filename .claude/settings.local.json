@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node setup/generateSampleParts.js:*)"
+      "Bash(node setup/generateSampleParts.js:*)",
+      "Bash(wc:*)",
+      "Bash(python3:*)",
+      "Bash(node /mnt/c/Users/frc80/OneDrive/Documents/DVOM/setup/buildSpecConfig.js:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(jq:*)",
+      "Bash(node:*)",
+      "Bash(cat:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-10-29T18:58:34.205Z",
+  "totalParts": 588,
+  "success": true,
+  "timeTaken": "11.62",
+  "error": null,
+  "categories": [
+    {
+      "code": "BEAR",
+      "name": "Bearings",
+      "count": 49,
+      "firstPartID": "BEAR-001",
+      "lastPartID": "BEAR-049"
+    },
+    {
+      "code": "BELT",
+      "name": "Belts and Pulleys",
+      "count": 81,
+      "firstPartID": "BELT-001",
+      "lastPartID": "BELT-081"
+    },
+    {
+      "code": "BOLT",
+      "name": "Bolts and Screws",
+      "count": 38,
+      "firstPartID": "BOLT-001",
+      "lastPartID": "BOLT-038"
+    },
+    {
+      "code": "CHAIN",
+      "name": "Chain and Sprockets",
+      "count": 63,
+      "firstPartID": "CHAIN-001",
+      "lastPartID": "CHAIN-063"
+    },
+    {
+      "code": "CTRL",
+      "name": "Motor Controllers",
+      "count": 1,
+      "firstPartID": "CTRL-001",
+      "lastPartID": "CTRL-001"
+    },
+    {
+      "code": "GEAR",
+      "name": "Gears and Sprockets",
+      "count": 266,
+      "firstPartID": "GEAR-001",
+      "lastPartID": "GEAR-266"
+    },
+    {
+      "code": "HDWR",
+      "name": "Hardware and Fasteners",
+      "count": 14,
+      "firstPartID": "HDWR-001",
+      "lastPartID": "HDWR-014"
+    },
+    {
+      "code": "MACH",
+      "name": "Machining Tools",
+      "count": 2,
+      "firstPartID": "MACH-001",
+      "lastPartID": "MACH-002"
+    },
+    {
+      "code": "SENSOR",
+      "name": "Sensors",
+      "count": 5,
+      "firstPartID": "SENSOR-001",
+      "lastPartID": "SENSOR-005"
+    },
+    {
+      "code": "SHAFT",
+      "name": "Shafts and Spacers",
+      "count": 37,
+      "firstPartID": "SHAFT-001",
+      "lastPartID": "SHAFT-037"
+    },
+    {
+      "code": "STOCK",
+      "name": "Raw Stock",
+      "count": 15,
+      "firstPartID": "STOCK-001",
+      "lastPartID": "STOCK-015"
+    },
+    {
+      "code": "WIRE",
+      "name": "Wiring and Cables",
+      "count": 17,
+      "firstPartID": "WIRE-001",
+      "lastPartID": "WIRE-017"
+    }
+  ],
+  "spreadsheet": {
+    "id": "1ttk2hlid22rtA6zcNvN9RrvG24qi-XfiUcdcumafaKo",
+    "sheet": "Parts",
+    "range": "A2:R589"
+  }
+}

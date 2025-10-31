@@ -1,15 +1,9 @@
 /**
  * Denham Venom Parts Management System
- * Team 8044 - Main Server-Side Code (COMPLETE MERGED VERSION)
+ * Team 8044 - Main Server-Side Code
  *
  * This Google Apps Script handles all server-side operations for the parts
  * management system including inventory queries, order processing, and part additions.
- *
- * UPDATED TO SUPPORT:
- * - 3-level hierarchy: Category → Subcategory → Type
- * - 5 specification fields (Spec 1-5)
- * - New 20-column Parts sheet structure
- * - New 9-column Spec Config structure
  */
 
 // Configuration - Update these with your actual spreadsheet IDs
@@ -120,63 +114,14 @@ function getSubcategories(category) {
 }
 
 /**
- * Gets unique types for a given category and subcategory (NEW FUNCTION)
- * @param {string} category - The category to filter by
- * @param {string} subcategory - The subcategory to filter by
- * @returns {Array<string>} Sorted array of type names
- */
-function getTypes(category, subcategory) {
-  try {
-    if (!category || !subcategory) {
-      return [];
-    }
-
-    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
-    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
-
-    if (!sheet) {
-      throw new Error('Parts sheet not found');
-    }
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const categoryCol = headers.indexOf('Category');
-    const subcategoryCol = headers.indexOf('Subcategory');
-    const typeCol = headers.indexOf('Type');
-
-    if (categoryCol === -1 || subcategoryCol === -1 || typeCol === -1) {
-      throw new Error('Required columns not found');
-    }
-
-    const types = new Set();
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][categoryCol] &&
-          data[i][categoryCol].toString().trim() === category &&
-          data[i][subcategoryCol] &&
-          data[i][subcategoryCol].toString().trim() === subcategory &&
-          data[i][typeCol]) {
-        types.add(data[i][typeCol].toString().trim());
-      }
-    }
-
-    return Array.from(types).sort();
-  } catch (error) {
-    Logger.log('Error in getTypes: ' + error.toString());
-    throw new Error('Failed to retrieve types: ' + error.message);
-  }
-}
-
-/**
- * Gets parts based on category, subcategory, type, and optional spec filters (UPDATED)
+ * Gets parts based on category, subcategory, and optional spec filters
  * @param {Object} filters - Object containing filter criteria
  * @param {string} filters.category - The category to filter by
  * @param {string} filters.subcategory - The subcategory to filter by
- * @param {string} filters.type - The type to filter by (NEW)
  * @param {string} filters.spec1 - Optional spec1 filter value
  * @param {string} filters.spec2 - Optional spec2 filter value
  * @param {string} filters.spec3 - Optional spec3 filter value
  * @param {string} filters.spec4 - Optional spec4 filter value
- * @param {string} filters.spec5 - Optional spec5 filter value (NEW)
  * @returns {Array<Object>} Array of matching parts with their details
  */
 function getPartsByFilters(filters) {
@@ -195,24 +140,21 @@ function getPartsByFilters(filters) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
 
-    // Get column indices for 20-column structure
+    // Get column indices
     const colIndices = {
       partID: headers.indexOf('Part ID'),
-      partName: headers.indexOf('Part Name'),
       category: headers.indexOf('Category'),
       subcategory: headers.indexOf('Subcategory'),
-      type: headers.indexOf('Type'),  // NEW
+      partName: headers.indexOf('Part Name'),
       productCode: headers.indexOf('Product Code'),
       spec1: headers.indexOf('Spec 1'),
       spec2: headers.indexOf('Spec 2'),
       spec3: headers.indexOf('Spec 3'),
       spec4: headers.indexOf('Spec 4'),
-      spec5: headers.indexOf('Spec 5'),  // NEW
       quantityPer: headers.indexOf('Quantity Per'),
       cost: headers.indexOf('Cost'),
-      supplier: headers.indexOf('Supplier'),
-      orderLink: headers.indexOf('Order Link'),
-      location: headers.indexOf('Location/Bin')
+      location: headers.indexOf('Location/Bin'),
+      supplier: headers.indexOf('Supplier')
     };
 
     // Validate required columns exist
@@ -226,18 +168,11 @@ function getPartsByFilters(filters) {
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
 
-      // Match category, subcategory, and type
+      // Match category and subcategory
       const matchesCategory = row[colIndices.category] &&
                              row[colIndices.category].toString().trim() === filters.category;
       const matchesSubcategory = row[colIndices.subcategory] &&
                                  row[colIndices.subcategory].toString().trim() === filters.subcategory;
-
-      // Type filtering (optional - if not provided, matches all)
-      let matchesType = true;
-      if (filters.type && filters.type.trim()) {
-        matchesType = row[colIndices.type] &&
-                     row[colIndices.type].toString().trim() === filters.type;
-      }
 
       // Match individual spec filters if provided (empty string means "All")
       let matchesSpec1 = true;
@@ -264,32 +199,21 @@ function getPartsByFilters(filters) {
         matchesSpec4 = rowSpec4 === filters.spec4;
       }
 
-      // NEW: Spec 5 filtering
-      let matchesSpec5 = true;
-      if (filters.spec5 && filters.spec5.trim()) {
-        const rowSpec5 = row[colIndices.spec5] ? row[colIndices.spec5].toString().trim() : '';
-        matchesSpec5 = rowSpec5 === filters.spec5;
-      }
-
-      if (matchesCategory && matchesSubcategory && matchesType &&
-          matchesSpec1 && matchesSpec2 && matchesSpec3 && matchesSpec4 && matchesSpec5) {
+      if (matchesCategory && matchesSubcategory && matchesSpec1 && matchesSpec2 && matchesSpec3 && matchesSpec4) {
         parts.push({
           partID: row[colIndices.partID] || '',
-          partName: row[colIndices.partName] || '',
           category: row[colIndices.category] || '',
           subcategory: row[colIndices.subcategory] || '',
-          type: row[colIndices.type] || '',  // NEW
+          partName: row[colIndices.partName] || '',
           productCode: row[colIndices.productCode] || '',
           spec1: row[colIndices.spec1] || '',
           spec2: row[colIndices.spec2] || '',
           spec3: row[colIndices.spec3] || '',
           spec4: row[colIndices.spec4] || '',
-          spec5: row[colIndices.spec5] || '',  // NEW
           quantityPer: row[colIndices.quantityPer] || '',
           unitCost: parseFloat(row[colIndices.cost]) || 0,
-          supplier: row[colIndices.supplier] || '',
-          orderLink: row[colIndices.orderLink] || '',
-          location: row[colIndices.location] || ''
+          location: row[colIndices.location] || '',
+          supplier: row[colIndices.supplier] || ''
         });
       }
     }
@@ -302,7 +226,7 @@ function getPartsByFilters(filters) {
 }
 
 /**
- * Gets parts by product code (case-insensitive exact match) (UPDATED)
+ * Gets parts by product code (case-insensitive exact match)
  * @param {string} productCode - The product code to search for
  * @returns {Array<Object>} Array of matching parts
  */
@@ -323,21 +247,18 @@ function getPartsByProductCode(productCode) {
     // Get column indices (same as getPartsByFilters)
     const colIndices = {
       partID: headers.indexOf('Part ID'),
-      partName: headers.indexOf('Part Name'),
       category: headers.indexOf('Category'),
       subcategory: headers.indexOf('Subcategory'),
-      type: headers.indexOf('Type'),  // NEW
+      partName: headers.indexOf('Part Name'),
       productCode: headers.indexOf('Product Code'),
       spec1: headers.indexOf('Spec 1'),
       spec2: headers.indexOf('Spec 2'),
       spec3: headers.indexOf('Spec 3'),
       spec4: headers.indexOf('Spec 4'),
-      spec5: headers.indexOf('Spec 5'),  // NEW
       quantityPer: headers.indexOf('Quantity Per'),
       cost: headers.indexOf('Cost'),
-      supplier: headers.indexOf('Supplier'),
-      orderLink: headers.indexOf('Order Link'),
-      location: headers.indexOf('Location/Bin')
+      location: headers.indexOf('Location/Bin'),
+      supplier: headers.indexOf('Supplier')
     };
 
     const parts = [];
@@ -350,21 +271,18 @@ function getPartsByProductCode(productCode) {
       if (rowProductCode === searchCode) {
         parts.push({
           partID: row[colIndices.partID] || '',
-          partName: row[colIndices.partName] || '',
           category: row[colIndices.category] || '',
           subcategory: row[colIndices.subcategory] || '',
-          type: row[colIndices.type] || '',  // NEW
+          partName: row[colIndices.partName] || '',
           productCode: row[colIndices.productCode] || '',
           spec1: row[colIndices.spec1] || '',
           spec2: row[colIndices.spec2] || '',
           spec3: row[colIndices.spec3] || '',
           spec4: row[colIndices.spec4] || '',
-          spec5: row[colIndices.spec5] || '',  // NEW
           quantityPer: row[colIndices.quantityPer] || '',
           unitCost: parseFloat(row[colIndices.cost]) || 0,
-          supplier: row[colIndices.supplier] || '',
-          orderLink: row[colIndices.orderLink] || '',
-          location: row[colIndices.location] || ''
+          location: row[colIndices.location] || '',
+          supplier: row[colIndices.supplier] || ''
         });
       }
     }
@@ -407,71 +325,6 @@ function getStudents() {
 }
 
 /**
- * Gets unique list of subteams
- * @returns {Array} Sorted array of subteam names
- */
-function getSubteams() {
-  try {
-    const ss = SpreadsheetApp.openById(CONFIG.PARTS_ORDERS_ID);
-    const sheet = ss.getSheetByName(CONFIG.STUDENTS_SHEET_NAME);
-
-    if (!sheet) {
-      throw new Error('Students sheet not found');
-    }
-
-    const data = sheet.getDataRange().getValues();
-    const subteams = new Set();
-
-    // Assuming column B (index 1) contains subteam
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][1]) {
-        subteams.add(data[i][1].toString().trim());
-      }
-    }
-
-    return Array.from(subteams).sort();
-  } catch (error) {
-    Logger.log('Error in getSubteams: ' + error.toString());
-    throw new Error('Failed to retrieve subteam list: ' + error.message);
-  }
-}
-
-/**
- * Gets students filtered by subteam
- * @param {string} subteam - The subteam to filter by
- * @returns {Array} Sorted array of student names
- */
-function getStudentsBySubteam(subteam) {
-  try {
-    if (!subteam) {
-      return [];
-    }
-
-    const ss = SpreadsheetApp.openById(CONFIG.PARTS_ORDERS_ID);
-    const sheet = ss.getSheetByName(CONFIG.STUDENTS_SHEET_NAME);
-
-    if (!sheet) {
-      throw new Error('Students sheet not found');
-    }
-
-    const data = sheet.getDataRange().getValues();
-    const students = [];
-
-    // Column A (index 0) = Name, Column B (index 1) = Subteam
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][1] && data[i][1].toString().trim() === subteam && data[i][0]) {
-        students.push(data[i][0].toString().trim());
-      }
-    }
-
-    return students.sort();
-  } catch (error) {
-    Logger.log('Error in getStudentsBySubteam: ' + error.toString());
-    throw new Error('Failed to retrieve students for subteam: ' + error.message);
-  }
-}
-
-/**
  * Submits a new parts order
  * @param {Object} orderData - Object containing order details
  * @returns {Object} Success status and order number
@@ -494,12 +347,11 @@ function submitOrder(orderData) {
     const timestamp = new Date();
     const totalCost = orderData.totalCost || 0;
     const priority = orderData.priority || 'Medium';
-    const justification = orderData.justification || '';
     const notes = orderData.notes || '';
 
     // Prepare rows for each item in the order
     // Columns: Order #, Date, Student Name, Part ID, Part Name, Category,
-    //          Quantity Requested, Priority, Justification, Unit Cost, Total Cost, Status, Notes, Monday ID
+    //          Quantity Requested, Priority, Unit Cost, Total Cost, Status, Notes, Monday ID
     const rows = [];
     for (const item of orderData.items) {
       rows.push([
@@ -511,7 +363,6 @@ function submitOrder(orderData) {
         item.category,
         parseInt(item.quantity) || 0,
         priority,
-        justification,
         parseFloat(item.unitCost) || 0,
         parseFloat(item.totalCost) || 0,
         'Pending',
@@ -1017,22 +868,21 @@ function getSpecifications(category, subcategory) {
 }
 
 /**
- * Gets spec configuration for a category/subcategory/type (UPDATED FOR NEW STRUCTURE)
- * Returns the labels for each spec field
+ * Gets spec configuration for a category/subcategory
+ * Returns the labels and requirements for each spec field
  * @param {string} category - The category name
  * @param {string} subcategory - The subcategory name
- * @param {string} type - The type name (NEW)
- * @returns {Object} Spec configuration object with labels
+ * @returns {Object} Spec configuration object with labels and requirements
  */
-function getSpecConfig(category, subcategory, type) {
+function getSpecConfig(category, subcategory) {
   try {
-    if (!category || !subcategory || !type) {
+    if (!category || !subcategory) {
       return null;
     }
 
     // Check cache first
     const cache = CacheService.getScriptCache();
-    const cacheKey = 'specConfig_' + category + '_' + subcategory + '_' + type;
+    const cacheKey = 'specConfig_' + category + '_' + subcategory;
     const cached = cache.get(cacheKey);
 
     if (cached) {
@@ -1053,37 +903,34 @@ function getSpecConfig(category, subcategory, type) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
 
-    // NEW: Get column indices for new 9-column structure
-    // Columns: Category Code, Category Name, Subcategory Name, Type,
-    //          Spec 1 Label, Spec 2 Label, Spec 3 Label, Spec 4 Label, Spec 5 Label
-    const categoryNameCol = headers.indexOf('Category Name');
-    const subcategoryCol = headers.indexOf('Subcategory Name');
-    const typeCol = headers.indexOf('Type');
-    const spec1LabelCol = headers.indexOf('Spec 1 Label');
-    const spec2LabelCol = headers.indexOf('Spec 2 Label');
-    const spec3LabelCol = headers.indexOf('Spec 3 Label');
-    const spec4LabelCol = headers.indexOf('Spec 4 Label');
-    const spec5LabelCol = headers.indexOf('Spec 5 Label');
-
-    if (categoryNameCol === -1 || subcategoryCol === -1 || typeCol === -1) {
-      throw new Error('Required Spec Config columns not found');
-    }
+    // Get column indices
+    const categoryCol = headers.indexOf('Category');
+    const subcategoryCol = headers.indexOf('Subcategory');
+    const spec1LabelCol = headers.indexOf('Spec1_Label');
+    const spec2LabelCol = headers.indexOf('Spec2_Label');
+    const spec3LabelCol = headers.indexOf('Spec3_Label');
+    const spec4LabelCol = headers.indexOf('Spec4_Label');
+    const spec1RequiredCol = headers.indexOf('Spec1_Required');
+    const spec2RequiredCol = headers.indexOf('Spec2_Required');
+    const spec3RequiredCol = headers.indexOf('Spec3_Required');
+    const spec4RequiredCol = headers.indexOf('Spec4_Required');
 
     // Find matching row
     for (let i = 1; i < data.length; i++) {
-      if (data[i][categoryNameCol] &&
-          data[i][categoryNameCol].toString().trim() === category &&
+      if (data[i][categoryCol] &&
+          data[i][categoryCol].toString().trim() === category &&
           data[i][subcategoryCol] &&
-          data[i][subcategoryCol].toString().trim() === subcategory &&
-          data[i][typeCol] &&
-          data[i][typeCol].toString().trim() === type) {
+          data[i][subcategoryCol].toString().trim() === subcategory) {
 
         const config = {
           spec1Label: data[i][spec1LabelCol] ? data[i][spec1LabelCol].toString().trim() : '',
           spec2Label: data[i][spec2LabelCol] ? data[i][spec2LabelCol].toString().trim() : '',
           spec3Label: data[i][spec3LabelCol] ? data[i][spec3LabelCol].toString().trim() : '',
           spec4Label: data[i][spec4LabelCol] ? data[i][spec4LabelCol].toString().trim() : '',
-          spec5Label: data[i][spec5LabelCol] ? data[i][spec5LabelCol].toString().trim() : ''  // NEW
+          spec1Required: data[i][spec1RequiredCol] === 'Y',
+          spec2Required: data[i][spec2RequiredCol] === 'Y',
+          spec3Required: data[i][spec3RequiredCol] === 'Y',
+          spec4Required: data[i][spec4RequiredCol] === 'Y'
         };
 
         // Cache for 5 minutes
@@ -1097,7 +944,7 @@ function getSpecConfig(category, subcategory, type) {
       }
     }
 
-    // No config found for this category/subcategory/type combination
+    // No config found for this category/subcategory combination
     return null;
   } catch (error) {
     Logger.log('Error in getSpecConfig: ' + error.toString());
@@ -1106,22 +953,22 @@ function getSpecConfig(category, subcategory, type) {
 }
 
 /**
- * Gets unique values for a specific spec field (UPDATED TO SUPPORT SPEC 5 AND TYPE)
+ * Gets unique values for a specific spec field for a category/subcategory
+ * Used to populate spec filter dropdowns dynamically
  * @param {string} category - The category name
  * @param {string} subcategory - The subcategory name
- * @param {string} type - The type name (NEW - optional)
- * @param {number} specNumber - Which spec (1, 2, 3, 4, or 5)
+ * @param {number} specNumber - Which spec (1, 2, 3, or 4)
  * @returns {Array<string>} Sorted unique values for the spec field
  */
-function getSpecValues(category, subcategory, type, specNumber) {
+function getSpecValues(category, subcategory, specNumber) {
   try {
-    if (!category || !subcategory || !specNumber || specNumber < 1 || specNumber > 5) {
+    if (!category || !subcategory || !specNumber || specNumber < 1 || specNumber > 4) {
       return [];
     }
 
     // Check cache first
     const cache = CacheService.getScriptCache();
-    const cacheKey = 'specValues_' + category + '_' + subcategory + '_' + (type || 'ALL') + '_' + specNumber;
+    const cacheKey = 'specValues_' + category + '_' + subcategory + '_' + specNumber;
     const cached = cache.get(cacheKey);
 
     if (cached) {
@@ -1145,7 +992,6 @@ function getSpecValues(category, subcategory, type, specNumber) {
     // Get column indices
     const categoryCol = headers.indexOf('Category');
     const subcategoryCol = headers.indexOf('Subcategory');
-    const typeCol = headers.indexOf('Type');
     const specCol = headers.indexOf('Spec ' + specNumber);
 
     if (categoryCol === -1 || subcategoryCol === -1 || specCol === -1) {
@@ -1156,17 +1002,12 @@ function getSpecValues(category, subcategory, type, specNumber) {
 
     // Collect unique non-empty values for this spec
     for (let i = 1; i < data.length; i++) {
-      const matchesCategory = data[i][categoryCol] && data[i][categoryCol].toString().trim() === category;
-      const matchesSubcategory = data[i][subcategoryCol] && data[i][subcategoryCol].toString().trim() === subcategory;
-
-      // If type is specified, filter by it; otherwise get all types
-      let matchesType = true;
-      if (type && type.trim()) {
-        matchesType = data[i][typeCol] && data[i][typeCol].toString().trim() === type;
-      }
-
-      if (matchesCategory && matchesSubcategory && matchesType &&
-          data[i][specCol] && data[i][specCol].toString().trim() !== '') {
+      if (data[i][categoryCol] &&
+          data[i][categoryCol].toString().trim() === category &&
+          data[i][subcategoryCol] &&
+          data[i][subcategoryCol].toString().trim() === subcategory &&
+          data[i][specCol] &&
+          data[i][specCol].toString().trim() !== '') {
         values.add(data[i][specCol].toString().trim());
       }
     }

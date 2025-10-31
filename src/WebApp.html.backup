@@ -490,7 +490,7 @@
       <div id="orderSection" class="form-section active">
         <div class="info-box">
           <h4>How to Order Parts</h4>
-          <p>Select your name, choose a category, subcategory, and type to view available parts, then add items to your cart. Review your order and submit when ready.</p>
+          <p>Select your name, choose a category and subcategory to view available parts, then add items to your cart. Review your order and submit when ready.</p>
         </div>
 
         <div class="button-group" style="margin-bottom: 20px;">
@@ -506,16 +506,9 @@
 
         <form id="orderForm" onsubmit="return false;">
           <div class="form-group">
-            <label for="subteam">Subteam <span class="required">*</span></label>
-            <select id="subteam" required>
-              <option value="">Select subteam...</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="studentName">Name <span class="required">*</span></label>
-            <select id="studentName" required disabled>
-              <option value="">Select subteam first...</option>
+            <label for="studentName">Student Name <span class="required">*</span></label>
+            <select id="studentName" required>
+              <option value="">Select your name...</option>
             </select>
           </div>
 
@@ -541,14 +534,6 @@
                 <option value="">Select category first...</option>
               </select>
             </div>
-          </div>
-
-          <!-- NEW: Type Dropdown -->
-          <div class="form-group">
-            <label for="orderType">Type <span class="required">*</span></label>
-            <select id="orderType" required disabled>
-              <option value="">Select subcategory first...</option>
-            </select>
           </div>
 
           <!-- Dynamic Spec Filter Dropdowns -->
@@ -664,15 +649,6 @@
             </div>
 
             <div class="form-group">
-              <label for="orderJustification">Justification/Use Case <span class="required">*</span></label>
-              <textarea id="orderJustification" required
-                placeholder="Describe how these parts will be used and why they are needed for the robot or team operations"
-                rows="4"
-                style="width: 100%; padding: 10px; font-size: 1em; border: 1px solid var(--border-gray); border-radius: 4px; resize: vertical;"></textarea>
-              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Required: Explain the purpose and benefit of this order</small>
-            </div>
-
-            <div class="form-group">
               <label for="orderNotes">Notes (Optional)</label>
               <textarea id="orderNotes" rows="3" placeholder="Add any special instructions or notes about this order..."></textarea>
             </div>
@@ -719,14 +695,6 @@
                   <option value="">Select category first...</option>
                 </select>
               </div>
-            </div>
-
-            <!-- NEW: Type field for Add Part form -->
-            <div class="form-group">
-              <label for="addType">Type <span class="required">*</span></label>
-              <select id="addType" disabled>
-                <option value="">Select subcategory first...</option>
-              </select>
             </div>
 
             <div class="form-group">
@@ -819,16 +787,15 @@
         })
         .getCategories();
 
-      // Load subteams on page load
+      // Load students
       google.script.run
-        .withSuccessHandler(function(subteams) {
-          populateDropdown('subteam', subteams);
+        .withSuccessHandler(function(students) {
+          populateDropdown('studentName', students);
         })
         .withFailureHandler(function(error) {
-          console.error('Failed to load subteams:', error);
-          showAlert('order', 'error', 'Failed to load subteam list');
+          console.error('Failed to load students:', error);
         })
-        .getSubteams();
+        .getStudents();
 
       // Load categories for add part form
       google.script.run
@@ -848,7 +815,6 @@
     function setupAddPartEventHandlers() {
       document.getElementById('addCategory').addEventListener('change', handleAddPartCategoryChange);
       document.getElementById('addSubcategory').addEventListener('change', handleAddPartSubcategoryChange);
-      document.getElementById('addType').addEventListener('change', handleAddPartTypeChange);
     }
 
     /**
@@ -902,23 +868,18 @@
     document.getElementById('orderCategory').addEventListener('change', function() {
       const category = this.value;
       const subcategorySelect = document.getElementById('orderSubcategory');
-      const typeSelect = document.getElementById('orderType');
 
       if (!category) {
         subcategorySelect.disabled = true;
         subcategorySelect.innerHTML = '<option value="">Select category first...</option>';
-        typeSelect.disabled = true;
-        typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
         clearSpecFilters();
         hideParts();
         return;
       }
 
-      showLoading('order', true, 'Loading subcategories...');
+      showLoading('order', true);
       subcategorySelect.disabled = true;
       subcategorySelect.innerHTML = '<option value="">Loading...</option>';
-      typeSelect.disabled = true;
-      typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
       clearSpecFilters();
 
       google.script.run
@@ -937,53 +898,16 @@
     });
 
     /**
-     * Handles subcategory change for order form - loads types
+     * Handles subcategory change for order form - loads spec filters
      */
     document.getElementById('orderSubcategory').addEventListener('change', function() {
       const category = document.getElementById('orderCategory').value;
       const subcategory = this.value;
-      const typeSelect = document.getElementById('orderType');
 
       clearSpecFilters();
       hideParts();
 
       if (!category || !subcategory) {
-        typeSelect.disabled = true;
-        typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
-        return;
-      }
-
-      showLoading('order', true, 'Loading types...');
-      typeSelect.disabled = true;
-      typeSelect.innerHTML = '<option value="">Loading...</option>';
-
-      google.script.run
-        .withSuccessHandler(function(types) {
-          typeSelect.disabled = false;
-          typeSelect.innerHTML = '<option value="">Select type...</option>';
-          populateDropdown('orderType', types);
-          showLoading('order', false);
-        })
-        .withFailureHandler(function(error) {
-          showAlert('order', 'error', 'Failed to load types: ' + error.message);
-          typeSelect.disabled = true;
-          showLoading('order', false);
-        })
-        .getTypes(category, subcategory);
-    });
-
-    /**
-     * Handles type change for order form - loads spec filters
-     */
-    document.getElementById('orderType').addEventListener('change', function() {
-      const category = document.getElementById('orderCategory').value;
-      const subcategory = document.getElementById('orderSubcategory').value;
-      const type = this.value;
-
-      clearSpecFilters();
-      hideParts();
-
-      if (!category || !subcategory || !type) {
         return;
       }
 
@@ -995,35 +919,7 @@
           console.error('Failed to load spec config:', error);
           showLoading('order', false);
         })
-        .getSpecConfig(category, subcategory, type);
-    });
-
-    /**
-     * Subteam selection handler
-     */
-    document.getElementById('subteam').addEventListener('change', function() {
-      const subteam = this.value;
-      const studentNameSelect = document.getElementById('studentName');
-
-      // Reset student name dropdown
-      studentNameSelect.innerHTML = '<option value="">Select name...</option>';
-
-      if (!subteam) {
-        studentNameSelect.disabled = true;
-        return;
-      }
-
-      // Load students for selected subteam
-      google.script.run
-        .withSuccessHandler(function(students) {
-          studentNameSelect.disabled = false;
-          populateDropdown('studentName', students);
-        })
-        .withFailureHandler(function(error) {
-          console.error('Failed to load students:', error);
-          showAlert('order', 'error', 'Failed to load student names');
-        })
-        .getStudentsBySubteam(subteam);
+        .getSpecConfig(category, subcategory);
     });
 
     /**
@@ -1042,7 +938,6 @@
       currentSpecConfig = config;
       const category = document.getElementById('orderCategory').value;
       const subcategory = document.getElementById('orderSubcategory').value;
-      const type = document.getElementById('orderType').value;
       const specFiltersDiv = document.getElementById('specFilters');
 
       specFiltersDiv.innerHTML = '';
@@ -1054,8 +949,8 @@
 
       let hasVisibleSpecs = false;
 
-      // Create dropdowns for each spec (1-5) - UPDATED from 4 to 5
-      for (let specNum = 1; specNum <= 5; specNum++) {
+      // Create dropdowns for each spec (1-4)
+      for (let specNum = 1; specNum <= 4; specNum++) {
         const labelKey = 'spec' + specNum + 'Label';
         const label = config[labelKey];
 
@@ -1082,7 +977,7 @@
 
           filterRow.appendChild(formGroup);
 
-          // Load values for this spec - UPDATED to include type parameter
+          // Load values for this spec
           google.script.run
             .withSuccessHandler(function(values) {
               populateSpecDropdown(specNum, label, values);
@@ -1090,7 +985,7 @@
             .withFailureHandler(function(error) {
               console.error('Failed to load spec values for ' + label + ':', error);
             })
-            .getSpecValues(category, subcategory, type, specNum);
+            .getSpecValues(category, subcategory, specNum);
         }
       }
 
@@ -1153,26 +1048,23 @@
         return;
       }
 
-      // Otherwise, proceed with category/subcategory/type/spec filtering
+      // Otherwise, proceed with category/subcategory/spec filtering
       const category = document.getElementById('orderCategory').value;
       const subcategory = document.getElementById('orderSubcategory').value;
-      const type = document.getElementById('orderType').value;
 
-      if (!category || !subcategory || !type) {
-        showAlert('order', 'warning', 'Please select category, subcategory, and type');
+      if (!category || !subcategory) {
+        showAlert('order', 'warning', 'Please select both category and subcategory');
         return;
       }
 
-      // Collect spec filter values - UPDATED to include spec5
+      // Collect spec filter values
       const filters = {
         category: category,
         subcategory: subcategory,
-        type: type,
         spec1: getSpecFilterValue(1),
         spec2: getSpecFilterValue(2),
         spec3: getSpecFilterValue(3),
-        spec4: getSpecFilterValue(4),
-        spec5: getSpecFilterValue(5)
+        spec4: getSpecFilterValue(4)
       };
 
       showLoading('order', true, 'Searching for parts...');
@@ -1245,7 +1137,7 @@
     }
 
     /**
-     * Formats spec display with dynamic labels - UPDATED to support 5 specs
+     * Formats spec display with dynamic labels
      */
     function formatSpecDisplay(part) {
       if (!currentSpecConfig) {
@@ -1255,13 +1147,12 @@
         if (part.spec2 && part.spec2 !== '-') specs.push(part.spec2);
         if (part.spec3 && part.spec3 !== '-') specs.push(part.spec3);
         if (part.spec4 && part.spec4 !== '-') specs.push(part.spec4);
-        if (part.spec5 && part.spec5 !== '-') specs.push(part.spec5);
         return specs.join(' | ');
       }
 
-      // Use dynamic labels from config - UPDATED loop from 4 to 5
+      // Use dynamic labels from config
       const specs = [];
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 4; i++) {
         const label = currentSpecConfig['spec' + i + 'Label'];
         const value = part['spec' + i];
 
@@ -1343,14 +1234,7 @@
       const part = availableParts[index];
       if (!part) return;
 
-      const subteam = document.getElementById('subteam').value;
       const studentName = document.getElementById('studentName').value;
-
-      if (!subteam) {
-        showAlert('order', 'warning', 'Please select your subteam first');
-        return;
-      }
-
       if (!studentName) {
         showAlert('order', 'warning', 'Please select your name first');
         return;
@@ -1360,7 +1244,7 @@
       currentOrderPart = part;
 
       // Populate order detail page
-      document.getElementById('orderDetailStudent').textContent = subteam + ' - ' + studentName;
+      document.getElementById('orderDetailStudent').textContent = studentName;
       document.getElementById('orderDetailPartName').textContent = part.partName || 'Unknown Part';
       document.getElementById('orderDetailPartID').textContent = part.partID || 'N/A';
       document.getElementById('orderDetailSpecs').textContent = formatSpecDisplay(part) || 'No specifications';
@@ -1431,7 +1315,6 @@
         partName: currentOrderPart.partName,
         category: currentOrderPart.category,
         subcategory: currentOrderPart.subcategory,
-        type: currentOrderPart.type,
         specifications: formatSpecDisplay(currentOrderPart),
         quantity: quantity,
         quantityPer: quantityPer,
@@ -1468,16 +1351,9 @@
      * Submits the order
      */
     function submitOrder() {
-      const subteam = document.getElementById('subteam').value;
       const studentName = document.getElementById('studentName').value;
       const priority = document.getElementById('orderPriority').value;
-      const justification = document.getElementById('orderJustification').value.trim();
       const notes = document.getElementById('orderNotes').value.trim();
-
-      if (!subteam) {
-        showAlert('order', 'warning', 'Please select your subteam');
-        return;
-      }
 
       if (!studentName) {
         showAlert('order', 'warning', 'Please select your name');
@@ -1491,11 +1367,6 @@
 
       if (!priority) {
         showAlert('order', 'warning', 'Please select a priority level for this order');
-        return;
-      }
-
-      if (!justification) {
-        showAlert('order', 'warning', 'Please provide a justification for this order');
         return;
       }
 
@@ -1523,7 +1394,6 @@
         items: currentCart,
         totalCost: totalCost,
         priority: priority,
-        justification: justification,
         notes: notes || ''
       };
 
@@ -1554,14 +1424,9 @@
      */
     function resetOrderForm() {
       document.getElementById('orderForm').reset();
-      document.getElementById('studentName').disabled = true;
-      document.getElementById('studentName').innerHTML = '<option value="">Select subteam first...</option>';
       document.getElementById('orderSubcategory').disabled = true;
       document.getElementById('orderSubcategory').innerHTML = '<option value="">Select category first...</option>';
-      document.getElementById('orderType').disabled = true;
-      document.getElementById('orderType').innerHTML = '<option value="">Select subcategory first...</option>';
       document.getElementById('orderPriority').value = '';
-      document.getElementById('orderJustification').value = '';
       document.getElementById('orderNotes').value = '';
       hideParts();
       availableParts = [];
@@ -1591,7 +1456,6 @@
      * Submits a custom part request
      */
     function submitCustomRequest() {
-      const subteam = document.getElementById('subteam').value;
       const studentName = document.getElementById('studentName').value;
       const partName = document.getElementById('customPartName').value.trim();
       const partLink = document.getElementById('customPartLink').value.trim();
@@ -1599,11 +1463,6 @@
       const justification = document.getElementById('customPartJustification').value.trim();
 
       // Validate required fields
-      if (!subteam) {
-        showAlert('order', 'warning', 'Please select your subteam');
-        return;
-      }
-
       if (!studentName) {
         showAlert('order', 'warning', 'Please select your name');
         return;
@@ -1677,22 +1536,17 @@
     function handleAddPartCategoryChange() {
       const category = document.getElementById('addCategory').value;
       const subcategorySelect = document.getElementById('addSubcategory');
-      const typeSelect = document.getElementById('addType');
 
       clearDynamicSpecFields();
 
       if (!category) {
         subcategorySelect.disabled = true;
         subcategorySelect.innerHTML = '<option value="">Select category first...</option>';
-        typeSelect.disabled = true;
-        typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
         return;
       }
 
       subcategorySelect.disabled = false;
       subcategorySelect.innerHTML = '<option value="">Loading subcategories...</option>';
-      typeSelect.disabled = true;
-      typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
 
       google.script.run
         .withSuccessHandler(function(subcategories) {
@@ -1712,50 +1566,13 @@
     }
 
     /**
-     * Handles subcategory change in add part form - loads types
+     * Handles subcategory change in add part form
      */
     function handleAddPartSubcategoryChange() {
       const category = document.getElementById('addCategory').value;
       const subcategory = document.getElementById('addSubcategory').value;
-      const typeSelect = document.getElementById('addType');
-
-      clearDynamicSpecFields();
 
       if (!category || !subcategory) {
-        typeSelect.disabled = true;
-        typeSelect.innerHTML = '<option value="">Select subcategory first...</option>';
-        return;
-      }
-
-      typeSelect.disabled = false;
-      typeSelect.innerHTML = '<option value="">Loading types...</option>';
-
-      google.script.run
-        .withSuccessHandler(function(types) {
-          typeSelect.innerHTML = '<option value="">Select type...</option>';
-          types.forEach(type => {
-            const option = document.createElement('option');
-            option.value = type;
-            option.textContent = type;
-            typeSelect.appendChild(option);
-          });
-        })
-        .withFailureHandler(function(error) {
-          typeSelect.innerHTML = '<option value="">Error loading types</option>';
-          console.error('Failed to load types:', error);
-        })
-        .getTypes(category, subcategory);
-    }
-
-    /**
-     * Handles type change in add part form - loads spec fields
-     */
-    function handleAddPartTypeChange() {
-      const category = document.getElementById('addCategory').value;
-      const subcategory = document.getElementById('addSubcategory').value;
-      const type = document.getElementById('addType').value;
-
-      if (!category || !subcategory || !type) {
         clearDynamicSpecFields();
         return;
       }
@@ -1766,7 +1583,7 @@
           console.error('Failed to load spec config:', error);
           clearDynamicSpecFields();
         })
-        .getSpecConfig(category, subcategory, type);
+        .getSpecConfig(category, subcategory);
     }
 
     /**
@@ -1779,7 +1596,7 @@
     }
 
     /**
-     * Handles spec configuration for add part form - UPDATED to support 5 specs
+     * Handles spec configuration for add part form
      */
     function handleAddPartSpecConfig(config) {
       addPartSpecConfig = config;
@@ -1788,14 +1605,14 @@
 
       const category = document.getElementById('addCategory').value;
       const subcategory = document.getElementById('addSubcategory').value;
-      const type = document.getElementById('addType').value;
 
-      // UPDATED loop from 4 to 5
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 4; i++) {
         const labelKey = `spec${i}Label`;
+        const requiredKey = `spec${i}Required`;
         const label = config[labelKey];
 
         if (label && label !== '-') {
+          const isRequired = config[requiredKey] === 'Y';
           const formGroup = document.createElement('div');
           formGroup.className = 'form-group';
           formGroup.id = `specField${i}Group`;
@@ -1803,7 +1620,7 @@
           formGroup.innerHTML = `
             <label for="addPartSpec${i}">
               ${label}
-              <span class="required">*</span>
+              ${isRequired ? '<span class="required">*</span>' : ''}
             </label>
             <select id="addPartSpec${i}" class="form-control" onchange="handleSpecChange(${i})">
               <option value="">Select ${label}...</option>
@@ -1815,7 +1632,6 @@
 
           container.appendChild(formGroup);
 
-          // UPDATED getSpecValues call to include type parameter
           google.script.run
             .withSuccessHandler(function(values) {
               populateAddPartSpec(i, label, values);
@@ -1823,7 +1639,7 @@
             .withFailureHandler(function(error) {
               console.error(`Failed to load values for spec ${i}:`, error);
             })
-            .getSpecValues(category, subcategory, type, i);
+            .getSpecValues(category, subcategory, i);
         }
       }
     }
@@ -1868,12 +1684,11 @@
     }
 
     /**
-     * Collects spec values from form (either dropdown or custom input) - UPDATED to support 5 specs
+     * Collects spec values from form (either dropdown or custom input)
      */
     function collectSpecValues() {
       const specs = {};
-      // UPDATED loop from 4 to 5
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 4; i++) {
         const dropdown = document.getElementById(`addPartSpec${i}`);
         const customInput = document.getElementById(`addPartSpec${i}Custom`);
 
@@ -1922,7 +1737,7 @@
     }
 
     /**
-     * Submits a new part - UPDATED to include type and spec5
+     * Submits a new part
      */
     function submitNewPart() {
       if (!isFormUnlocked) {
@@ -1936,14 +1751,12 @@
       const partData = {
         category: document.getElementById('addCategory').value,
         subcategory: document.getElementById('addSubcategory').value,
-        type: document.getElementById('addType').value,
         partName: document.getElementById('addPartName').value,
         productCode: document.getElementById('addProductCode').value.trim(),
         spec1: specValues.spec1,
         spec2: specValues.spec2,
         spec3: specValues.spec3,
         spec4: specValues.spec4,
-        spec5: specValues.spec5,
         quantity: document.getElementById('addQuantity').value,
         unitCost: document.getElementById('addUnitCost').value,
         storageLocation: document.getElementById('addStorageLocation').value,
@@ -1953,18 +1766,19 @@
       };
 
       // Validate required fields
-      if (!partData.category || !partData.subcategory || !partData.type || !partData.partName) {
+      if (!partData.category || !partData.subcategory || !partData.partName) {
         showAlert('addPart', 'warning', 'Please fill in all required fields');
         return;
       }
 
       // Validate required specs
       if (addPartSpecConfig) {
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 4; i++) {
+          const requiredKey = `spec${i}Required`;
           const labelKey = `spec${i}Label`;
           const specValue = partData[`spec${i}`];
 
-          if (addPartSpecConfig[labelKey] && (!specValue || specValue === '-')) {
+          if (addPartSpecConfig[requiredKey] === 'Y' && (!specValue || specValue === '-')) {
             const label = addPartSpecConfig[labelKey];
             showAlert('addPart', 'warning', `Error: ${label} is required`);
             return;
@@ -2006,8 +1820,6 @@
       document.getElementById('addPartForm').reset();
       document.getElementById('addSubcategory').disabled = true;
       document.getElementById('addSubcategory').innerHTML = '<option value="">Select category first...</option>';
-      document.getElementById('addType').disabled = true;
-      document.getElementById('addType').innerHTML = '<option value="">Select subcategory first...</option>';
       clearDynamicSpecFields();
     }
 

@@ -1,0 +1,178 @@
+{
+  "timestamp": "2025-10-29T14:25:35.997Z",
+  "totalCategories": 28,
+  "success": true,
+  "error": null,
+  "rowMappings": {
+    "PRINT": 2,
+    "ADHSV": 3,
+    "POWER": 4,
+    "BEAR": 5,
+    "BELT": 6,
+    "TOOLS": 7,
+    "BUMP": 8,
+    "BIZMED": 9,
+    "CHAIN": 10,
+    "CONSUM": 11,
+    "CTRL": 12,
+    "ELEC": 13,
+    "FAST": 14,
+    "GAME": 15,
+    "GEAR": 16,
+    "HDWR": 17,
+    "MACH": 18,
+    "MOTOR": 19,
+    "PNEU": 20,
+    "PULLEY": 21,
+    "STOCK": 22,
+    "SAFETY": 23,
+    "SENSOR": 24,
+    "SHAFT": 25,
+    "SPKT": 26,
+    "STRUCT": 27,
+    "WHEEL": 28,
+    "WIRE": 29
+  },
+  "categories": [
+    {
+      "name": "3D Printing",
+      "code": "PRINT",
+      "sortOrder": 1
+    },
+    {
+      "name": "Adhesives",
+      "code": "ADHSV",
+      "sortOrder": 2
+    },
+    {
+      "name": "Batteries & Power",
+      "code": "POWER",
+      "sortOrder": 3
+    },
+    {
+      "name": "Bearings",
+      "code": "BEAR",
+      "sortOrder": 4
+    },
+    {
+      "name": "Belts",
+      "code": "BELT",
+      "sortOrder": 5
+    },
+    {
+      "name": "Build Site Tools",
+      "code": "TOOLS",
+      "sortOrder": 6
+    },
+    {
+      "name": "Bumpers & Fabric",
+      "code": "BUMP",
+      "sortOrder": 7
+    },
+    {
+      "name": "Business Outreach Media",
+      "code": "BIZMED",
+      "sortOrder": 8
+    },
+    {
+      "name": "Chain",
+      "code": "CHAIN",
+      "sortOrder": 9
+    },
+    {
+      "name": "Consumables",
+      "code": "CONSUM",
+      "sortOrder": 10
+    },
+    {
+      "name": "Control System",
+      "code": "CTRL",
+      "sortOrder": 11
+    },
+    {
+      "name": "Electronics",
+      "code": "ELEC",
+      "sortOrder": 12
+    },
+    {
+      "name": "Fasteners",
+      "code": "FAST",
+      "sortOrder": 13
+    },
+    {
+      "name": "Game Elements",
+      "code": "GAME",
+      "sortOrder": 14
+    },
+    {
+      "name": "Gears",
+      "code": "GEAR",
+      "sortOrder": 15
+    },
+    {
+      "name": "Hardware",
+      "code": "HDWR",
+      "sortOrder": 16
+    },
+    {
+      "name": "Machining Tools",
+      "code": "MACH",
+      "sortOrder": 17
+    },
+    {
+      "name": "Motors",
+      "code": "MOTOR",
+      "sortOrder": 18
+    },
+    {
+      "name": "Pneumatics",
+      "code": "PNEU",
+      "sortOrder": 19
+    },
+    {
+      "name": "Pulleys",
+      "code": "PULLEY",
+      "sortOrder": 20
+    },
+    {
+      "name": "Raw Stock",
+      "code": "STOCK",
+      "sortOrder": 21
+    },
+    {
+      "name": "Safety Equipment",
+      "code": "SAFETY",
+      "sortOrder": 22
+    },
+    {
+      "name": "Sensors",
+      "code": "SENSOR",
+      "sortOrder": 23
+    },
+    {
+      "name": "Shafts & Hubs",
+      "code": "SHAFT",
+      "sortOrder": 24
+    },
+    {
+      "name": "Sprockets",
+      "code": "SPKT",
+      "sortOrder": 25
+    },
+    {
+      "name": "Structural",
+      "code": "STRUCT",
+      "sortOrder": 26
+    },
+    {
+      "name": "Wheels & Casters",
+      "code": "WHEEL",
+      "sortOrder": 27
+    },
+    {
+      "name": "Wiring",
+      "code": "WIRE",
+      "sortOrder": 28
+    }
+  ]
+}

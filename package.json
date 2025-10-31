@@ -12,15 +12,23 @@
     "watch": "clasp push --watch",
     "init-data": "node setup/populateData.js",
     "import-wcp": "node setup/importWCPParts.js",
+    "final-import": "node setup/finalImport.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["robotics", "parts", "inventory", "frc"],
+  "keywords": [
+    "robotics",
+    "parts",
+    "inventory",
+    "frc"
+  ],
   "author": "Denham Venom Robotics",
   "license": "ISC",
   "description": "Parts ordering system for Denham Venom Robotics Team",
   "dependencies": {
     "csv-parse": "^5.5.6",
+    "csv-parser": "^3.2.0",
     "dotenv": "^16.4.7",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "sqlite3": "^5.1.7"
   }
 }
