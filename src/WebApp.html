@@ -427,6 +427,69 @@
       line-height: 1.6;
     }
 
+    .dropdown-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: var(--white);
+      border: 2px solid var(--medium-gray);
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 200px;
+      z-index: 1000;
+      margin-top: 5px;
+    }
+
+    .dropdown-menu button {
+      display: block;
+      width: 100%;
+      padding: 12px 15px;
+      background: var(--white);
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.95em;
+      color: var(--dark-gray);
+      transition: background 0.2s ease;
+    }
+
+    .dropdown-menu button:hover {
+      background: var(--light-gray);
+    }
+
+    .dropdown-menu hr {
+      margin: 5px 0;
+      border: none;
+      border-top: 1px solid var(--medium-gray);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+
+    .modal-content {
+      background: var(--white);
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      min-width: 400px;
+      max-width: 90%;
+    }
+
     @media (max-width: 768px) {
       body {
         padding: 10px;
@@ -470,6 +533,11 @@
       .remove-button {
         justify-self: start;
       }
+
+      .modal-content {
+        min-width: 90%;
+        padding: 20px;
+      }
     }
   </style>
 </head>
@@ -508,20 +576,128 @@
         <form id="orderForm" onsubmit="return false;">
           <div class="form-group">
             <label for="subteam">Subteam <span class="required">*</span></label>
-            <select id="subteam" required>
+            <select id="subteam">
               <option value="">Select subteam...</option>
             </select>
           </div>
 
           <div class="form-group">
             <label for="studentName">Name <span class="required">*</span></label>
-            <select id="studentName" required disabled>
+            <select id="studentName" disabled>
               <option value="">Select subteam first...</option>
             </select>
           </div>
 
+          <!-- SEARCH MODE SECTION -->
+          <div id="searchModeSection" style="background: var(--light-gray); padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+            <h3 style="color: var(--lsu-purple); margin-bottom: 15px;">Search Mode</h3>
+
+            <div class="form-group">
+              <label style="margin-bottom: 10px;">Select Search Type:</label>
+              <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="searchMode" value="simple" onchange="toggleSearchMode()" checked style="width: auto; margin-right: 8px;">
+                  <span>Simple Search</span>
+                </label>
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="searchMode" value="advanced" onchange="toggleSearchMode()" style="width: auto; margin-right: 8px;">
+                  <span>Advanced Search</span>
+                </label>
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="searchMode" value="browse" onchange="toggleSearchMode()" style="width: auto; margin-right: 8px;">
+                  <span>Browse by Category</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="inventoryOnlyFilter" onchange="handleFilterChange()" style="width: auto; margin-right: 8px;">
+                  <span>Show Inventory Parts Only</span>
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="seasonOnlyFilter" onchange="toggleSeasonFilter()" style="width: auto; margin-right: 8px;">
+                  <span>Filter by Season</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group" id="seasonFilterGroup" style="display: none;">
+              <label for="seasonFilterSelect">Season</label>
+              <select id="seasonFilterSelect" disabled onchange="handleFilterChange()">
+                <option value="">Select season...</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- SIMPLE SEARCH SECTION -->
+          <div id="simpleSearchSection" style="display: block; margin-bottom: 20px;">
+            <h3 style="color: var(--lsu-purple); margin-bottom: 15px;">Simple Search</h3>
+            <div class="form-group">
+              <label for="simpleSearchInput">Search All Fields</label>
+              <input type="text" id="simpleSearchInput" placeholder="Search by part name, ID, product code, or specifications...">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">
+                Enter any text to search across all part fields
+              </small>
+            </div>
+            <div class="button-group" style="justify-content: flex-start;">
+              <button type="button" class="button button-primary" onclick="executeSimpleSearch()">Search</button>
+              <button type="button" class="button button-secondary" onclick="clearSearch()">Clear</button>
+            </div>
+          </div>
+
+          <!-- ADVANCED SEARCH SECTION -->
+          <div id="advancedSearchSection" style="display: none; margin-bottom: 20px;">
+            <h3 style="color: var(--lsu-purple); margin-bottom: 15px;">Advanced Search</h3>
+            <div class="form-group">
+              <label for="advancedSearchInput">Search Term</label>
+              <input type="text" id="advancedSearchInput" placeholder="Enter search term...">
+            </div>
+
+            <div class="form-group">
+              <label>Search In Fields:</label>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="searchPartName" checked style="width: auto; margin-right: 8px;">
+                  <span>Part Name</span>
+                </label>
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="searchPartID" style="width: auto; margin-right: 8px;">
+                  <span>Part ID</span>
+                </label>
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="searchProductCode" style="width: auto; margin-right: 8px;">
+                  <span>Product Code</span>
+                </label>
+                <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                  <input type="checkbox" id="searchSpecifications" style="width: auto; margin-right: 8px;">
+                  <span>Specifications</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="button-group" style="justify-content: flex-start;">
+              <button type="button" class="button button-primary" onclick="executeAdvancedSearch()">Search</button>
+              <button type="button" class="button button-secondary" onclick="clearSearch()">Clear</button>
+            </div>
+          </div>
+
+          <!-- QUICK VIEW BUTTONS -->
+          <div id="quickViewSection" style="margin-bottom: 20px;">
+            <h3 style="color: var(--lsu-purple); margin-bottom: 15px;">Quick Views</h3>
+            <div class="button-group" style="justify-content: flex-start;">
+              <button type="button" class="button button-secondary" onclick="viewAllInventory()">View All Inventory Parts</button>
+              <button type="button" class="button button-secondary" onclick="viewSeasonParts()">View Season Parts</button>
+              <button type="button" class="button button-secondary" onclick="resetToOriginal()">Reset View</button>
+            </div>
+          </div>
+
           <!-- BROWSE INVENTORY SECTION -->
-          <div id="browseInventorySection">
+          <div id="browseInventorySection" style="display: none;">
           <div class="form-group">
             <label for="productCodeSearch">Quick Search by Product Code (Optional)</label>
             <input type="text" id="productCodeSearch" placeholder="e.g., WCP-0448" style="width: 100%; padding: 10px; font-size: 1em;">
@@ -538,7 +714,7 @@
 
             <div class="form-group">
               <label for="orderSubcategory">Subcategory <span class="required">*</span></label>
-              <select id="orderSubcategory" required disabled>
+              <select id="orderSubcategory" disabled>
                 <option value="">Select category first...</option>
               </select>
             </div>
@@ -547,7 +723,7 @@
           <!-- NEW: Type Dropdown -->
           <div class="form-group">
             <label for="orderType">Type <span class="required">*</span></label>
-            <select id="orderType" required disabled>
+            <select id="orderType" disabled>
               <option value="">Select subcategory first...</option>
             </select>
           </div>
@@ -557,11 +733,6 @@
 
           <div class="button-group">
             <button type="button" class="button button-secondary" onclick="searchParts()">Search Parts</button>
-          </div>
-
-          <div id="partsListContainer" style="display: none;">
-            <h3 style="margin-top: 30px; margin-bottom: 10px; color: var(--lsu-purple);">Available Parts</h3>
-            <div id="partsList" class="part-list"></div>
           </div>
 
           <!-- ORDER DETAIL PAGE -->
@@ -608,6 +779,12 @@
           </div>
           </div>
           <!-- END BROWSE INVENTORY SECTION -->
+
+          <!-- PARTS LIST CONTAINER (Shared across all search modes) -->
+          <div id="partsListContainer" style="display: none;">
+            <h3 style="margin-top: 30px; margin-bottom: 10px; color: var(--lsu-purple);">Available Parts</h3>
+            <div id="partsList" class="part-list"></div>
+          </div>
 
           <!-- CUSTOM REQUEST SECTION -->
           <div id="customRequestSection" style="display: none;">
@@ -788,18 +965,20 @@
 
               <div class="form-group">
                 <label for="addSubcategory">Subcategory <span class="required">*</span></label>
-                <select id="addSubcategory" disabled>
+                <select id="addSubcategory" disabled onchange="handleSubcategoryChange()">
                   <option value="">Select category first...</option>
                 </select>
+                <input type="text" id="addSubcategoryCustom" placeholder="Enter new subcategory..." style="display: none; margin-top: 10px;">
               </div>
             </div>
 
             <!-- NEW: Type field for Add Part form -->
             <div class="form-group">
               <label for="addType">Type <span class="required">*</span></label>
-              <select id="addType" disabled>
+              <select id="addType" disabled onchange="handleTypeChange()">
                 <option value="">Select subcategory first...</option>
               </select>
+              <input type="text" id="addTypeCustom" placeholder="Enter new type..." style="display: none; margin-top: 10px;">
             </div>
 
             <div class="form-group">
@@ -811,6 +990,23 @@
               <label for="addProductCode">Product Code (Optional)</label>
               <input type="text" id="addProductCode" placeholder="e.g., WCP-0448">
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Manufacturer's product/part number (if applicable)</small>
+            </div>
+
+            <!-- Inventory and Season Fields -->
+            <div class="form-group">
+              <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
+                <input type="checkbox" id="addInventoryCheckbox" style="width: auto; margin-right: 8px;">
+                <span>Add to Inventory (common stock)</span>
+              </label>
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Check this box if this part should be tracked as inventory stock</small>
+            </div>
+
+            <div class="form-group">
+              <label for="addPartSeasons">Seasons (Optional)</label>
+              <select id="addPartSeasons" multiple size="4" style="width: 100%; padding: 10px;">
+                <option value="">Loading seasons...</option>
+              </select>
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Hold Ctrl (Windows) or Cmd (Mac) to select multiple seasons</small>
             </div>
 
             <!-- Dynamic Spec Fields Container -->
@@ -1312,15 +1508,24 @@
      * Displays parts in the list
      */
     function displayParts(parts) {
+      console.log('[DEBUG] displayParts called with ' + parts.length + ' parts');
+      console.log('[DEBUG] Parts data:', parts);
+
       const container = document.getElementById('partsListContainer');
       const list = document.getElementById('partsList');
+
+      console.log('[DEBUG] Container element:', container);
+      console.log('[DEBUG] List element:', list);
 
       list.innerHTML = '';
 
       if (parts.length === 0) {
         list.innerHTML = '<div class="cart-empty">No parts found matching filters</div>';
       } else {
+        console.log('[DEBUG] Building HTML for ' + parts.length + ' parts...');
         parts.forEach((part, index) => {
+          console.log('[DEBUG] Building part at index:', index, 'Part ID:', part.partID);
+
           const item = document.createElement('div');
           item.className = 'part-item';
 
@@ -1334,23 +1539,66 @@
           // Build spec display with dynamic labels
           let specDisplay = formatSpecDisplay(part);
 
+          // Build status indicators
+          let statusBadges = '';
+
+          // Inventory badge
+          if (part.inventory === 'Yes') {
+            statusBadges += '<span style="display: inline-block; background: var(--success-green); color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.85em; margin-right: 5px;">In Inventory</span>';
+          }
+
+          // Seasons badges
+          if (part.seasons && part.seasons.trim() !== '') {
+            const seasonsList = part.seasons.split(',').map(s => s.trim()).filter(s => s !== '');
+            seasonsList.forEach(season => {
+              statusBadges += '<span style="display: inline-block; background: var(--lsu-purple); color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.85em; margin-right: 5px;">' + season + '</span>';
+            });
+          }
+
           item.innerHTML = `
             <div style="flex: 1;">
               <div class="part-item-name">${part.partName || 'Unknown Part'}</div>
               <div class="part-item-details">${part.partID || 'N/A'}${specDisplay ? ' - ' + specDisplay : ''}</div>
               ${part.productCode ? '<div class="part-item-details" style="color: var(--lsu-gold);">Product Code: ' + part.productCode + '</div>' : ''}
+              ${statusBadges ? '<div style="margin-top: 5px;">' + statusBadges + '</div>' : ''}
               <div class="part-item-stock">Quantity Per: ${quantityPer} | Unit Cost: $${unitCost.toFixed(2)}</div>
             </div>
-            ${quantityPer > 0 ? '<button class="button button-primary" onclick="showOrderPage(' + index + '); event.stopPropagation();" style="margin-left: 10px; padding: 10px 20px;">Order</button>' : '<span style="color: #999; margin-left: 10px;">Out of Stock</span>'}
+            <div style="display: flex; gap: 10px; align-items: center;">
+              ${quantityPer > 0 ? '<button class="button button-primary" onclick="showOrderPage(' + index + '); event.stopPropagation();" style="padding: 10px 20px;">Order</button>' : '<span style="color: #999;">Out of Stock</span>'}
+              <div class="dropdown-container">
+                <button class="button button-secondary" onclick="toggleAddToMenu(${index}, \'${part.partID || ''}\'); event.stopPropagation();" style="padding: 10px 15px;">Add to ▾</button>
+                <div class="dropdown-menu" id="addToMenu${index}" style="display: none;">
+                  <button onclick="handleAddToInventory('${part.partID}', ${index}); event.stopPropagation();">
+                    ${part.inventory === 'Yes' ? '✓ ' : ''}Add to Inventory
+                  </button>
+                  <button onclick="showSeasonModal('add', '${part.partID}', ${index}); event.stopPropagation();">
+                    Add to Season
+                  </button>
+                  <hr>
+                  <button onclick="handleRemoveFromInventory('${part.partID}', ${index}); event.stopPropagation();">
+                    Remove from Inventory
+                  </button>
+                  <button onclick="showSeasonModal('remove', '${part.partID}', ${index}); event.stopPropagation();">
+                    Remove from Season
+                  </button>
+                </div>
+              </div>
+            </div>
           `;
 
           // No longer using click event on entire item
 
           list.appendChild(item);
+
+          // Verify menu element exists in DOM
+          const menuCheck = document.getElementById('addToMenu' + index);
+          console.log('[DEBUG] Verified menu element addToMenu' + index + ' exists:', menuCheck !== null);
         });
       }
 
+      console.log('[DEBUG] Setting container display to block');
       container.style.display = 'block';
+      console.log('[DEBUG] displayParts completed');
     }
 
     /**
@@ -1960,6 +2208,11 @@
             option.textContent = sub;
             subcategorySelect.appendChild(option);
           });
+
+          const createNewOption = document.createElement('option');
+          createNewOption.value = '__CREATE_NEW__';
+          createNewOption.textContent = '+ Create New Subcategory...';
+          subcategorySelect.appendChild(createNewOption);
         })
         .withFailureHandler(function(error) {
           subcategorySelect.innerHTML = '<option value="">Error loading subcategories</option>';
@@ -1996,6 +2249,11 @@
             option.textContent = type;
             typeSelect.appendChild(option);
           });
+
+          const createNewOption = document.createElement('option');
+          createNewOption.value = '__CREATE_NEW__';
+          createNewOption.textContent = '+ Create New Type...';
+          typeSelect.appendChild(createNewOption);
         })
         .withFailureHandler(function(error) {
           typeSelect.innerHTML = '<option value="">Error loading types</option>';
@@ -2146,6 +2404,70 @@
     }
 
     /**
+     * Handles subcategory dropdown change for "Create New..." functionality
+     */
+    function handleSubcategoryChange() {
+      const dropdown = document.getElementById('addSubcategory');
+      const customInput = document.getElementById('addSubcategoryCustom');
+      const typeSelect = document.getElementById('addType');
+
+      if (dropdown.value === '__CREATE_NEW__') {
+        dropdown.style.display = 'none';
+        customInput.style.display = 'block';
+        customInput.focus();
+        customInput.required = true;
+
+        typeSelect.disabled = true;
+        typeSelect.innerHTML = '<option value="">Enter subcategory first...</option>';
+        clearDynamicSpecFields();
+      }
+    }
+
+    /**
+     * Handles type dropdown change for "Create New..." functionality
+     */
+    function handleTypeChange() {
+      const dropdown = document.getElementById('addType');
+      const customInput = document.getElementById('addTypeCustom');
+
+      if (dropdown.value === '__CREATE_NEW__') {
+        dropdown.style.display = 'none';
+        customInput.style.display = 'block';
+        customInput.focus();
+        customInput.required = true;
+        clearDynamicSpecFields();
+      }
+    }
+
+    /**
+     * Resets subcategory custom input
+     */
+    function resetSubcategoryInput() {
+      const dropdown = document.getElementById('addSubcategory');
+      const customInput = document.getElementById('addSubcategoryCustom');
+
+      dropdown.style.display = 'block';
+      dropdown.value = '';
+      customInput.style.display = 'none';
+      customInput.value = '';
+      customInput.required = false;
+    }
+
+    /**
+     * Resets type custom input
+     */
+    function resetTypeInput() {
+      const dropdown = document.getElementById('addType');
+      const customInput = document.getElementById('addTypeCustom');
+
+      dropdown.style.display = 'block';
+      dropdown.value = '';
+      customInput.style.display = 'none';
+      customInput.value = '';
+      customInput.required = false;
+    }
+
+    /**
      * Validates the access password
      */
     function validatePassword() {
@@ -2167,6 +2489,8 @@
             document.getElementById('addPartFormContainer').style.display = 'block';
             showAlert('addPart', 'success', 'Access granted. You can now add parts to the directory.');
             setTimeout(() => hideAlert('addPart'), 3000);
+
+            loadSeasonsList();
           } else {
             showAlert('addPart', 'error', 'Invalid password. Access denied.');
           }
@@ -2190,10 +2514,35 @@
       // Collect spec values
       const specValues = collectSpecValues();
 
+      // Get subcategory - either from dropdown or custom input
+      const subcategoryDropdown = document.getElementById('addSubcategory');
+      const subcategoryCustom = document.getElementById('addSubcategoryCustom');
+      let subcategory = subcategoryDropdown.value;
+      if (subcategoryCustom.style.display !== 'none' && subcategoryCustom.value) {
+        subcategory = subcategoryCustom.value.trim();
+      }
+
+      // Get type - either from dropdown or custom input
+      const typeDropdown = document.getElementById('addType');
+      const typeCustom = document.getElementById('addTypeCustom');
+      let type = typeDropdown.value;
+      if (typeCustom.style.display !== 'none' && typeCustom.value) {
+        type = typeCustom.value.trim();
+      }
+
+      // Get inventory checkbox
+      const inventory = document.getElementById('addInventoryCheckbox').checked;
+
+      // Get selected seasons
+      const seasonsSelect = document.getElementById('addPartSeasons');
+      const selectedSeasons = Array.from(seasonsSelect.selectedOptions)
+        .map(opt => opt.value)
+        .join(', ');
+
       const partData = {
         category: document.getElementById('addCategory').value,
-        subcategory: document.getElementById('addSubcategory').value,
-        type: document.getElementById('addType').value,
+        subcategory: subcategory,
+        type: type,
         partName: document.getElementById('addPartName').value,
         productCode: document.getElementById('addProductCode').value.trim(),
         spec1: specValues.spec1,
@@ -2206,7 +2555,9 @@
         storageLocation: document.getElementById('addStorageLocation').value,
         supplier: document.getElementById('addSupplier').value,
         supplierPartNumber: document.getElementById('addSupplierPartNumber').value,
-        notes: document.getElementById('addNotes').value
+        notes: document.getElementById('addNotes').value,
+        inventory: inventory,
+        seasons: selectedSeasons
       };
 
       // Validate required fields
@@ -2266,6 +2617,14 @@
       document.getElementById('addType').disabled = true;
       document.getElementById('addType').innerHTML = '<option value="">Select subcategory first...</option>';
       clearDynamicSpecFields();
+      resetSubcategoryInput();
+      resetTypeInput();
+
+      document.getElementById('addInventoryCheckbox').checked = false;
+      const seasonsSelect = document.getElementById('addPartSeasons');
+      if (seasonsSelect) {
+        Array.from(seasonsSelect.options).forEach(opt => opt.selected = false);
+      }
     }
 
     /**
@@ -2306,7 +2665,517 @@
       }
     }
 
+    // ===== SEARCH MODE MANAGEMENT =====
+
+    /**
+     * Toggles between search modes (simple, advanced, browse)
+     */
+    function toggleSearchMode() {
+      const mode = document.querySelector('input[name="searchMode"]:checked').value;
+
+      const simpleSection = document.getElementById('simpleSearchSection');
+      const advancedSection = document.getElementById('advancedSearchSection');
+      const browseSection = document.getElementById('browseInventorySection');
+
+      simpleSection.style.display = 'none';
+      advancedSection.style.display = 'none';
+      browseSection.style.display = 'none';
+
+      if (mode === 'simple') {
+        simpleSection.style.display = 'block';
+      } else if (mode === 'advanced') {
+        advancedSection.style.display = 'block';
+      } else if (mode === 'browse') {
+        browseSection.style.display = 'block';
+      }
+    }
+
+    /**
+     * Toggles the season filter dropdown
+     */
+    function toggleSeasonFilter() {
+      const checkbox = document.getElementById('seasonOnlyFilter');
+      const seasonGroup = document.getElementById('seasonFilterGroup');
+      const seasonSelect = document.getElementById('seasonFilterSelect');
+
+      if (checkbox.checked) {
+        seasonGroup.style.display = 'block';
+        seasonSelect.disabled = false;
+      } else {
+        seasonGroup.style.display = 'none';
+        seasonSelect.disabled = true;
+        seasonSelect.value = '';
+        handleFilterChange();
+      }
+    }
+
+    /**
+     * Handles filter changes (inventory only, season filter)
+     */
+    function handleFilterChange() {
+      if (availableParts.length > 0) {
+        applyFiltersToResults();
+      }
+    }
+
+    // ===== SEARCH EXECUTION =====
+
+    /**
+     * Executes simple search across all fields
+     */
+    function executeSimpleSearch() {
+      const searchTerm = document.getElementById('simpleSearchInput').value.trim();
+
+      if (!searchTerm) {
+        showAlert('order', 'warning', 'Please enter a search term');
+        return;
+      }
+
+      showLoading('order', true, 'Searching all fields...');
+      hideParts();
+
+      const fields = ['name', 'id', 'code', 'specs'];
+
+      google.script.run
+        .withSuccessHandler(handleSearchResults)
+        .withFailureHandler(handleSearchError)
+        .searchPartsByText(searchTerm, fields);
+    }
+
+    /**
+     * Executes advanced search with selected fields
+     */
+    function executeAdvancedSearch() {
+      const searchTerm = document.getElementById('advancedSearchInput').value.trim();
+
+      if (!searchTerm) {
+        showAlert('order', 'warning', 'Please enter a search term');
+        return;
+      }
+
+      const fields = [];
+      if (document.getElementById('searchPartName').checked) fields.push('name');
+      if (document.getElementById('searchPartID').checked) fields.push('id');
+      if (document.getElementById('searchProductCode').checked) fields.push('code');
+      if (document.getElementById('searchSpecifications').checked) fields.push('specs');
+
+      if (fields.length === 0) {
+        showAlert('order', 'warning', 'Please select at least one field to search');
+        return;
+      }
+
+      showLoading('order', true, 'Searching selected fields...');
+      hideParts();
+
+      google.script.run
+        .withSuccessHandler(handleSearchResults)
+        .withFailureHandler(handleSearchError)
+        .searchPartsByText(searchTerm, fields);
+    }
+
+    /**
+     * Views all inventory parts
+     */
+    function viewAllInventory() {
+      showLoading('order', true, 'Loading inventory parts...');
+      hideParts();
+
+      google.script.run
+        .withSuccessHandler(handleSearchResults)
+        .withFailureHandler(handleSearchError)
+        .getInventoryParts();
+    }
+
+    /**
+     * Views parts for a specific season
+     */
+    function viewSeasonParts() {
+      const modal = document.getElementById('viewSeasonModal');
+      modal.style.display = 'flex';
+    }
+
+    function closeViewSeasonModal() {
+      const modal = document.getElementById('viewSeasonModal');
+      modal.style.display = 'none';
+      document.getElementById('viewSeasonSelect').value = '';
+    }
+
+    function confirmViewSeasonParts() {
+      const season = document.getElementById('viewSeasonSelect').value;
+
+      if (!season) {
+        alert('Please select a season');
+        return;
+      }
+
+      closeViewSeasonModal();
+      showLoading('order', true, 'Loading season parts...');
+      hideParts();
+
+      google.script.run
+        .withSuccessHandler(handleSearchResults)
+        .withFailureHandler(handleSearchError)
+        .getSeasonParts(season);
+    }
+
+    /**
+     * Handles search results from backend
+     */
+    function handleSearchResults(parts) {
+      console.log('[DEBUG] Backend returned ' + parts.length + ' parts');
+      availableParts = parts;
+      console.log('[DEBUG] Calling applyFiltersToResults...');
+      applyFiltersToResults();
+      showLoading('order', false);
+    }
+
+    /**
+     * Applies inventory and season filters to current results
+     */
+    function applyFiltersToResults() {
+      console.log('[DEBUG] Starting with ' + availableParts.length + ' parts');
+      let filteredParts = [...availableParts];
+
+      const inventoryOnlyElement = document.getElementById('inventoryOnlyFilter');
+      const seasonOnlyElement = document.getElementById('seasonOnlyFilter');
+      const seasonSelectElement = document.getElementById('seasonFilterSelect');
+
+      const inventoryOnly = inventoryOnlyElement ? inventoryOnlyElement.checked : false;
+      const seasonOnly = seasonOnlyElement ? seasonOnlyElement.checked : false;
+      const selectedSeason = seasonSelectElement ? seasonSelectElement.value : '';
+
+      console.log('[DEBUG] Filters - Inventory: ' + inventoryOnly + ', Season: ' + seasonOnly + ' (' + selectedSeason + ')');
+
+      if (inventoryOnly) {
+        filteredParts = filteredParts.filter(part => part.inventory === 'Yes');
+        console.log('[DEBUG] After inventory filter: ' + filteredParts.length + ' parts');
+      }
+
+      if (seasonOnly && selectedSeason) {
+        filteredParts = filteredParts.filter(part => {
+          if (!part.seasons) return false;
+          const seasonsList = part.seasons.split(',').map(s => s.trim());
+          return seasonsList.includes(selectedSeason);
+        });
+        console.log('[DEBUG] After season filter: ' + filteredParts.length + ' parts');
+      }
+
+      console.log('[DEBUG] Final results: ' + filteredParts.length + ' parts');
+      displayParts(filteredParts);
+    }
+
+    /**
+     * Handles search errors
+     */
+    function handleSearchError(error) {
+      showAlert('order', 'error', 'Search failed: ' + error.message);
+      showLoading('order', false);
+    }
+
+    /**
+     * Clears search inputs
+     */
+    function clearSearch() {
+      document.getElementById('simpleSearchInput').value = '';
+      document.getElementById('advancedSearchInput').value = '';
+      document.getElementById('searchPartName').checked = true;
+      document.getElementById('searchPartID').checked = false;
+      document.getElementById('searchProductCode').checked = false;
+      document.getElementById('searchSpecifications').checked = false;
+      hideParts();
+      availableParts = [];
+      hideAlert('order');
+    }
+
+    /**
+     * Resets all filters and view
+     */
+    function resetToOriginal() {
+      clearSearch();
+      document.getElementById('inventoryOnlyFilter').checked = false;
+      document.getElementById('seasonOnlyFilter').checked = false;
+      document.getElementById('seasonFilterSelect').value = '';
+      toggleSeasonFilter();
+      hideParts();
+      availableParts = [];
+      hideAlert('order');
+    }
+
+    // ===== ADD TO MENU =====
+
+    let currentOpenMenu = null;
+
+    /**
+     * Toggles the Add To dropdown menu
+     */
+    function toggleAddToMenu(index, partID) {
+      const menu = document.getElementById('addToMenu' + index);
+
+      console.log('[DEBUG] toggleAddToMenu called with index:', index, 'partID:', partID);
+      console.log('[DEBUG] Looking for element with ID: addToMenu' + index);
+      console.log('[DEBUG] Menu element found:', menu);
+
+      if (!menu) {
+        console.error('[ERROR] Menu element not found for index:', index);
+        return;
+      }
+
+      if (currentOpenMenu && currentOpenMenu !== menu) {
+        currentOpenMenu.style.display = 'none';
+      }
+
+      if (menu.style.display === 'none' || menu.style.display === '') {
+        menu.style.display = 'block';
+        currentOpenMenu = menu;
+      } else {
+        menu.style.display = 'none';
+        currentOpenMenu = null;
+      }
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+      if (!event.target.closest('.dropdown-container')) {
+        if (currentOpenMenu) {
+          currentOpenMenu.style.display = 'none';
+          currentOpenMenu = null;
+        }
+      }
+    });
+
+    // ===== INVENTORY MANAGEMENT =====
+
+    /**
+     * Adds part to inventory
+     */
+    function handleAddToInventory(partID, index) {
+      if (!partID) {
+        showAlert('order', 'error', 'Invalid part ID');
+        return;
+      }
+
+      showLoading('order', true, 'Adding to inventory...');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          showLoading('order', false);
+          if (result.success) {
+            showAlert('order', 'success', 'Part added to inventory');
+            setTimeout(() => hideAlert('order'), 3000);
+
+            if (availableParts[index]) {
+              availableParts[index].inventory = 'Yes';
+              applyFiltersToResults();
+            }
+          } else {
+            showAlert('order', 'error', result.message || 'Failed to add to inventory');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading('order', false);
+          showAlert('order', 'error', 'Error: ' + error.message);
+        })
+        .updatePartInventory(partID, true);
+
+      if (currentOpenMenu) {
+        currentOpenMenu.style.display = 'none';
+        currentOpenMenu = null;
+      }
+    }
+
+    /**
+     * Removes part from inventory
+     */
+    function handleRemoveFromInventory(partID, index) {
+      if (!partID) {
+        showAlert('order', 'error', 'Invalid part ID');
+        return;
+      }
+
+      if (!confirm('Remove this part from inventory?')) {
+        return;
+      }
+
+      showLoading('order', true, 'Removing from inventory...');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          showLoading('order', false);
+          if (result.success) {
+            showAlert('order', 'success', 'Part removed from inventory');
+            setTimeout(() => hideAlert('order'), 3000);
+
+            if (availableParts[index]) {
+              availableParts[index].inventory = 'No';
+              applyFiltersToResults();
+            }
+          } else {
+            showAlert('order', 'error', result.message || 'Failed to remove from inventory');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading('order', false);
+          showAlert('order', 'error', 'Error: ' + error.message);
+        })
+        .updatePartInventory(partID, false);
+
+      if (currentOpenMenu) {
+        currentOpenMenu.style.display = 'none';
+        currentOpenMenu = null;
+      }
+    }
+
+    // ===== SEASON MANAGEMENT =====
+
+    let seasonModalContext = {
+      action: null,
+      partID: null,
+      index: null
+    };
+
+    /**
+     * Shows the season modal
+     */
+    function showSeasonModal(action, partID, index) {
+      seasonModalContext = { action, partID, index };
+
+      const modal = document.getElementById('seasonModal');
+      modal.style.display = 'flex';
+
+      if (currentOpenMenu) {
+        currentOpenMenu.style.display = 'none';
+        currentOpenMenu = null;
+      }
+    }
+
+    /**
+     * Closes the season modal
+     */
+    function closeSeasonModal() {
+      const modal = document.getElementById('seasonModal');
+      modal.style.display = 'none';
+      seasonModalContext = { action: null, partID: null, index: null };
+      document.getElementById('seasonModalSelect').value = '';
+    }
+
+    /**
+     * Confirms season action (add or remove)
+     */
+    function confirmSeasonAction() {
+      const season = document.getElementById('seasonModalSelect').value;
+
+      if (!season) {
+        alert('Please select a season');
+        return;
+      }
+
+      const { action, partID, index } = seasonModalContext;
+
+      if (!action || !partID) {
+        showAlert('order', 'error', 'Invalid operation');
+        closeSeasonModal();
+        return;
+      }
+
+      closeSeasonModal();
+      showLoading('order', true, action === 'add' ? 'Adding to season...' : 'Removing from season...');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          showLoading('order', false);
+          if (result.success) {
+            showAlert('order', 'success', result.message || 'Season updated successfully');
+            setTimeout(() => hideAlert('order'), 3000);
+
+            if (availableParts[index] && result.seasons !== undefined) {
+              // Update seasons string from backend response
+              availableParts[index].seasons = result.seasons;
+              applyFiltersToResults();
+            }
+          } else {
+            showAlert('order', 'error', result.message || 'Failed to update season');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading('order', false);
+          showAlert('order', 'error', 'Error: ' + error.message);
+        })
+        .updatePartSeasons(partID, action, season);
+    }
+
+    // ===== DATA LOADING =====
+
+    /**
+     * Loads seasons list for all dropdowns
+     */
+    function loadSeasonsList() {
+      google.script.run
+        .withSuccessHandler(function(seasons) {
+          populateDropdown('seasonFilterSelect', seasons);
+          populateDropdown('seasonModalSelect', seasons);
+          populateDropdown('viewSeasonSelect', seasons);
+
+          const addPartSeasonsSelect = document.getElementById('addPartSeasons');
+          if (addPartSeasonsSelect) {
+            addPartSeasonsSelect.innerHTML = '';
+            seasons.forEach(season => {
+              const option = document.createElement('option');
+              option.value = season;
+              option.textContent = season;
+              addPartSeasonsSelect.appendChild(option);
+            });
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('Failed to load seasons:', error);
+        })
+        .getSeasonsList();
+    }
+
+    // Load seasons on page load
+    window.addEventListener('load', function() {
+      loadSeasonsList();
+    });
+
   </script>
+
+  <!-- SEASON MODAL -->
+  <div id="seasonModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3 style="color: var(--lsu-purple); margin-bottom: 20px;">Select Season</h3>
+
+      <div class="form-group">
+        <label for="seasonModalSelect">Season <span class="required">*</span></label>
+        <select id="seasonModalSelect" style="width: 100%; padding: 10px; font-size: 1em;">
+          <option value="">Select season...</option>
+        </select>
+      </div>
+
+      <div class="button-group" style="margin-top: 20px;">
+        <button type="button" class="button button-secondary" onclick="closeSeasonModal()">Cancel</button>
+        <button type="button" class="button button-primary" onclick="confirmSeasonAction()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW SEASON PARTS MODAL -->
+  <div id="viewSeasonModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3 style="color: var(--lsu-purple); margin-bottom: 20px;">View Season Parts</h3>
+
+      <div class="form-group">
+        <label for="viewSeasonSelect">Select Season <span class="required">*</span></label>
+        <select id="viewSeasonSelect" style="width: 100%; padding: 10px; font-size: 1em;">
+          <option value="">Select season...</option>
+        </select>
+      </div>
+
+      <div class="button-group" style="margin-top: 20px;">
+        <button type="button" class="button button-secondary" onclick="closeViewSeasonModal()">Cancel</button>
+        <button type="button" class="button button-primary" onclick="confirmViewSeasonParts()">View Parts</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ADMIN: Manual Monday Sync (Password Protected) -->
   <div style="position: fixed; bottom: 10px; right: 10px; font-size: 11px;">

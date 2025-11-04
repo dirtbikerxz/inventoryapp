@@ -222,7 +222,9 @@ function getPartsByFilters(filters) {
       cost: headers.indexOf('Cost'),
       supplier: headers.indexOf('Supplier'),
       orderLink: headers.indexOf('Order Link'),
-      location: headers.indexOf('Location/Bin')
+      location: headers.indexOf('Location/Bin'),
+      inventory: headers.indexOf('Inventory'),
+      seasons: headers.indexOf('Seasons')
     };
 
     // Validate required columns exist
@@ -299,7 +301,9 @@ function getPartsByFilters(filters) {
           unitCost: parseFloat(row[colIndices.cost]) || 0,
           supplier: row[colIndices.supplier] || '',
           orderLink: row[colIndices.orderLink] || '',
-          location: row[colIndices.location] || ''
+          location: row[colIndices.location] || '',
+          inventory: row[colIndices.inventory] || 'No',
+          seasons: row[colIndices.seasons] || ''
         });
       }
     }
@@ -347,7 +351,9 @@ function getPartsByProductCode(productCode) {
       cost: headers.indexOf('Cost'),
       supplier: headers.indexOf('Supplier'),
       orderLink: headers.indexOf('Order Link'),
-      location: headers.indexOf('Location/Bin')
+      location: headers.indexOf('Location/Bin'),
+      inventory: headers.indexOf('Inventory'),
+      seasons: headers.indexOf('Seasons')
     };
 
     const parts = [];
@@ -374,7 +380,9 @@ function getPartsByProductCode(productCode) {
           unitCost: parseFloat(row[colIndices.cost]) || 0,
           supplier: row[colIndices.supplier] || '',
           orderLink: row[colIndices.orderLink] || '',
-          location: row[colIndices.location] || ''
+          location: row[colIndices.location] || '',
+          inventory: row[colIndices.inventory] || 'No',
+          seasons: row[colIndices.seasons] || ''
         });
       }
     }
@@ -383,6 +391,482 @@ function getPartsByProductCode(productCode) {
   } catch (error) {
     Logger.log('Error in getPartsByProductCode: ' + error.toString());
     throw new Error('Failed to search by product code: ' + error.message);
+  }
+}
+
+/**
+ * Searches parts by text across multiple fields
+ * @param {string} searchText - Text to search for (case-insensitive)
+ * @param {Array<string>} searchFields - Fields to search: ['name', 'id', 'code', 'specs']
+ * @returns {Array<Object>} Array of matching parts
+ */
+function searchPartsByText(searchText, searchFields) {
+  try {
+    if (!searchText || !searchFields || searchFields.length === 0) {
+      return [];
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Get column indices
+    const colIndices = {
+      partID: headers.indexOf('Part ID'),
+      partName: headers.indexOf('Part Name'),
+      category: headers.indexOf('Category'),
+      subcategory: headers.indexOf('Subcategory'),
+      type: headers.indexOf('Type'),
+      productCode: headers.indexOf('Product Code'),
+      spec1: headers.indexOf('Spec 1'),
+      spec2: headers.indexOf('Spec 2'),
+      spec3: headers.indexOf('Spec 3'),
+      spec4: headers.indexOf('Spec 4'),
+      spec5: headers.indexOf('Spec 5'),
+      quantityPer: headers.indexOf('Quantity Per'),
+      cost: headers.indexOf('Cost'),
+      supplier: headers.indexOf('Supplier'),
+      orderLink: headers.indexOf('Order Link'),
+      location: headers.indexOf('Location/Bin'),
+      inventory: headers.indexOf('Inventory'),
+      seasons: headers.indexOf('Seasons')
+    };
+
+    const parts = [];
+    const searchLower = searchText.toLowerCase().trim();
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      let matches = false;
+
+      // Check each requested search field
+      for (const field of searchFields) {
+        if (field === 'name' && colIndices.partName !== -1) {
+          const partName = row[colIndices.partName] ? row[colIndices.partName].toString().toLowerCase() : '';
+          if (partName.includes(searchLower)) {
+            matches = true;
+            break;
+          }
+        }
+
+        if (field === 'id' && colIndices.partID !== -1) {
+          const partID = row[colIndices.partID] ? row[colIndices.partID].toString().toLowerCase() : '';
+          if (partID.includes(searchLower)) {
+            matches = true;
+            break;
+          }
+        }
+
+        if (field === 'code' && colIndices.productCode !== -1) {
+          const productCode = row[colIndices.productCode] ? row[colIndices.productCode].toString().toLowerCase() : '';
+          if (productCode.includes(searchLower)) {
+            matches = true;
+            break;
+          }
+        }
+
+        if (field === 'specs') {
+          // Search across all 5 spec fields
+          const spec1 = row[colIndices.spec1] ? row[colIndices.spec1].toString().toLowerCase() : '';
+          const spec2 = row[colIndices.spec2] ? row[colIndices.spec2].toString().toLowerCase() : '';
+          const spec3 = row[colIndices.spec3] ? row[colIndices.spec3].toString().toLowerCase() : '';
+          const spec4 = row[colIndices.spec4] ? row[colIndices.spec4].toString().toLowerCase() : '';
+          const spec5 = row[colIndices.spec5] ? row[colIndices.spec5].toString().toLowerCase() : '';
+
+          if (spec1.includes(searchLower) || spec2.includes(searchLower) ||
+              spec3.includes(searchLower) || spec4.includes(searchLower) ||
+              spec5.includes(searchLower)) {
+            matches = true;
+            break;
+          }
+        }
+      }
+
+      if (matches) {
+        parts.push({
+          partID: row[colIndices.partID] || '',
+          partName: row[colIndices.partName] || '',
+          category: row[colIndices.category] || '',
+          subcategory: row[colIndices.subcategory] || '',
+          type: row[colIndices.type] || '',
+          productCode: row[colIndices.productCode] || '',
+          spec1: row[colIndices.spec1] || '',
+          spec2: row[colIndices.spec2] || '',
+          spec3: row[colIndices.spec3] || '',
+          spec4: row[colIndices.spec4] || '',
+          spec5: row[colIndices.spec5] || '',
+          quantityPer: row[colIndices.quantityPer] || '',
+          unitCost: parseFloat(row[colIndices.cost]) || 0,
+          supplier: row[colIndices.supplier] || '',
+          orderLink: row[colIndices.orderLink] || '',
+          location: row[colIndices.location] || '',
+          inventory: row[colIndices.inventory] || 'No',
+          seasons: row[colIndices.seasons] || ''
+        });
+      }
+    }
+
+    return parts.sort((a, b) => a.partName.localeCompare(b.partName));
+  } catch (error) {
+    Logger.log('Error in searchPartsByText: ' + error.toString());
+    throw new Error('Failed to search parts: ' + error.message);
+  }
+}
+
+/**
+ * Gets all parts marked as Inventory (common stock)
+ * @returns {Array<Object>} Array of inventory parts
+ */
+function getInventoryParts() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Get column indices
+    const colIndices = {
+      partID: headers.indexOf('Part ID'),
+      partName: headers.indexOf('Part Name'),
+      category: headers.indexOf('Category'),
+      subcategory: headers.indexOf('Subcategory'),
+      type: headers.indexOf('Type'),
+      productCode: headers.indexOf('Product Code'),
+      spec1: headers.indexOf('Spec 1'),
+      spec2: headers.indexOf('Spec 2'),
+      spec3: headers.indexOf('Spec 3'),
+      spec4: headers.indexOf('Spec 4'),
+      spec5: headers.indexOf('Spec 5'),
+      quantityPer: headers.indexOf('Quantity Per'),
+      cost: headers.indexOf('Cost'),
+      supplier: headers.indexOf('Supplier'),
+      orderLink: headers.indexOf('Order Link'),
+      location: headers.indexOf('Location/Bin'),
+      inventory: headers.indexOf('Inventory'),
+      seasons: headers.indexOf('Seasons')
+    };
+
+    if (colIndices.inventory === -1) {
+      throw new Error('Inventory column not found');
+    }
+
+    const parts = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const inventoryValue = row[colIndices.inventory] ? row[colIndices.inventory].toString().trim() : '';
+
+      if (inventoryValue === 'Yes') {
+        parts.push({
+          partID: row[colIndices.partID] || '',
+          partName: row[colIndices.partName] || '',
+          category: row[colIndices.category] || '',
+          subcategory: row[colIndices.subcategory] || '',
+          type: row[colIndices.type] || '',
+          productCode: row[colIndices.productCode] || '',
+          spec1: row[colIndices.spec1] || '',
+          spec2: row[colIndices.spec2] || '',
+          spec3: row[colIndices.spec3] || '',
+          spec4: row[colIndices.spec4] || '',
+          spec5: row[colIndices.spec5] || '',
+          quantityPer: row[colIndices.quantityPer] || '',
+          unitCost: parseFloat(row[colIndices.cost]) || 0,
+          supplier: row[colIndices.supplier] || '',
+          orderLink: row[colIndices.orderLink] || '',
+          location: row[colIndices.location] || '',
+          inventory: row[colIndices.inventory] || 'No',
+          seasons: row[colIndices.seasons] || ''
+        });
+      }
+    }
+
+    return parts.sort((a, b) => a.partName.localeCompare(b.partName));
+  } catch (error) {
+    Logger.log('Error in getInventoryParts: ' + error.toString());
+    throw new Error('Failed to retrieve inventory parts: ' + error.message);
+  }
+}
+
+/**
+ * Gets all parts tagged for a specific season
+ * @param {string} season - Season to filter (e.g., "2024-2025")
+ * @returns {Array<Object>} Array of season parts
+ */
+function getSeasonParts(season) {
+  try {
+    if (!season) {
+      return [];
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Get column indices
+    const colIndices = {
+      partID: headers.indexOf('Part ID'),
+      partName: headers.indexOf('Part Name'),
+      category: headers.indexOf('Category'),
+      subcategory: headers.indexOf('Subcategory'),
+      type: headers.indexOf('Type'),
+      productCode: headers.indexOf('Product Code'),
+      spec1: headers.indexOf('Spec 1'),
+      spec2: headers.indexOf('Spec 2'),
+      spec3: headers.indexOf('Spec 3'),
+      spec4: headers.indexOf('Spec 4'),
+      spec5: headers.indexOf('Spec 5'),
+      quantityPer: headers.indexOf('Quantity Per'),
+      cost: headers.indexOf('Cost'),
+      supplier: headers.indexOf('Supplier'),
+      orderLink: headers.indexOf('Order Link'),
+      location: headers.indexOf('Location/Bin'),
+      inventory: headers.indexOf('Inventory'),
+      seasons: headers.indexOf('Seasons')
+    };
+
+    if (colIndices.seasons === -1) {
+      throw new Error('Seasons column not found');
+    }
+
+    const parts = [];
+    const searchSeason = season.trim();
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const seasonsValue = row[colIndices.seasons] ? row[colIndices.seasons].toString() : '';
+
+      // Handle comma-separated values
+      if (seasonsValue) {
+        const seasonsList = seasonsValue.split(',').map(s => s.trim());
+        if (seasonsList.includes(searchSeason)) {
+          parts.push({
+            partID: row[colIndices.partID] || '',
+            partName: row[colIndices.partName] || '',
+            category: row[colIndices.category] || '',
+            subcategory: row[colIndices.subcategory] || '',
+            type: row[colIndices.type] || '',
+            productCode: row[colIndices.productCode] || '',
+            spec1: row[colIndices.spec1] || '',
+            spec2: row[colIndices.spec2] || '',
+            spec3: row[colIndices.spec3] || '',
+            spec4: row[colIndices.spec4] || '',
+            spec5: row[colIndices.spec5] || '',
+            quantityPer: row[colIndices.quantityPer] || '',
+            unitCost: parseFloat(row[colIndices.cost]) || 0,
+            supplier: row[colIndices.supplier] || '',
+            orderLink: row[colIndices.orderLink] || '',
+            location: row[colIndices.location] || '',
+            inventory: row[colIndices.inventory] || 'No',
+            seasons: row[colIndices.seasons] || ''
+          });
+        }
+      }
+    }
+
+    return parts.sort((a, b) => a.partName.localeCompare(b.partName));
+  } catch (error) {
+    Logger.log('Error in getSeasonParts: ' + error.toString());
+    throw new Error('Failed to retrieve season parts: ' + error.message);
+  }
+}
+
+/**
+ * Gets list of all seasons from Seasons sheet
+ * @returns {Array<string>} Array of season names, sorted
+ */
+function getSeasonsList() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName('Seasons');
+
+    if (!sheet) {
+      Logger.log('Seasons sheet not found');
+      return [];
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const seasons = [];
+
+    // Skip header row (index 0), read column A
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim() !== '') {
+        seasons.push(data[i][0].toString().trim());
+      }
+    }
+
+    return seasons.sort();
+  } catch (error) {
+    Logger.log('Error in getSeasonsList: ' + error.toString());
+    return [];
+  }
+}
+
+/**
+ * Updates inventory flag for a part
+ * @param {string} partID - Part ID to update
+ * @param {boolean} isInventory - True to add to inventory, false to remove
+ * @returns {Object} Result with success flag and message
+ */
+function updatePartInventory(partID, isInventory) {
+  try {
+    if (!partID) {
+      return {
+        success: false,
+        message: 'Part ID is required'
+      };
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const partIDCol = headers.indexOf('Part ID');
+    const inventoryCol = headers.indexOf('Inventory');
+
+    if (partIDCol === -1 || inventoryCol === -1) {
+      throw new Error('Required columns not found');
+    }
+
+    // Find the part
+    for (let i = 1; i < data.length; i++) {
+      const rowPartID = data[i][partIDCol] ? data[i][partIDCol].toString().trim() : '';
+      if (rowPartID === partID.trim()) {
+        // Update inventory value
+        const newValue = isInventory ? 'Yes' : 'No';
+        sheet.getRange(i + 1, inventoryCol + 1).setValue(newValue);
+
+        // Clear cache
+        const cache = CacheService.getScriptCache();
+        cache.removeAll(['specConfig_', 'specValues_']);
+
+        return {
+          success: true,
+          message: 'Inventory status updated successfully'
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: 'Part ID not found: ' + partID
+    };
+  } catch (error) {
+    Logger.log('Error in updatePartInventory: ' + error.toString());
+    return {
+      success: false,
+      message: 'Failed to update inventory: ' + error.message
+    };
+  }
+}
+
+/**
+ * Adds or removes a season from a part's season list
+ * @param {string} partID - Part ID to update
+ * @param {string} action - "add" or "remove"
+ * @param {string} season - Season to add/remove
+ * @returns {Object} Result with success flag, message, and updated seasons string
+ */
+function updatePartSeasons(partID, action, season) {
+  try {
+    if (!partID || !action || !season) {
+      return {
+        success: false,
+        message: 'Part ID, action, and season are required'
+      };
+    }
+
+    if (action !== 'add' && action !== 'remove') {
+      return {
+        success: false,
+        message: 'Action must be "add" or "remove"'
+      };
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const partIDCol = headers.indexOf('Part ID');
+    const seasonsCol = headers.indexOf('Seasons');
+
+    if (partIDCol === -1 || seasonsCol === -1) {
+      throw new Error('Required columns not found');
+    }
+
+    // Find the part
+    for (let i = 1; i < data.length; i++) {
+      const rowPartID = data[i][partIDCol] ? data[i][partIDCol].toString().trim() : '';
+      if (rowPartID === partID.trim()) {
+        // Get current seasons
+        const currentSeasons = data[i][seasonsCol] ? data[i][seasonsCol].toString() : '';
+        let seasonsList = currentSeasons ? currentSeasons.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+
+        // Add or remove season
+        if (action === 'add') {
+          if (!seasonsList.includes(season.trim())) {
+            seasonsList.push(season.trim());
+          }
+        } else if (action === 'remove') {
+          seasonsList = seasonsList.filter(s => s !== season.trim());
+        }
+
+        // Join back to comma-separated string
+        const updatedSeasons = seasonsList.join(', ');
+
+        // Update the cell
+        sheet.getRange(i + 1, seasonsCol + 1).setValue(updatedSeasons);
+
+        // Clear cache
+        const cache = CacheService.getScriptCache();
+        cache.removeAll(['specConfig_', 'specValues_']);
+
+        return {
+          success: true,
+          message: 'Seasons updated successfully',
+          seasons: updatedSeasons
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: 'Part ID not found: ' + partID
+    };
+  } catch (error) {
+    Logger.log('Error in updatePartSeasons: ' + error.toString());
+    return {
+      success: false,
+      message: 'Failed to update seasons: ' + error.message
+    };
   }
 }
 
@@ -853,11 +1337,15 @@ function submitNewPartRequest(partData) {
 
 /**
  * Adds a new part to the parts directory
- * @param {Object} partData - Object containing part details
+ * @param {Object} partData - Object containing part details (including inventory and seasons)
  * @returns {Object} Success status, part ID, and message
  */
 function addPartToDirectory(partData) {
   try {
+    // Extract inventory and seasons from partData
+    const inventory = partData.inventory || false;
+    const seasons = partData.seasons || '';
+
     const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
     const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
 
@@ -868,28 +1356,34 @@ function addPartToDirectory(partData) {
     // Generate new Part ID
     const partID = generatePartID(partData.category);
 
-    // Prepare the new row matching Parts sheet structure:
-    // Part ID, Part Name, Category, Subcategory, Product Code, Spec 1, Spec 2, Spec 3, Spec 4,
-    // Quantity Per, Cost, Supplier, Order Link, Location/Bin, Notes, Status, Date Added, Added By
+    // Prepare the new row matching Parts sheet structure (22 columns):
+    // Part ID, Part Name, Category, Subcategory, Type, Product Code,
+    // Spec 1, Spec 2, Spec 3, Spec 4, Spec 5,
+    // Quantity Per, Cost, Supplier, Order Link, Location/Bin, Notes,
+    // Status, Date Added, Added By, Inventory, Seasons
     const newRow = [
-      partID,
-      partData.partName,
-      partData.category,
-      partData.subcategory || '',
-      partData.productCode || '',
-      partData.spec1 || '-',
-      partData.spec2 || '-',
-      partData.spec3 || '-',
-      partData.spec4 || '-',
-      parseInt(partData.quantity) || 0,
-      parseFloat(partData.unitCost) || 0,
-      partData.supplier || '',
-      partData.supplierPartNumber || '',
-      partData.storageLocation || '',
-      partData.notes || '',
-      'Active',  // Status
-      new Date(),  // Date added
-      Session.getActiveUser().getEmail() || 'System'  // Added by
+      partID,                                       // 1. Part ID
+      partData.partName,                            // 2. Part Name
+      partData.category,                            // 3. Category
+      partData.subcategory || '',                   // 4. Subcategory
+      partData.type || '',                          // 5. Type
+      partData.productCode || '',                   // 6. Product Code
+      partData.spec1 || '-',                        // 7. Spec 1
+      partData.spec2 || '-',                        // 8. Spec 2
+      partData.spec3 || '-',                        // 9. Spec 3
+      partData.spec4 || '-',                        // 10. Spec 4
+      partData.spec5 || '-',                        // 11. Spec 5
+      parseInt(partData.quantity) || 0,             // 12. Quantity Per
+      parseFloat(partData.unitCost) || 0,           // 13. Cost
+      partData.supplier || '',                      // 14. Supplier
+      partData.supplierPartNumber || '',            // 15. Order Link
+      partData.storageLocation || '',               // 16. Location/Bin
+      partData.notes || '',                         // 17. Notes
+      'Active',                                     // 18. Status
+      new Date(),                                   // 19. Date Added
+      Session.getActiveUser().getEmail() || 'System', // 20. Added By
+      inventory ? 'Yes' : 'No',                     // 21. Inventory
+      seasons || ''                                 // 22. Seasons
     ];
 
     // Append the new part

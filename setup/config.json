@@ -22,8 +22,12 @@
             "Category",
             "Subcategory",
             "Type",
-            "Size/Specification 1",
-            "Specification 2",
+            "Product Code",
+            "Spec 1",
+            "Spec 2",
+            "Spec 3",
+            "Spec 4",
+            "Spec 5",
             "Quantity Per",
             "Cost",
             "Supplier",
@@ -32,7 +36,9 @@
             "Notes",
             "Status",
             "Date Added",
-            "Added By"
+            "Added By",
+            "Inventory",
+            "Seasons"
           ],
           "protectedColumns": ["Part ID"],
           "columnWidths": {
@@ -41,8 +47,12 @@
             "Category": 150,
             "Subcategory": 150,
             "Type": 120,
-            "Size/Specification 1": 120,
-            "Specification 2": 120,
+            "Product Code": 150,
+            "Spec 1": 120,
+            "Spec 2": 120,
+            "Spec 3": 120,
+            "Spec 4": 120,
+            "Spec 5": 120,
             "Quantity Per": 100,
             "Cost": 80,
             "Supplier": 150,
@@ -51,7 +61,9 @@
             "Notes": 250,
             "Status": 100,
             "Date Added": 100,
-            "Added By": 150
+            "Added By": 150,
+            "Inventory": 100,
+            "Seasons": 200
           },
           "defaultValues": {
             "Status": "Active",
@@ -69,6 +81,13 @@
             "Category Name": 250,
             "Code": 100,
             "Sort Order": 100
+          }
+        },
+        {
+          "name": "Seasons",
+          "headers": ["Season List"],
+          "columnWidths": {
+            "Season List": 150
           }
         }
       ]
