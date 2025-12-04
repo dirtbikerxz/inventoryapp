@@ -316,8 +316,8 @@
       <div id="selection-count"></div>
       <div class="flex-between" style="gap:8px; flex:1;">
         <input id="group-title" class="input-inline" placeholder="Group title" />
-        <input id="group-vendor" class="input-inline" placeholder="Vendor / Supplier" />
         <input id="group-tracking" class="input-inline" placeholder="Tracking number" />
+        <div id="group-vendor-note" class="small" style="min-width:180px;">Vendor: auto from selection</div>
       </div>
       <button class="btn primary" id="group-btn">Create/Update Group</button>
     </div>
@@ -383,6 +383,10 @@
             <option>High</option>
             <option>Urgent</option>
           </select>
+        </div>
+        <div>
+          <label class="small">Tracking number</label>
+          <input name="trackingNumber" class="input" placeholder="Optional tracking" />
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Notes</label>
@@ -614,8 +618,8 @@
     const selectionCount = document.getElementById('selection-count');
     const groupBtn = document.getElementById('group-btn');
     const groupTitle = document.getElementById('group-title');
-    const groupVendor = document.getElementById('group-vendor');
     const groupTracking = document.getElementById('group-tracking');
+    const groupVendorNote = document.getElementById('group-vendor-note');
     const modal = document.getElementById('modal');
     const closeModal = document.getElementById('close-modal');
     const cancelOrder = document.getElementById('cancel-order');
@@ -646,6 +650,7 @@
     const applySelector = document.getElementById('apply-selector');
     const partExample = vendorForm.elements.partNumberExample;
     const partPattern = vendorForm.elements.partNumberPattern;
+    let editingOrderId = null;
     const loginModal = document.getElementById('login-modal');
     const loginForm = document.getElementById('login-form');
     const loginMessage = document.getElementById('login-message');
@@ -747,6 +752,20 @@
       vendorFilter.innerHTML = ['<option value="">All vendors</option>', ...vendors.map(v => `<option>${v}</option>`)].join('');
     }
 
+    function openEdit(order) {
+      editingOrderId = order._id;
+      orderForm.elements.vendor.value = order.vendor || order.supplier || '';
+      orderForm.elements.vendorPartNumber.value = order.vendorPartNumber || '';
+      orderForm.elements.partLink.value = order.partLink || '';
+      orderForm.elements.partName.value = order.partName || '';
+      orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
+      orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
+      orderForm.elements.priority.value = order.priority || 'Medium';
+      orderForm.elements.trackingNumber.value = order.trackingNumber || '';
+      orderForm.elements.notes.value = order.notes || '';
+      modal.style.display = 'flex';
+    }
+
     function createCard(order) {
       const card = document.createElement('div');
       card.className = 'card';
@@ -775,6 +794,10 @@
         <div class="card-footer">
           <span class="muted">${order.productCode || ''}</span>
           <span class="muted">${fmtDate(order.requestedAt)}</span>
+          <div class="row-actions" style="display:flex; gap:6px;">
+            ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
+            ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
+          </div>
         </div>
       `;
 
@@ -788,6 +811,22 @@
         toggleSelect(order._id);
       });
 
+      card.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEdit(order);
+        });
+      });
+
+      card.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm('Delete this order?')) return;
+          await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
+          fetchOrders();
+        });
+      });
+
       card.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', order._id);
         card.style.opacity = '0.6';
@@ -797,11 +836,20 @@
     }
 
     function renderBoard() {
-      const grouped = filteredOrders().reduce((acc, order) => {
-        acc[order.status] = acc[order.status] || [];
-        acc[order.status].push(order);
-        return acc;
-      }, {});
+      const fo = filteredOrders();
+      const groupedByStatus = {};
+      const groupMap = {};
+
+      fo.forEach(order => {
+        if (order.groupId || order.group?._id) {
+          const gid = order.groupId || order.group?._id;
+          if (!groupMap[gid]) groupMap[gid] = [];
+          groupMap[gid].push(order);
+        } else {
+          groupedByStatus[order.status] = groupedByStatus[order.status] || [];
+          groupedByStatus[order.status].push(order);
+        }
+      });
 
       boardEl.innerHTML = '';
       statuses.forEach(col => {
@@ -809,7 +857,7 @@
         column.className = 'column';
         column.dataset.status = col.status;
         column.innerHTML = `
-          <h3>${col.label} <span class="pill">${(grouped[col.status] || []).length}</span></h3>
+          <h3>${col.label} <span class="pill">${(groupedByStatus[col.status] || []).length + Object.values(groupMap).filter(items => (items[0]?.status === col.status)).length}</span></h3>
           <div class="small" style="margin-bottom:6px;">${col.hint}</div>
           <div class="board-drop"></div>
         `;
@@ -821,14 +869,140 @@
           e.preventDefault();
           dropArea.style.border = 'none';
           const id = e.dataTransfer.getData('text/plain');
-          if (id) updateStatus(id, col.status);
+          if (!id) return;
+          if (id.startsWith('group:')) {
+            const gid = id.replace('group:', '');
+            updateGroupStatus(gid, col.status);
+          } else {
+            moveOrderToStatus(id, col.status);
+          }
         });
 
-        (grouped[col.status] || []).forEach(order => {
+        (groupedByStatus[col.status] || []).forEach(order => {
           dropArea.appendChild(createCard(order));
         });
 
-        if ((grouped[col.status] || []).length === 0) {
+        Object.entries(groupMap).forEach(([gid, items]) => {
+          const first = items[0];
+          const status = first.status;
+          if (status !== col.status) return;
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.draggable = true;
+          card.dataset.groupId = gid;
+          const vendor = first.supplier || first.vendor || '';
+          const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
+          const tracking = first.group?.trackingNumber || first.trackingNumber || '';
+          card.innerHTML = `
+            <div class="flex-between" style="gap:8px;">
+              <div>
+                <h4>${vendor || 'Grouped Order'}</h4>
+                <div class="meta">Grouped items: ${items.length}${tracking ? ' · Tracking: '+tracking : ''}</div>
+              </div>
+              <div class="row-actions" style="display:flex; gap:6px;">
+                ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
+                ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
+              </div>
+            </div>
+            <div class="meta">${vendor ? `<span class="tag supplier">${vendor}</span>` : ''}</div>
+            <details style="margin-top:6px;">
+              <summary class="small">Show parts</summary>
+              <div class="group-items">
+                ${items.map(o => `
+                  <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; margin-top:4px;">
+                    <span style="font-weight:700;">${o.partName || ''}</span>
+                    ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ''}
+                    <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
+                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
+                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </details>
+            <div class="card-footer">
+              <span class="muted">${fmtDate(first.requestedAt)}</span>
+              <span class="muted">${total ? '$'+total.toFixed(2) : ''}</span>
+            </div>
+          `;
+          card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', `group:${gid}`);
+            card.style.opacity = '0.6';
+          });
+          card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+
+          card.addEventListener('dragover', (e) => { e.preventDefault(); card.style.borderColor = 'var(--accent)'; });
+          card.addEventListener('dragleave', () => { card.style.borderColor = 'var(--border)'; });
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            card.style.borderColor = 'var(--border)';
+            const id = e.dataTransfer.getData('text/plain');
+            if (!id || id.startsWith('group:')) return;
+            (async () => {
+              const res = await assignGroup(id, gid);
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(data.error || 'Unable to group this item.');
+                return;
+              }
+              await patchStatusOnly(id, status);
+              await fetchOrders();
+            })();
+          });
+
+          card.querySelectorAll('.group-item').forEach(el => {
+            const oid = el.dataset.id;
+            el.addEventListener('dragstart', (e) => {
+              e.dataTransfer.setData('text/plain', oid);
+            });
+          });
+
+          card.querySelectorAll('button[data-action="edit-group"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              const newTitle = prompt('Group title', first.group?.title || vendor || 'Group');
+              const newTracking = prompt('Tracking number', tracking || '');
+              await fetch(`/api/order-groups/${gid}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle || undefined, trackingNumber: newTracking || undefined })
+              });
+              fetchOrders();
+            });
+          });
+
+          card.querySelectorAll('button[data-action="delete-group"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              if (!confirm('Delete this group? Orders will be ungrouped.')) return;
+              await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
+              fetchOrders();
+            });
+          });
+
+          card.querySelectorAll('button[data-action="edit-part"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const oid = e.target.closest('.group-item').dataset.id;
+              const order = orders.find(o => o._id === oid);
+              if (order) openEdit(order);
+            });
+          });
+          card.querySelectorAll('button[data-action="delete-part"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              const oid = e.target.closest('.group-item').dataset.id;
+              if (!confirm('Delete this order?')) return;
+              await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
+              fetchOrders();
+            });
+          });
+
+          dropArea.appendChild(card);
+        });
+
+        const hasSingles = (groupedByStatus[col.status] || []).length > 0;
+        const hasGroups = Object.values(groupMap).some(items => items[0]?.status === col.status);
+        if (!hasSingles && !hasGroups) {
           const empty = document.createElement('div');
           empty.className = 'empty';
           empty.textContent = 'Drag an order here or create a new one.';
@@ -905,11 +1079,11 @@
       updateSelectionBar();
     }
 
-    async function updateStatus(id, status) {
+    async function updateStatus(id, status, trackingNumber) {
       await fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, trackingNumber })
       });
       selected.delete(id);
       await fetchOrders();
@@ -919,28 +1093,39 @@
       if (selected.size === 0) {
         selectionBar.classList.remove('active');
         selectionCount.textContent = '';
+        groupVendorNote.textContent = 'Vendor: auto from selection';
         return;
       }
       selectionBar.classList.add('active');
+      const selectedOrders = orders.filter(o => selected.has(o._id));
+      const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
       selectionCount.textContent = `${selected.size} selected`;
+      groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
     }
 
     async function createGroup() {
       if (selected.size === 0) return;
+      const selectedOrders = orders.filter(o => selected.has(o._id));
+      const baseVendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor;
+      const mixed = selectedOrders.some(o => (o.supplier || o.vendor) !== baseVendor);
+      if (mixed) {
+        alert('Select orders from the same vendor to group.');
+        return;
+      }
       await fetch('/api/order-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: groupTitle.value || undefined,
-          supplier: groupVendor.value || undefined,
+          supplier: baseVendor || undefined,
           trackingNumber: groupTracking.value || undefined,
           orderIds: Array.from(selected)
         })
       });
       selected.clear();
       groupTitle.value = '';
-      groupVendor.value = '';
       groupTracking.value = '';
+      groupVendorNote.textContent = 'Vendor: auto from selection';
       await fetchOrders();
     }
 
@@ -961,6 +1146,9 @@
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     groupBtn.addEventListener('click', createGroup);
     document.getElementById('new-order-btn').addEventListener('click', () => {
+      editingOrderId = null;
+      orderForm.reset();
+      orderForm.elements.quantityRequested.value = 1;
       modal.style.display = 'flex';
     });
     closeModal.addEventListener('click', () => { modal.style.display = 'none'; });
@@ -988,6 +1176,38 @@
       if (!text) return undefined;
       const num = parseFloat(text.replace(/[^0-9\\.]+/g, ''));
       return Number.isFinite(num) ? num : undefined;
+    }
+
+    async function assignGroup(orderId, groupId) {
+      return fetch(`/api/orders/${orderId}/group`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId })
+      });
+    }
+
+    async function patchStatusOnly(id, status, trackingNumber) {
+      await fetch(`/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, trackingNumber })
+      });
+    }
+
+    async function moveOrderToStatus(orderId, status) {
+      await assignGroup(orderId, null);
+      await patchStatusOnly(orderId, status);
+      await fetchOrders();
+      selected.delete(orderId);
+      updateSelectionBar();
+    }
+
+    async function updateGroupStatus(groupId, status) {
+      const affected = orders.filter(o => (o.groupId && o.groupId === groupId) || (o.group && o.group._id === groupId));
+      for (const o of affected) {
+        await patchStatusOnly(o._id, status);
+      }
+      await fetchOrders();
     }
 
     fetchProduct.addEventListener('click', async () => {
@@ -1029,14 +1249,12 @@
 
         const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
         const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
-        const pickStock = data.picks?.stock || data.candidates?.stocks?.[0]?.text;
 
         if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
         const priceNum = parsePrice(pickPrice);
         if (priceNum !== undefined) {
           orderForm.elements.unitCost.value = priceNum;
         }
-        if (pickStock) orderForm.elements.stockStatus.value = pickStock;
         if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
 
         orderMessage.textContent = 'Fetched. Verify fields before submitting.';
@@ -1054,19 +1272,36 @@
       payload.quantityRequested = Number(payload.quantityRequested || 0);
       payload.unitCost = payload.unitCost ? Number(payload.unitCost) : undefined;
       payload.fetchedPrice = payload.unitCost || undefined;
+      if (!payload.vendor) {
+        const auto = detectVendor(payload.vendorPartNumber, payload.partLink);
+        if (auto?.vendor) {
+          payload.vendor = auto.vendor;
+          payload.supplier = auto.vendor;
+        }
+      }
       payload.supplier = payload.vendor || payload.supplier;
       orderMessage.textContent = 'Submitting...';
       orderMessage.className = 'small';
       try {
-        await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        orderMessage.textContent = 'Order created.';
+        if (editingOrderId) {
+          await fetch(`/api/orders/${editingOrderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          orderMessage.textContent = 'Order updated.';
+        } else {
+          await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          orderMessage.textContent = 'Order created.';
+        }
         orderMessage.className = 'success';
         modal.style.display = 'none';
         orderForm.reset();
+        editingOrderId = null;
         await fetchOrders();
       } catch (err) {
         orderMessage.textContent = 'Failed to create order';

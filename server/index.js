@@ -374,6 +374,33 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
+app.patch('/api/orders/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditOrders');
+  if (!user) return;
+  try {
+    const result = await client.mutation('orders:update', {
+      orderId: req.params.id,
+      ...req.body
+    });
+    res.json({ orderId: result.orderId });
+  } catch (error) {
+    logger.error(error, 'Failed to update order');
+    res.status(500).json({ error: 'Unable to update order' });
+  }
+});
+
+app.delete('/api/orders/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canDeleteOrders');
+  if (!user) return;
+  try {
+    await client.mutation('orders:deleteOrder', { orderId: req.params.id });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to delete order');
+    res.status(500).json({ error: 'Unable to delete order' });
+  }
+});
+
 app.patch('/api/orders/:id/status', async (req, res) => {
   const user = await requireAuth(req, res, 'canMoveOrders');
   if (!user) return;
@@ -398,9 +425,6 @@ app.patch('/api/orders/:id/group', async (req, res) => {
   const user = await requireAuth(req, res, 'canMoveOrders');
   if (!user) return;
   const { groupId } = req.body || {};
-  if (!groupId) {
-    return res.status(400).json({ error: 'groupId is required' });
-  }
   try {
     const result = await client.mutation('orders:assignGroup', {
       orderId: req.params.id,
@@ -452,6 +476,18 @@ app.patch('/api/order-groups/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to update order group');
     res.status(500).json({ error: 'Unable to update order group' });
+  }
+});
+
+app.delete('/api/order-groups/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canDeleteOrders');
+  if (!user) return;
+  try {
+    const result = await client.mutation('orderGroups:remove', { groupId: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete order group');
+    res.status(500).json({ error: 'Unable to delete order group' });
   }
 });
 

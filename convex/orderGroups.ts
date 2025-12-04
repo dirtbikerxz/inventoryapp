@@ -80,3 +80,20 @@ export const update = mutation({
     return { groupId };
   }
 });
+
+export const remove = mutation({
+  args: { groupId: v.string() },
+  handler: async (ctx, args) => {
+    const groupId = ctx.db.normalizeId("orderGroups", args.groupId);
+    if (!groupId) throw new Error("Invalid group id");
+
+    // Ungroup any orders tied to this group
+    const orders = await ctx.db.query("orders").withIndex("by_groupId", q => q.eq("groupId", groupId)).collect();
+    for (const order of orders) {
+      await ctx.db.patch(order._id, { groupId: undefined });
+    }
+
+    await ctx.db.delete(groupId);
+    return { groupId: args.groupId };
+  }
+});

@@ -63,7 +63,6 @@ export const create = mutation({
     partLink: v.optional(v.string()),
     fetchedName: v.optional(v.string()),
     fetchedPrice: v.optional(v.number()),
-    stockStatus: v.optional(v.string()),
     category: v.optional(v.string()),
     quantityRequested: v.number(),
     priority: v.optional(v.string()),
@@ -131,15 +130,73 @@ export const updateStatus = mutation({
 export const assignGroup = mutation({
   args: {
     orderId: v.string(),
-    groupId: v.string()
+    groupId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const orderId = ctx.db.normalizeId("orders", args.orderId);
     if (!orderId) throw new Error("Invalid order id");
+
+    // Ungroup
+    if (!args.groupId) {
+      await ctx.db.patch(orderId, { groupId: undefined });
+      return { orderId, groupId: null };
+    }
+
     const groupId = ctx.db.normalizeId("orderGroups", args.groupId);
     if (!groupId) throw new Error("Invalid group id");
 
+    const order = await ctx.db.get(orderId);
+    if (!order) throw new Error("Order not found");
+
+    const existingInGroup = await ctx.db.query("orders")
+      .withIndex("by_groupId", q => q.eq("groupId", groupId))
+      .collect();
+    const conflicting = existingInGroup.find(o => (o.supplier || o.vendor) !== (order.supplier || order.vendor));
+    if (conflicting) {
+      throw new Error("Group contains different vendor orders");
+    }
+
     await ctx.db.patch(orderId, { groupId });
     return { orderId, groupId };
+  }
+});
+
+export const update = mutation({
+  args: {
+    orderId: v.string(),
+    partName: v.optional(v.string()),
+    quantityRequested: v.optional(v.number()),
+    priority: v.optional(v.string()),
+    supplier: v.optional(v.string()),
+    vendor: v.optional(v.string()),
+    partLink: v.optional(v.string()),
+    vendorPartNumber: v.optional(v.string()),
+    trackingNumber: v.optional(v.string()),
+    status: v.optional(v.string()),
+    unitCost: v.optional(v.number()),
+    fetchedPrice: v.optional(v.number()),
+    notes: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("orders", args.orderId);
+    if (!id) throw new Error("Invalid order id");
+    const updates: Record<string, any> = {};
+    ["partName","quantityRequested","priority","supplier","vendor","partLink","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","notes"].forEach(k => {
+      const val = (args as any)[k];
+      if (val !== undefined) updates[k] = val;
+    });
+    if (Object.keys(updates).length === 0) return { orderId: id };
+    await ctx.db.patch(id, updates);
+    return { orderId: id };
+  }
+});
+
+export const deleteOrder = mutation({
+  args: { orderId: v.string() },
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("orders", args.orderId);
+    if (!id) throw new Error("Invalid order id");
+    await ctx.db.delete(id);
+    return { orderId: args.orderId };
   }
 });

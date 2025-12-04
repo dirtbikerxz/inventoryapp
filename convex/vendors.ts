@@ -18,7 +18,6 @@ export const upsert = mutation({
     partNumberPattern: v.optional(v.string()),
     nameSelector: v.optional(v.string()),
     priceSelector: v.optional(v.string()),
-    stockSelector: v.optional(v.string()),
     notes: v.optional(v.string()),
     headers: v.optional(v.record(v.string(), v.string()))
   },
@@ -31,15 +30,14 @@ export const upsert = mutation({
       await ctx.db.patch(id, {
         vendor: args.vendor,
         baseUrl: args.baseUrl,
-        productUrlTemplate: args.productUrlTemplate,
-        partNumberExample: args.partNumberExample,
-        partNumberPattern: args.partNumberPattern,
-        nameSelector: args.nameSelector,
-        priceSelector: args.priceSelector,
-        stockSelector: args.stockSelector,
-        notes: args.notes,
-        headers: args.headers,
-        updatedAt: now
+      productUrlTemplate: args.productUrlTemplate,
+      partNumberExample: args.partNumberExample,
+      partNumberPattern: args.partNumberPattern,
+      nameSelector: args.nameSelector,
+      priceSelector: args.priceSelector,
+      notes: args.notes,
+      headers: args.headers,
+      updatedAt: now
       });
       return { id };
     }
@@ -58,7 +56,6 @@ export const upsert = mutation({
       partNumberPattern: args.partNumberPattern,
       nameSelector: args.nameSelector,
       priceSelector: args.priceSelector,
-      stockSelector: args.stockSelector,
       notes: args.notes,
       headers: args.headers,
       createdAt: now,

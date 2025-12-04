@@ -91,7 +91,6 @@ export default defineSchema({
     partNumberPattern: v.optional(v.string()),
     nameSelector: v.optional(v.string()),
     priceSelector: v.optional(v.string()),
-    stockSelector: v.optional(v.string()),
     platform: v.optional(v.string()),
     notes: v.optional(v.string()),
     headers: v.optional(v.record(v.string(), v.string())),
