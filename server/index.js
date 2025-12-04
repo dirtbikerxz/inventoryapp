@@ -551,11 +551,10 @@ function deriveSelector(el) {
 function collectCandidates($) {
   const titleCandidates = [];
   const priceCandidates = [];
-  const stockCandidates = [];
 
   $('meta[property="og:title"], meta[name="twitter:title"]').each((_, el) => {
     const content = $(el).attr('content');
-    if (content) titleCandidates.push({ text: content.trim(), selector: 'meta[og:title]' });
+    if (content) titleCandidates.push({ text: content.trim(), selector: 'meta[property="og:title"]' });
   });
   const commonTitles = ['h1', '.product-title', '.title', 'title'];
   commonTitles.forEach(sel => {
@@ -571,9 +570,6 @@ function collectCandidates($) {
     if ((/\$\s*\d/.test(txt) || /\d+(\.\d{2})/.test(txt)) && txt.length <= 120 && !/function/i.test(txt)) {
       priceCandidates.push({ text: txt, selector });
     }
-    if (/in stock|out of stock|backorder|lead time|ships|available/i.test(txt) && txt.length <= 160) {
-      stockCandidates.push({ text: txt, selector });
-    }
   });
 
   const unique = (arr) => {
@@ -588,9 +584,62 @@ function collectCandidates($) {
 
   return {
     titles: unique(titleCandidates),
-    prices: unique(priceCandidates),
-    stocks: unique(stockCandidates)
+    prices: unique(priceCandidates)
   };
+}
+
+function parseShopifyMeta(html) {
+  const metaMatch = html.match(/var meta\s*=\s*(\{[\s\S]*?\});/);
+  if (!metaMatch) return null;
+  try {
+    const obj = JSON.parse(metaMatch[1]);
+    const product = obj?.product;
+    if (!product || !product.variants?.length) return null;
+    return {
+      vendor: product.vendor,
+      variants: product.variants.map(v => ({
+        id: v.id,
+        name: v.name || v.title,
+        price: v.price ? Number(v.price) / 100 : undefined,
+        sku: v.sku,
+        publicTitle: v.public_title
+      }))
+    };
+  } catch (e) {
+    logger.warn(e, 'Failed to parse Shopify meta');
+    return null;
+  }
+}
+
+async function getShopifyVariantPrice(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const productsIndex = parts.findIndex(p => p === 'products');
+    if (productsIndex === -1 || productsIndex === parts.length - 1) return null;
+    const handle = parts[productsIndex + 1];
+    const variantId = u.searchParams.get('variant');
+    if (!handle) return null;
+    const jsUrl = `${u.origin}/products/${handle}.js`;
+    const resp = await fetch(jsUrl);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const variants = data?.variants || [];
+    let variant = variants[0];
+    if (variantId) {
+      const found = variants.find(v => String(v.id) === String(variantId));
+      if (found) variant = found;
+    }
+    if (!variant) return null;
+    return {
+      priceText: variant.price ? (Number(variant.price) / 100).toFixed(2) : '',
+      priceNumber: variant.price ? Number(variant.price) / 100 : undefined,
+      title: variant.name || variant.title
+    };
+  } catch (e) {
+    logger.warn(e, 'Shopify variant fetch failed');
+    return null;
+  }
 }
 
 app.post('/api/vendors/extract', async (req, res) => {
@@ -602,15 +651,47 @@ app.post('/api/vendors/extract', async (req, res) => {
     const resp = await fetch(url, { headers });
     if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
     const html = await resp.text();
+    const finalUrl = resp.url || url;
     const $ = cheerio.load(html);
 
+    const shopifyMeta = parseShopifyMeta(html);
+    let shopifyVariant = null;
+    if (shopifyMeta?.variants?.length) {
+      const u = new URL(finalUrl);
+      const variantId = u.searchParams.get('variant');
+      shopifyVariant = shopifyMeta.variants.find(v => String(v.id) === String(variantId)) || shopifyMeta.variants[0];
+    }
+
     const picks = {};
-    if (selectors.nameSelector) picks.name = $(selectors.nameSelector).first().text().trim();
-    if (selectors.priceSelector) picks.price = $(selectors.priceSelector).first().text().trim();
-    if (selectors.stockSelector) picks.stock = $(selectors.stockSelector).first().text().trim();
+    const safePick = (sel) => {
+      if (!sel) return '';
+      try {
+        return $(sel).first().text().trim();
+      } catch (err) {
+        logger.warn({ selector: sel, err }, 'Invalid selector during extraction');
+        return '';
+      }
+    };
+
+    picks.name = safePick(selectors.nameSelector);
+    picks.price = safePick(selectors.priceSelector);
+
+    const shopifyPrice = await getShopifyVariantPrice(finalUrl);
+    if (shopifyPrice?.priceText) {
+      picks.price = shopifyPrice.priceText;
+    }
+    if (shopifyPrice?.title && !picks.name) {
+      picks.name = shopifyPrice.title;
+    }
+    if (shopifyVariant?.price !== undefined) {
+      picks.price = shopifyVariant.price.toFixed(2);
+    }
+    if (shopifyVariant?.name && !picks.name) {
+      picks.name = shopifyVariant.name;
+    }
 
     const candidates = collectCandidates($);
-    res.json({ picks, candidates });
+    res.json({ picks, candidates, shopify: shopifyMeta ? { vendor: shopifyMeta.vendor, variant: shopifyVariant, variants: shopifyMeta.variants } : null });
   } catch (error) {
     logger.error(error, 'Failed to extract vendor product');
     res.status(500).json({ error: 'Extraction failed', details: error.message });

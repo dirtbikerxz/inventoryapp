@@ -376,10 +376,6 @@
           <input name="quantityRequested" class="input" type="number" min="1" value="1" required />
         </div>
         <div>
-          <label class="small">Stock status</label>
-          <input name="stockStatus" class="input" placeholder="In stock / Backordered / Lead time" />
-        </div>
-        <div>
           <label class="small">Priority</label>
           <select name="priority" class="input">
             <option>Low</option>
@@ -526,18 +522,20 @@
             <label class="small">Base URL</label>
             <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
           </div>
-          <div>
-            <label class="small">Product URL template</label>
-            <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
-          </div>
-          <div>
-            <label class="small">Part # example</label>
-            <input name="partNumberExample" class="input" placeholder="WCP-0921" />
-          </div>
-          <div>
-            <label class="small">Part # regex</label>
-            <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
-          </div>
+        <div>
+          <label class="small">Product URL template</label>
+          <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
+          <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
+        </div>
+        <div>
+          <label class="small">Part # example</label>
+          <input name="partNumberExample" class="input" placeholder="WCP-0921" />
+        </div>
+        <div>
+          <label class="small">Part # regex</label>
+          <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
+          <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
+        </div>
           <div>
             <label class="small">Name selector</label>
             <input name="nameSelector" class="input" placeholder=".product-title" />
@@ -546,9 +544,19 @@
             <label class="small">Price selector</label>
             <input name="priceSelector" class="input" placeholder=".price" />
           </div>
-          <div>
-            <label class="small">Stock selector</label>
-            <input name="stockSelector" class="input" placeholder=".stock" />
+        <div style="grid-column: span 2;">
+          <label class="small">Paste copied selector or JS path</label>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+            <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
+            <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
+            <select id="selector-target" class="input">
+              <option value="nameSelector">Apply to Name</option>
+              <option value="priceSelector">Apply to Price</option>
+            </select>
+                <button type="button" class="btn ghost" id="apply-selector">Apply</button>
+              </div>
+            </div>
+            <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
           </div>
           <div style="grid-column: span 2;">
             <label class="small">Notes / headers JSON (optional)</label>
@@ -562,21 +570,16 @@
             </div>
             <div id="extract-results" class="small" style="margin-top:8px;"></div>
             <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
-              <div>
-                <label class="small">Pick name</label>
-                <select id="pick-name" class="input"></select>
-                <div id="preview-name" class="small"></div>
-              </div>
-              <div>
-                <label class="small">Pick price</label>
-                <select id="pick-price" class="input"></select>
-                <div id="preview-price" class="small"></div>
-              </div>
-              <div>
-                <label class="small">Pick stock</label>
-                <select id="pick-stock" class="input"></select>
-                <div id="preview-stock" class="small"></div>
-              </div>
+        <div>
+          <label class="small">Pick name</label>
+          <select id="pick-name" class="input"></select>
+          <div id="preview-name" class="small"></div>
+        </div>
+        <div>
+          <label class="small">Pick price</label>
+          <select id="pick-price" class="input"></select>
+          <div id="preview-price" class="small"></div>
+        </div>
             </div>
           </div>
           <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
@@ -636,10 +639,13 @@
     const testExtract = document.getElementById('test-extract');
     const pickName = document.getElementById('pick-name');
     const pickPrice = document.getElementById('pick-price');
-    const pickStock = document.getElementById('pick-stock');
     const previewName = document.getElementById('preview-name');
     const previewPrice = document.getElementById('preview-price');
-    const previewStock = document.getElementById('preview-stock');
+    const selectorSnippet = document.getElementById('selector-snippet');
+    const selectorTarget = document.getElementById('selector-target');
+    const applySelector = document.getElementById('apply-selector');
+    const partExample = vendorForm.elements.partNumberExample;
+    const partPattern = vendorForm.elements.partNumberPattern;
     const loginModal = document.getElementById('login-modal');
     const loginForm = document.getElementById('login-form');
     const loginMessage = document.getElementById('login-message');
@@ -655,6 +661,17 @@
     const roleList = document.getElementById('role-list');
     let vendorConfigs = [];
     let currentUser = null;
+    function detectVendor(partNum, link) {
+      if (!vendorConfigs?.length) return null;
+      const candidates = vendorConfigs.filter(v => {
+        const regex = v.partNumberPattern ? new RegExp(v.partNumberPattern) : null;
+        const baseMatch = v.baseUrl && link && link.toLowerCase().includes(v.baseUrl.toLowerCase());
+        const patternMatch = regex && partNum && regex.test(partNum);
+        return baseMatch || patternMatch;
+      });
+      if (candidates.length === 1) return candidates[0];
+      return null;
+    }
 
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
@@ -752,7 +769,6 @@
         <div class="meta">
           ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ''}
           ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
-          ${order.stockStatus ? `<span class="tag priority">${order.stockStatus}</span>` : ''}
           ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
           ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
         </div>
@@ -980,7 +996,14 @@
       const vendorLower = vendor.toLowerCase();
       const partNum = (formData.get('vendorPartNumber') || '').toString().trim();
       const link = (formData.get('partLink') || '').toString().trim();
-      const config = findVendorConfig(vendorLower);
+      let config = findVendorConfig(vendorLower);
+      if (!config) {
+        const auto = detectVendor(partNum, link);
+        if (auto) {
+          config = auto;
+          orderForm.elements.vendor.value = auto.vendor || orderForm.elements.vendor.value;
+        }
+      }
       const url = deriveUrl(config, partNum, link);
       if (!url) {
         orderMessage.textContent = 'Provide a link or vendor part number.';
@@ -998,7 +1021,6 @@
             selectors: {
               nameSelector: config?.nameSelector,
               priceSelector: config?.priceSelector,
-              stockSelector: config?.stockSelector
             }
           })
         });
@@ -1086,7 +1108,7 @@
                 <h4 style="margin:0 0 4px;">${v.vendor}</h4>
                 <div class="small">${v.baseUrl || ''}</div>
                 <div class="small">Template: ${v.productUrlTemplate || ''}</div>
-                <div class="small">Selectors: ${v.nameSelector || '-'} | ${v.priceSelector || '-'} | ${v.stockSelector || '-'}</div>
+                <div class="small">Selectors: ${v.nameSelector || '-'} | ${v.priceSelector || '-'}</div>
               </div>
               <div class="flex-between" style="gap:8px;">
                 <button class="btn ghost" data-action="edit">Edit</button>
@@ -1110,7 +1132,6 @@
             vendorForm.elements.partNumberPattern.value = v.partNumberPattern || '';
             vendorForm.elements.nameSelector.value = v.nameSelector || '';
             vendorForm.elements.priceSelector.value = v.priceSelector || '';
-            vendorForm.elements.stockSelector.value = v.stockSelector || '';
             vendorForm.elements.notes.value = v.notes || '';
           });
         });
@@ -1164,7 +1185,7 @@
             partNumberPattern: data.partNumberPattern || undefined,
             nameSelector: data.nameSelector || undefined,
             priceSelector: data.priceSelector || undefined,
-            stockSelector: data.stockSelector || undefined,
+            platform: data.platform || undefined,
             notes: data.notes || undefined,
             headers: headersObj
           })
@@ -1246,8 +1267,7 @@
       }
       const selectors = {
         nameSelector: vendorForm.elements.nameSelector.value || undefined,
-        priceSelector: vendorForm.elements.priceSelector.value || undefined,
-        stockSelector: vendorForm.elements.stockSelector.value || undefined
+        priceSelector: vendorForm.elements.priceSelector.value || undefined
       };
       const headers = {};
       try {
@@ -1274,20 +1294,33 @@
         if (!res.ok) throw new Error(data.error || 'Failed');
         resultsEl.textContent = 'Pick which value looks correct for each field. You can paste CSS selectors (e.g., span.money).';
 
-        const trim = (t) => (t && t.length > 80 ? t.slice(0, 80) + '…' : t || '');
+        if (data.shopify) {
+          vendorMessage.textContent = 'Shopify data detected. Name/price auto-filled. Editing selectors will override Shopify.';
+          vendorMessage.className = 'small';
+          if (data.shopify.vendor && !vendorForm.elements.vendor.value) {
+            vendorForm.elements.vendor.value = data.shopify.vendor;
+          }
+          if (data.shopify.variant?.name && !vendorForm.elements.nameSelector.value) {
+            previewName.textContent = data.shopify.variant.name;
+          }
+          if (data.shopify.variant?.price !== undefined && !vendorForm.elements.priceSelector.value) {
+            previewPrice.textContent = data.shopify.variant.price.toFixed(2);
+          }
+        }
+
+        const trim = (t) => (t && t.length > 120 ? t.slice(0, 120) + '…' : t || '');
         const nameOptions = (data.picks?.name ? [{ text: data.picks.name, selector: selectors.nameSelector }] : []).concat(data.candidates?.titles || []);
         const priceOptions = (data.picks?.price ? [{ text: data.picks.price, selector: selectors.priceSelector }] : []).concat(data.candidates?.prices || []);
-        const stockOptions = (data.picks?.stock ? [{ text: data.picks.stock, selector: selectors.stockSelector }] : []).concat(data.candidates?.stocks || []);
 
-        const makeOptions = (opts) => opts.map(c => `<option title="${c.text || ''}" value="${c.selector || ''}">${trim(c.text)}</option>`).join('');
+        const makeOptions = (opts) => opts.map(c => `<option data-text="${c.text || ''}" title="${c.text || ''}" value="${c.selector || ''}">${trim(c.text)}</option>`).join('');
         pickName.innerHTML = '<option value="">-- choose name --</option>' + makeOptions(nameOptions);
         pickPrice.innerHTML = '<option value="">-- choose price --</option>' + makeOptions(priceOptions);
-        pickStock.innerHTML = '<option value="">-- choose stock --</option>' + makeOptions(stockOptions);
 
         const applySelection = (selectEl, fieldName, previewEl) => {
           const apply = () => {
-            const selSelector = selectEl.value || '';
-            const selText = selectEl.options[selectEl.selectedIndex]?.title || selectEl.options[selectEl.selectedIndex]?.text || '';
+            const selOption = selectEl.options[selectEl.selectedIndex];
+            const selSelector = selOption?.value || '';
+            const selText = selOption?.dataset?.text || selOption?.title || selOption?.text || '';
             if (selSelector) {
               vendorForm.elements[fieldName].value = selSelector;
             }
@@ -1301,7 +1334,6 @@
         };
         applySelection(pickName, 'nameSelector', previewName);
         applySelection(pickPrice, 'priceSelector', previewPrice);
-        applySelection(pickStock, 'stockSelector', previewStock);
       } catch (err) {
         resultsEl.textContent = 'Extraction failed. Check URL/headers.';
         vendorMessage.textContent = err.message;
@@ -1322,8 +1354,48 @@
       testExtraction();
     }, 500);
 
-    ['nameSelector', 'priceSelector', 'stockSelector'].forEach(name => {
+    ['nameSelector', 'priceSelector'].forEach(name => {
       vendorForm.elements[name].addEventListener('input', liveExtract);
+    });
+
+    function deriveFromSnippet(snippet) {
+      if (!snippet) return '';
+      const text = snippet.trim().replace(/;$/, '');
+      const qsMatch = text.match(/querySelector(All)?\((['"`])([^'"`]+)\2\)/i);
+      if (qsMatch) {
+        return qsMatch[3].trim();
+      }
+      // CSS selector only
+      return text;
+    }
+
+    applySelector.addEventListener('click', () => {
+      const sel = deriveFromSnippet(selectorSnippet.value || '');
+      if (!sel) return;
+      const target = selectorTarget.value;
+      vendorForm.elements[target].value = sel;
+      liveExtract();
+    });
+
+    function guessRegexFromExample(example) {
+      if (!example) return '';
+      // If looks like ABC-1234 or AM-4896
+      if (/^[A-Za-z]{2,}-\d+$/i.test(example)) {
+        const prefix = example.split('-')[0];
+        return `^${prefix}-\\d+$`;
+      }
+      // Alphanumeric with dashes
+      if (/^[A-Za-z0-9-]+$/.test(example)) {
+        return '^[A-Za-z0-9-]+$';
+      }
+      return '';
+    }
+
+    partExample.addEventListener('blur', () => {
+      const guess = guessRegexFromExample(partExample.value.trim());
+      if (guess && !partPattern.value) {
+        partPattern.value = guess;
+      }
     });
 
     testExtract.addEventListener('click', testExtraction);
