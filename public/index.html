@@ -157,7 +157,8 @@
       border: 1px solid var(--border);
     }
     .board-drop {
-      min-height: 200px;
+      min-height: 320px;
+      padding-bottom: 60px;
     }
     .card {
       background: var(--panel);
@@ -403,6 +404,40 @@
     </div>
   </div>
 
+  <div id="group-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:55; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:520px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:22px;">Edit Group</div>
+          <div class="subtitle" style="margin-bottom:12px;">Update group title or tracking.</div>
+        </div>
+        <button class="btn ghost" id="close-group">Close</button>
+      </div>
+      <form id="group-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="small">Group title</label>
+          <input name="title" class="input" placeholder="Vendor - mm/dd/yy" />
+        </div>
+        <div>
+          <label class="small">Tracking number</label>
+          <input name="trackingNumber" class="input" placeholder="Optional" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea name="notes" class="input" rows="3" placeholder="Optional notes for this order group"></textarea>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="group-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="cancel-group">Cancel</button>
+            <button type="submit" class="btn primary">Save group</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
       <div class="page-title" style="font-size:22px;">Sign In</div>
@@ -620,6 +655,19 @@
     const groupTitle = document.getElementById('group-title');
     const groupTracking = document.getElementById('group-tracking');
     const groupVendorNote = document.getElementById('group-vendor-note');
+    const boardMessage = document.createElement('div');
+    boardMessage.id = 'board-message';
+    boardMessage.style.position = 'fixed';
+    boardMessage.style.right = '16px';
+    boardMessage.style.bottom = '16px';
+    boardMessage.style.background = 'var(--panel)';
+    boardMessage.style.border = '1px solid var(--border)';
+    boardMessage.style.padding = '10px 14px';
+    boardMessage.style.borderRadius = '10px';
+    boardMessage.style.boxShadow = 'var(--card-shadow)';
+    boardMessage.style.display = 'none';
+    boardMessage.style.zIndex = '80';
+    document.body.appendChild(boardMessage);
     const modal = document.getElementById('modal');
     const closeModal = document.getElementById('close-modal');
     const cancelOrder = document.getElementById('cancel-order');
@@ -635,6 +683,11 @@
     const closeAdmin = document.getElementById('close-admin');
     const accountBtn = document.getElementById('account-btn');
     const accountModal = document.getElementById('account-modal');
+    const groupModal = document.getElementById('group-modal');
+    const closeGroup = document.getElementById('close-group');
+    const cancelGroup = document.getElementById('cancel-group');
+    const groupForm = document.getElementById('group-form');
+    const groupMessage = document.getElementById('group-message');
     const vendorForm = document.getElementById('vendor-form');
     const vendorMessage = document.getElementById('vendor-message');
     const clearVendor = document.getElementById('clear-vendor');
@@ -651,6 +704,7 @@
     const partExample = vendorForm.elements.partNumberExample;
     const partPattern = vendorForm.elements.partNumberPattern;
     let editingOrderId = null;
+    let editingGroupId = null;
     const loginModal = document.getElementById('login-modal');
     const loginForm = document.getElementById('login-form');
     const loginMessage = document.getElementById('login-message');
@@ -681,17 +735,33 @@
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
       { label: 'Ordered', status: 'Ordered', hint: 'Placed orders - awaiting arrival' },
-      { label: 'Arrived', status: 'Received', hint: 'Items received' },
-      { label: 'Cancelled', status: 'Cancelled', hint: 'Not moving forward' }
+      { label: 'Arrived', status: 'Received', hint: 'Items received' }
     ];
 
     let orders = [];
     let selected = new Set();
+    function getOrderById(id) {
+      return orders.find(o => o._id === id);
+    }
+    function getOrderVendor(order) {
+      return (order?.supplier || order?.vendor || '').toLowerCase();
+    }
 
     function fmtDate(ts) {
       if (!ts) return '';
       const d = new Date(ts);
       return d.toLocaleString();
+    }
+    function formatShortDate(date = new Date()) {
+      return `${date.getMonth() + 1}/${date.getDate()}/${String(date.getFullYear()).slice(-2)}`;
+    }
+    function showBoardMessage(text, type = 'info', timeout = 3500) {
+      boardMessage.textContent = text;
+      boardMessage.style.borderColor = type === 'error' ? 'var(--danger)' : 'var(--border)';
+      boardMessage.style.color = type === 'error' ? 'var(--danger)' : 'var(--text)';
+      boardMessage.style.display = 'block';
+      if (showBoardMessage._t) clearTimeout(showBoardMessage._t);
+      showBoardMessage._t = setTimeout(() => { boardMessage.style.display = 'none'; }, timeout);
     }
 
     function matchesSearch(order, term) {
@@ -782,7 +852,12 @@
           <input type="checkbox" class="checkbox" ${selected.has(order._id) ? 'checked' : ''}/>
         </div>
           <div class="meta">
-          ${order.totalCost ? '$'+order.totalCost : (order.unitCost ? '$'+order.unitCost : (order.fetchedPrice ? '$'+order.fetchedPrice : ''))}
+          ${(() => {
+            const unit = order.unitCost ?? order.fetchedPrice;
+            const qty = order.quantityRequested || 1;
+            const total = order.totalCost ?? (unit !== undefined ? Number((unit * qty).toFixed(2)) : undefined);
+            return total !== undefined ? '$' + total : (unit !== undefined ? '$'+unit : '');
+          })()}
           ${order.quantityRequested ? ' · x' + order.quantityRequested : ''}
         </div>
         <div class="meta">
@@ -863,9 +938,7 @@
         `;
         const dropArea = column.querySelector('.board-drop');
 
-        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.style.border = '1px dashed var(--accent)'; });
-        dropArea.addEventListener('dragleave', () => { dropArea.style.border = 'none'; });
-        dropArea.addEventListener('drop', (e) => {
+        const onDropTarget = async (e) => {
           e.preventDefault();
           dropArea.style.border = 'none';
           const id = e.dataTransfer.getData('text/plain');
@@ -876,7 +949,16 @@
           } else {
             moveOrderToStatus(id, col.status);
           }
-        });
+        };
+        const onDragOver = (e) => { e.preventDefault(); dropArea.style.border = '1px dashed var(--accent)'; };
+        const onDragLeave = () => { dropArea.style.border = 'none'; };
+
+        dropArea.addEventListener('dragover', onDragOver);
+        dropArea.addEventListener('dragleave', onDragLeave);
+        dropArea.addEventListener('drop', onDropTarget);
+        column.addEventListener('dragover', onDragOver);
+        column.addEventListener('dragleave', onDragLeave);
+        column.addEventListener('drop', onDropTarget);
 
         (groupedByStatus[col.status] || []).forEach(order => {
           dropArea.appendChild(createCard(order));
@@ -893,10 +975,12 @@
           const vendor = first.supplier || first.vendor || '';
           const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
           const tracking = first.group?.trackingNumber || first.trackingNumber || '';
+          const groupTitle = first.group?.title || vendor || 'Grouped Order';
+          const groupedAt = first.group?.updatedAt || first.group?.createdAt;
           card.innerHTML = `
             <div class="flex-between" style="gap:8px;">
               <div>
-                <h4>${vendor || 'Grouped Order'}</h4>
+                <h4>${groupTitle}</h4>
                 <div class="meta">Grouped items: ${items.length}${tracking ? ' · Tracking: '+tracking : ''}</div>
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
@@ -908,19 +992,22 @@
             <details style="margin-top:6px;">
               <summary class="small">Show parts</summary>
               <div class="group-items">
-                ${items.map(o => `
-                  <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; margin-top:4px;">
+          ${items.map(o => `
+                  <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
                     <span style="font-weight:700;">${o.partName || ''}</span>
                     ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ''}
+                    ${o.priority ? `<span class="tag priority">${o.priority}</span>` : ''}
+                    ${o.supplier || o.vendor ? `<span class="tag supplier">${o.supplier || o.vendor}</span>` : ''}
+                    ${o.studentName ? `<span class="tag">${o.studentName}</span>` : ''}
                     <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
                     ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
                     ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
                   </div>
                 `).join('')}
-              </div>
+            </div>
             </details>
             <div class="card-footer">
-              <span class="muted">${fmtDate(first.requestedAt)}</span>
+              <span class="muted">${groupedAt ? fmtDate(groupedAt) : fmtDate(first.requestedAt)}</span>
               <span class="muted">${total ? '$'+total.toFixed(2) : ''}</span>
             </div>
           `;
@@ -938,10 +1025,17 @@
             const id = e.dataTransfer.getData('text/plain');
             if (!id || id.startsWith('group:')) return;
             (async () => {
+              const draggedOrder = getOrderById(id);
+              const targetVendor = getOrderVendor(first);
+              const dragVendor = getOrderVendor(draggedOrder);
+              if (dragVendor && targetVendor && dragVendor !== targetVendor) {
+                showBoardMessage('Cannot assign part to an order from a different vendor', 'error', 4000);
+                return;
+              }
               const res = await assignGroup(id, gid);
               if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
-                alert(data.error || 'Unable to group this item.');
+                showBoardMessage(data.error || 'Cannot assign part to an order from a different vendor', 'error');
                 return;
               }
               await patchStatusOnly(id, status);
@@ -952,6 +1046,7 @@
           card.querySelectorAll('.group-item').forEach(el => {
             const oid = el.dataset.id;
             el.addEventListener('dragstart', (e) => {
+              e.stopPropagation();
               e.dataTransfer.setData('text/plain', oid);
             });
           });
@@ -959,14 +1054,12 @@
           card.querySelectorAll('button[data-action="edit-group"]').forEach(btn => {
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
-              const newTitle = prompt('Group title', first.group?.title || vendor || 'Group');
-              const newTracking = prompt('Tracking number', tracking || '');
-              await fetch(`/api/order-groups/${gid}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newTitle || undefined, trackingNumber: newTracking || undefined })
+              openGroupModal({
+                id: gid,
+                title: first.group?.title || groupTitle,
+                trackingNumber: tracking,
+                notes: first.group?.notes || ''
               });
-              fetchOrders();
             });
           });
 
@@ -1049,7 +1142,12 @@
           <td><span class="status-chip status-${o.status || ''}">${o.status || ''}</span></td>
           <td>${o.quantityRequested || ''}</td>
           <td>${o.unitCost ? '$'+o.unitCost : (o.fetchedPrice ? '$'+o.fetchedPrice : '')}</td>
-          <td>${o.totalCost ? '$'+o.totalCost : ''}</td>
+          <td>${(() => {
+            const unit = o.unitCost ?? o.fetchedPrice;
+            const qty = o.quantityRequested || 1;
+            const total = o.totalCost ?? (unit !== undefined ? Number((unit * qty).toFixed(2)) : undefined);
+            return total !== undefined ? '$'+total : '';
+          })()}</td>
           <td>${o.supplier || o.vendor || ''}</td>
           <td>${o.studentName || ''}</td>
           <td>${fmtDate(o.requestedAt)}</td>
@@ -1112,11 +1210,12 @@
         alert('Select orders from the same vendor to group.');
         return;
       }
+      const fallbackTitle = baseVendor ? `${baseVendor} - ${formatShortDate()}` : `Group - ${formatShortDate()}`;
       await fetch('/api/order-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: groupTitle.value || undefined,
+          title: groupTitle.value || fallbackTitle,
           supplier: baseVendor || undefined,
           trackingNumber: groupTracking.value || undefined,
           orderIds: Array.from(selected)
@@ -1153,6 +1252,8 @@
     });
     closeModal.addEventListener('click', () => { modal.style.display = 'none'; });
     cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; });
+    closeGroup.addEventListener('click', () => { groupModal.style.display = 'none'; });
+    cancelGroup.addEventListener('click', () => { groupModal.style.display = 'none'; });
 
     function findVendorConfig(name) {
       if (!name) return null;
@@ -1182,7 +1283,7 @@
       return fetch(`/api/orders/${orderId}/group`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId })
+        body: JSON.stringify({ groupId: groupId === undefined ? undefined : groupId })
       });
     }
 
@@ -1195,7 +1296,7 @@
     }
 
     async function moveOrderToStatus(orderId, status) {
-      await assignGroup(orderId, null);
+      await assignGroup(orderId, undefined);
       await patchStatusOnly(orderId, status);
       await fetchOrders();
       selected.delete(orderId);
@@ -1324,6 +1425,44 @@
       accountModal.style.display = 'flex';
     });
     clearVendor.addEventListener('click', () => { vendorForm.reset(); vendorForm.elements.id.value = ''; });
+
+    function openGroupModal(data) {
+      editingGroupId = data?.id || null;
+      groupForm.elements.id.value = data?.id || '';
+      groupForm.elements.title.value = data?.title || '';
+      groupForm.elements.trackingNumber.value = data?.trackingNumber || '';
+      groupForm.elements.notes.value = data?.notes || '';
+      groupMessage.textContent = '';
+      groupModal.style.display = 'flex';
+    }
+
+    groupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(groupForm);
+      const payload = Object.fromEntries(formData.entries());
+      const id = payload.id;
+      groupMessage.textContent = 'Saving...';
+      groupMessage.className = 'small';
+      try {
+        await fetch(`/api/order-groups/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: payload.title || undefined,
+            trackingNumber: payload.trackingNumber || undefined,
+            notes: payload.notes || undefined
+          })
+        });
+        groupMessage.textContent = 'Saved.';
+        groupMessage.className = 'success';
+        groupModal.style.display = 'none';
+        editingGroupId = null;
+        await fetchOrders();
+      } catch (err) {
+        groupMessage.textContent = 'Failed to save group';
+        groupMessage.className = 'error';
+      }
+    });
 
     async function loadVendors() {
       if (!currentUser) return;

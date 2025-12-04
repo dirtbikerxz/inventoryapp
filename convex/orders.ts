@@ -185,6 +185,15 @@ export const update = mutation({
       const val = (args as any)[k];
       if (val !== undefined) updates[k] = val;
     });
+    // Recompute total cost if price or qty changed
+    if (updates.quantityRequested !== undefined || updates.unitCost !== undefined || updates.fetchedPrice !== undefined) {
+      const order = await ctx.db.get(id);
+      const qty = updates.quantityRequested ?? order?.quantityRequested;
+      const price = updates.unitCost ?? updates.fetchedPrice ?? order?.unitCost ?? order?.fetchedPrice;
+      if (qty !== undefined && price !== undefined) {
+        updates.totalCost = Number((qty * price).toFixed(2));
+      }
+    }
     if (Object.keys(updates).length === 0) return { orderId: id };
     await ctx.db.patch(id, updates);
     return { orderId: id };
