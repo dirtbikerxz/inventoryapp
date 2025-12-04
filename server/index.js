@@ -565,13 +565,14 @@ function collectCandidates($) {
     });
   });
   $('body *').each((_, el) => {
-    const txt = $(el).text().trim();
+    const txt = ($(el).text() || '').trim().replace(/\s+/g, ' ');
     if (!txt) return;
-    if (/\$\s*\d/.test(txt) || /\d+(\.\d{2})/.test(txt)) {
-      priceCandidates.push({ text: txt, selector: deriveSelector(el) });
+    const selector = deriveSelector(el);
+    if ((/\$\s*\d/.test(txt) || /\d+(\.\d{2})/.test(txt)) && txt.length <= 120 && !/function/i.test(txt)) {
+      priceCandidates.push({ text: txt, selector });
     }
-    if (/in stock|out of stock|backorder|lead time|ships|available/i.test(txt)) {
-      stockCandidates.push({ text: txt, selector: deriveSelector(el) });
+    if (/in stock|out of stock|backorder|lead time|ships|available/i.test(txt) && txt.length <= 160) {
+      stockCandidates.push({ text: txt, selector });
     }
   });
 

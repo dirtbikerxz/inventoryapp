@@ -269,6 +269,8 @@
       color: var(--text);
     }
     .small { font-size: 12px; color: var(--muted); }
+    select { max-width: 100%; }
+    select option { white-space: normal; }
     .empty {
       border: 1px dashed var(--border);
       padding: 24px;
@@ -563,14 +565,17 @@
               <div>
                 <label class="small">Pick name</label>
                 <select id="pick-name" class="input"></select>
+                <div id="preview-name" class="small"></div>
               </div>
               <div>
                 <label class="small">Pick price</label>
                 <select id="pick-price" class="input"></select>
+                <div id="preview-price" class="small"></div>
               </div>
               <div>
                 <label class="small">Pick stock</label>
                 <select id="pick-stock" class="input"></select>
+                <div id="preview-stock" class="small"></div>
               </div>
             </div>
           </div>
@@ -632,6 +637,9 @@
     const pickName = document.getElementById('pick-name');
     const pickPrice = document.getElementById('pick-price');
     const pickStock = document.getElementById('pick-stock');
+    const previewName = document.getElementById('preview-name');
+    const previewPrice = document.getElementById('preview-price');
+    const previewStock = document.getElementById('preview-stock');
     const loginModal = document.getElementById('login-modal');
     const loginForm = document.getElementById('login-form');
     const loginMessage = document.getElementById('login-message');
@@ -1264,23 +1272,26 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed');
-        resultsEl.textContent = 'Pick which value looks correct for each field.';
+        resultsEl.textContent = 'Pick which value looks correct for each field. You can paste CSS selectors (e.g., span.money).';
 
+        const trim = (t) => (t && t.length > 80 ? t.slice(0, 80) + '…' : t || '');
         const nameOptions = (data.picks?.name ? [{ text: data.picks.name, selector: selectors.nameSelector }] : []).concat(data.candidates?.titles || []);
         const priceOptions = (data.picks?.price ? [{ text: data.picks.price, selector: selectors.priceSelector }] : []).concat(data.candidates?.prices || []);
         const stockOptions = (data.picks?.stock ? [{ text: data.picks.stock, selector: selectors.stockSelector }] : []).concat(data.candidates?.stocks || []);
 
-        const makeOptions = (opts) => opts.map(c => `<option value="${c.selector || ''}">${c.text || ''}</option>`).join('');
+        const makeOptions = (opts) => opts.map(c => `<option title="${c.text || ''}" value="${c.selector || ''}">${trim(c.text)}</option>`).join('');
         pickName.innerHTML = '<option value="">-- choose name --</option>' + makeOptions(nameOptions);
         pickPrice.innerHTML = '<option value="">-- choose price --</option>' + makeOptions(priceOptions);
         pickStock.innerHTML = '<option value="">-- choose stock --</option>' + makeOptions(stockOptions);
 
-        const applySelection = (selectEl, fieldName) => {
+        const applySelection = (selectEl, fieldName, previewEl) => {
           const apply = () => {
             const selSelector = selectEl.value || '';
+            const selText = selectEl.options[selectEl.selectedIndex]?.title || selectEl.options[selectEl.selectedIndex]?.text || '';
             if (selSelector) {
               vendorForm.elements[fieldName].value = selSelector;
             }
+            if (previewEl) previewEl.textContent = selText;
           };
           selectEl.addEventListener('change', apply);
           if (selectEl.options.length > 1) {
@@ -1288,15 +1299,32 @@
             apply();
           }
         };
-        applySelection(pickName, 'nameSelector');
-        applySelection(pickPrice, 'priceSelector');
-        applySelection(pickStock, 'stockSelector');
+        applySelection(pickName, 'nameSelector', previewName);
+        applySelection(pickPrice, 'priceSelector', previewPrice);
+        applySelection(pickStock, 'stockSelector', previewStock);
       } catch (err) {
         resultsEl.textContent = 'Extraction failed. Check URL/headers.';
         vendorMessage.textContent = err.message;
         vendorMessage.className = 'error';
       }
     }
+
+    // Live preview when selectors change (uses current test URL if present)
+    const debounce = (fn, ms = 400) => {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    };
+    const liveExtract = debounce(() => {
+      if (!testUrl.value.trim()) return;
+      testExtraction();
+    }, 500);
+
+    ['nameSelector', 'priceSelector', 'stockSelector'].forEach(name => {
+      vendorForm.elements[name].addEventListener('input', liveExtract);
+    });
 
     testExtract.addEventListener('click', testExtraction);
 
