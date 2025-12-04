@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      target: development
+    container_name: inventory-app
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules

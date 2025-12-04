@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DV Parts Orders</title>
+  <style>
+    :root {
+      --purple: #461D7C;
+      --gold: #FDD023;
+      --bg: #110b1f;
+      --panel: #1a1230;
+      --panel-2: #140d25;
+      --accent: var(--gold);
+      --accent-2: #f7d96c;
+      --text: #f5efff;
+      --muted: #c8c1dd;
+      --border: #2a1f45;
+      --danger: #ff5565;
+      --success: #4ad28f;
+      --warning: var(--gold);
+      --card-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: linear-gradient(120deg, #1b0f32, #120924);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .brand {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--gold);
+      text-shadow: 0 2px 10px rgba(253,208,35,0.2);
+    }
+    .search {
+      flex: 1;
+      max-width: 400px;
+      margin: 0 16px;
+      position: relative;
+    }
+    .search input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { border-color: var(--accent); box-shadow: 0 6px 18px rgba(253,208,35,0.25); }
+    .btn.primary {
+      background: var(--accent);
+      color: #2b1d00;
+      border-color: var(--accent);
+      font-weight: 700;
+      box-shadow: 0 8px 20px rgba(253,208,35,0.25);
+    }
+    .btn.ghost {
+      background: transparent;
+    }
+    main { padding: 24px; }
+    .page-title { font-size: 32px; font-weight: 800; margin: 0 0 4px; color: var(--gold); }
+    .subtitle { color: var(--muted); margin-bottom: 20px; }
+    .view-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+    .view-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--text);
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      min-width: 100px;
+    }
+    .view-toggle button.active {
+      background: var(--accent);
+      color: #0b1324;
+    }
+    .flex-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    /* Board */
+    .board {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      margin-top: 16px;
+    }
+    .column {
+      background: var(--panel-2);
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 300px;
+      position: relative;
+    }
+    .column h3 {
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 17px;
+    }
+    .pill {
+      background: #1f2a44;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+    }
+    .board-drop {
+      min-height: 200px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: var(--card-shadow);
+      cursor: grab;
+      transition: transform 0.1s ease, border-color 0.1s ease, box-shadow 0.15s ease;
+    }
+    .card:hover { border-color: var(--accent); box-shadow: 0 10px 28px rgba(253,208,35,0.18); }
+    .card h4 { margin: 0 0 6px; font-size: 15px; }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1b2440;
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+    .tag.supplier { background: rgba(79,180,255,0.12); color: var(--accent-2); }
+    .tag.priority { background: rgba(248,197,82,0.16); color: var(--gold); }
+    .tag.group { background: rgba(74,210,143,0.16); color: var(--success); }
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 2px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+    }
+    .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,180,255,0.25); }
+    /* Table */
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .input {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      width: 100%;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    tr:hover td { background: rgba(79,180,255,0.05); }
+    .status-chip {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .status-Requested { background: rgba(253,208,35,0.18); color: var(--gold); }
+    .status-Ordered { background: rgba(253,208,35,0.28); color: #1f1a00; }
+    .status-Received { background: rgba(74,210,143,0.16); color: var(--success); }
+    .status-Cancelled { background: rgba(255,85,101,0.16); color: var(--danger); }
+    .selection-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin: 12px 0;
+    }
+    .selection-bar.active { display: flex; }
+    .input-inline {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .empty {
+      border: 1px dashed var(--border);
+      padding: 24px;
+      border-radius: 12px;
+      text-align: center;
+      color: var(--muted);
+      background: var(--panel-2);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">DV Parts Orders</div>
+    <div class="search">
+      <input id="global-search" placeholder="Search parts, students, suppliers..." />
+    </div>
+    <div class="toolbar">
+      <button class="btn ghost" id="refresh-btn">Refresh</button>
+      <button class="btn primary" id="new-order-btn">New order</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="flex-between">
+      <div>
+        <div class="page-title">Orders</div>
+        <div class="subtitle">Track parts from request to delivery.</div>
+      </div>
+      <div class="view-toggle">
+        <button id="board-view-btn" class="active">Board</button>
+        <button id="table-view-btn">Table</button>
+      </div>
+    </div>
+
+    <div id="selection-bar" class="selection-bar">
+      <div id="selection-count"></div>
+      <div class="flex-between" style="gap:8px; flex:1;">
+        <input id="group-title" class="input-inline" placeholder="Group title" />
+        <input id="group-vendor" class="input-inline" placeholder="Vendor / Supplier" />
+        <input id="group-tracking" class="input-inline" placeholder="Tracking number" />
+      </div>
+      <button class="btn primary" id="group-btn">Create/Update Group</button>
+    </div>
+
+    <section id="board-section">
+      <div class="board" id="board"></div>
+    </section>
+
+    <section id="table-section" style="display:none;">
+      <div class="filters">
+        <div><label class="small">Start date</label><input id="start-date" class="input" type="date" /></div>
+        <div><label class="small">End date</label><input id="end-date" class="input" type="date" /></div>
+        <div><label class="small">Status</label><select id="status-filter" class="input"></select></div>
+        <div><label class="small">Vendor</label><select id="vendor-filter" class="input"></select></div>
+      </div>
+      <div id="table-container"></div>
+    </section>
+  </main>
+
+  <script>
+    const boardEl = document.getElementById('board');
+    const boardBtn = document.getElementById('board-view-btn');
+    const tableBtn = document.getElementById('table-view-btn');
+    const boardSection = document.getElementById('board-section');
+    const tableSection = document.getElementById('table-section');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const globalSearch = document.getElementById('global-search');
+    const statusFilter = document.getElementById('status-filter');
+    const vendorFilter = document.getElementById('vendor-filter');
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    const tableContainer = document.getElementById('table-container');
+    const selectionBar = document.getElementById('selection-bar');
+    const selectionCount = document.getElementById('selection-count');
+    const groupBtn = document.getElementById('group-btn');
+    const groupTitle = document.getElementById('group-title');
+    const groupVendor = document.getElementById('group-vendor');
+    const groupTracking = document.getElementById('group-tracking');
+
+    const statuses = [
+      { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
+      { label: 'Ordered', status: 'Ordered', hint: 'Placed orders - awaiting arrival' },
+      { label: 'Arrived', status: 'Received', hint: 'Items received' },
+      { label: 'Cancelled', status: 'Cancelled', hint: 'Not moving forward' }
+    ];
+
+    let orders = [];
+    let selected = new Set();
+
+    function fmtDate(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      return d.toLocaleString();
+    }
+
+    function matchesSearch(order, term) {
+      if (!term) return true;
+      const hay = [
+        order.partName,
+        order.studentName,
+        order.supplier,
+        order.productCode,
+        order.orderNumber,
+        order.category,
+        order.priority,
+        order.group && order.group.title,
+        order.group && order.group.trackingNumber
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term.toLowerCase());
+    }
+
+    function withinDate(order, start, end) {
+      if (!start && !end) return true;
+      const ts = order.requestedAt || Date.parse(order.createdAt || '') || 0;
+      if (start && ts < start) return false;
+      if (end && ts > end) return false;
+      return true;
+    }
+
+    function filteredOrders() {
+      const term = globalSearch.value.trim();
+      const s = statusFilter.value;
+      const v = vendorFilter.value;
+      const start = startDate.value ? Date.parse(startDate.value) : null;
+      const end = endDate.value ? Date.parse(endDate.value) + 24*60*60*1000 : null; // inclusive
+      return orders.filter(o =>
+        matchesSearch(o, term) &&
+        (!s || o.status === s) &&
+        (!v || (o.supplier || '').toLowerCase() === v.toLowerCase()) &&
+        withinDate(o, start, end)
+      );
+    }
+
+    async function fetchOrders() {
+      const res = await fetch('/api/orders');
+      const data = await res.json();
+      orders = (data.orders || []).map(o => ({ ...o, _id: o._id || o.id || o.orderNumber }));
+      buildFilters();
+      renderBoard();
+      renderTable();
+      updateSelectionBar();
+    }
+
+    function buildFilters() {
+      const statusesUnique = Array.from(new Set(orders.map(o => o.status).filter(Boolean)));
+      statusFilter.innerHTML = ['<option value="">All statuses</option>', ...statusesUnique.map(s => `<option>${s}</option>`)].join('');
+      const vendors = Array.from(new Set(orders.map(o => (o.supplier || '').trim()).filter(Boolean)));
+      vendorFilter.innerHTML = ['<option value="">All vendors</option>', ...vendors.map(v => `<option>${v}</option>`)].join('');
+    }
+
+    function createCard(order) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.draggable = true;
+      card.dataset.id = order._id;
+      if (selected.has(order._id)) card.classList.add('selected');
+
+      card.innerHTML = `
+        <div class="flex-between" style="gap:8px;">
+          <div>
+            <h4>${order.partName || 'Untitled part'}</h4>
+            <div class="meta">Requested by ${order.studentName || 'Unknown'}</div>
+          </div>
+          <input type="checkbox" class="checkbox" ${selected.has(order._id) ? 'checked' : ''}/>
+        </div>
+        <div class="meta">
+          ${order.totalCost ? '$'+order.totalCost : (order.unitCost ? '$'+order.unitCost : '')}
+          ${order.quantityRequested ? ' · x' + order.quantityRequested : ''}
+        </div>
+        <div class="meta">
+          ${order.supplier ? `<span class="tag supplier">${order.supplier}</span>` : ''}
+          ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
+          ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
+        </div>
+        <div class="card-footer">
+          <span class="muted">${order.productCode || ''}</span>
+          <span class="muted">${fmtDate(order.requestedAt)}</span>
+        </div>
+      `;
+
+      card.querySelector('.checkbox').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleSelect(order._id);
+      });
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.checkbox')) return;
+        toggleSelect(order._id);
+      });
+
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', order._id);
+        card.style.opacity = '0.6';
+      });
+      card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+      return card;
+    }
+
+    function renderBoard() {
+      const grouped = filteredOrders().reduce((acc, order) => {
+        acc[order.status] = acc[order.status] || [];
+        acc[order.status].push(order);
+        return acc;
+      }, {});
+
+      boardEl.innerHTML = '';
+      statuses.forEach(col => {
+        const column = document.createElement('div');
+        column.className = 'column';
+        column.dataset.status = col.status;
+        column.innerHTML = `
+          <h3>${col.label} <span class="pill">${(grouped[col.status] || []).length}</span></h3>
+          <div class="small" style="margin-bottom:6px;">${col.hint}</div>
+          <div class="board-drop"></div>
+        `;
+        const dropArea = column.querySelector('.board-drop');
+
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.style.border = '1px dashed var(--accent)'; });
+        dropArea.addEventListener('dragleave', () => { dropArea.style.border = 'none'; });
+        dropArea.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropArea.style.border = 'none';
+          const id = e.dataTransfer.getData('text/plain');
+          if (id) updateStatus(id, col.status);
+        });
+
+        (grouped[col.status] || []).forEach(order => {
+          dropArea.appendChild(createCard(order));
+        });
+
+        if ((grouped[col.status] || []).length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'Drag an order here or create a new one.';
+          dropArea.appendChild(empty);
+        }
+
+        boardEl.appendChild(column);
+      });
+    }
+
+    function renderTable() {
+      const rows = filteredOrders();
+      if (!rows.length) {
+        tableContainer.innerHTML = '<div class="empty">No orders found.</div>';
+        return;
+      }
+
+      const header = `
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all"></th>
+              <th>Part</th>
+              <th>Status</th>
+              <th>Qty</th>
+              <th>Unit</th>
+              <th>Total</th>
+              <th>Vendor</th>
+              <th>Requested by</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      const body = rows.map(o => `
+        <tr data-id="${o._id}">
+          <td><input type="checkbox" class="row-check" ${selected.has(o._id) ? 'checked' : ''}></td>
+          <td>${o.partName || ''} ${o.group ? `<span class="tag group">Group</span>` : ''}</td>
+          <td><span class="status-chip status-${o.status || ''}">${o.status || ''}</span></td>
+          <td>${o.quantityRequested || ''}</td>
+          <td>${o.unitCost ? '$'+o.unitCost : ''}</td>
+          <td>${o.totalCost ? '$'+o.totalCost : ''}</td>
+          <td>${o.supplier || ''}</td>
+          <td>${o.studentName || ''}</td>
+          <td>${fmtDate(o.requestedAt)}</td>
+        </tr>
+      `).join('');
+      tableContainer.innerHTML = header + body + '</tbody></table>';
+
+      tableContainer.querySelector('#select-all').addEventListener('change', (e) => {
+        const check = e.target.checked;
+        rows.forEach(o => { if (check) selected.add(o._id); else selected.delete(o._id); });
+        renderBoard(); renderTable(); updateSelectionBar();
+      });
+      tableContainer.querySelectorAll('.row-check').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const id = e.target.closest('tr').dataset.id;
+          if (e.target.checked) selected.add(id); else selected.delete(id);
+          renderBoard(); updateSelectionBar();
+        });
+      });
+    }
+
+    function toggleSelect(id) {
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      renderBoard();
+      renderTable();
+      updateSelectionBar();
+    }
+
+    async function updateStatus(id, status) {
+      await fetch(`/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      selected.delete(id);
+      await fetchOrders();
+    }
+
+    function updateSelectionBar() {
+      if (selected.size === 0) {
+        selectionBar.classList.remove('active');
+        selectionCount.textContent = '';
+        return;
+      }
+      selectionBar.classList.add('active');
+      selectionCount.textContent = `${selected.size} selected`;
+    }
+
+    async function createGroup() {
+      if (selected.size === 0) return;
+      await fetch('/api/order-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: groupTitle.value || undefined,
+          supplier: groupVendor.value || undefined,
+          trackingNumber: groupTracking.value || undefined,
+          orderIds: Array.from(selected)
+        })
+      });
+      selected.clear();
+      groupTitle.value = '';
+      groupVendor.value = '';
+      groupTracking.value = '';
+      await fetchOrders();
+    }
+
+    // Event wiring
+    boardBtn.addEventListener('click', () => {
+      boardBtn.classList.add('active'); tableBtn.classList.remove('active');
+      boardSection.style.display = 'block'; tableSection.style.display = 'none';
+    });
+    tableBtn.addEventListener('click', () => {
+      tableBtn.classList.add('active'); boardBtn.classList.remove('active');
+      boardSection.style.display = 'none'; tableSection.style.display = 'block';
+    });
+    refreshBtn.addEventListener('click', fetchOrders);
+    globalSearch.addEventListener('input', () => { renderBoard(); renderTable(); });
+    statusFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
+    vendorFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
+    startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
+    endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
+    groupBtn.addEventListener('click', createGroup);
+    document.getElementById('new-order-btn').addEventListener('click', () => {
+      alert('Order creation coming soon. Use the quick form in earlier UI or API /api/orders.');
+    });
+
+    fetchOrders().catch(() => {
+      boardEl.innerHTML = '<div class="empty">Failed to load orders. Check Convex URL and network.</div>';
+    });
+  </script>
+</body>
+</html>
