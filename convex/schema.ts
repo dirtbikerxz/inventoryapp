@@ -36,12 +36,18 @@ export default defineSchema({
     partId: v.optional(v.id("parts")),
     partCode: v.optional(v.string()), // original sheet Part ID
     partName: v.string(),
+    vendorPartNumber: v.optional(v.string()),
+    partLink: v.optional(v.string()),
+    fetchedName: v.optional(v.string()),
+    fetchedPrice: v.optional(v.number()),
+    stockStatus: v.optional(v.string()),
+    supplier: v.optional(v.string()),
+    vendor: v.optional(v.string()),
     category: v.optional(v.string()),
     quantityRequested: v.number(),
     priority: v.string(),
     unitCost: v.optional(v.number()),
     totalCost: v.optional(v.number()),
-    supplier: v.optional(v.string()),
     supplierLink: v.optional(v.string()),
     productCode: v.optional(v.string()),
     status: v.string(),
@@ -76,5 +82,45 @@ export default defineSchema({
     name: v.string(),
     code: v.optional(v.string()),
     sortOrder: v.optional(v.number())
-  }).index("by_name", ["name"])
+  }).index("by_name", ["name"]),
+
+  vendorConfigs: defineTable({
+    vendor: v.string(),
+    baseUrl: v.optional(v.string()),
+    productUrlTemplate: v.optional(v.string()),
+    partNumberExample: v.optional(v.string()),
+    partNumberPattern: v.optional(v.string()),
+    nameSelector: v.optional(v.string()),
+    priceSelector: v.optional(v.string()),
+    stockSelector: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    headers: v.optional(v.record(v.string(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  }).index("by_vendor", ["vendor"]),
+
+  rolePolicies: defineTable({
+    role: v.string(),
+    permissions: v.record(v.string(), v.boolean()),
+    updatedAt: v.number()
+  }).index("by_role", ["role"]),
+
+  users: defineTable({
+    username: v.optional(v.string()),
+    email: v.optional(v.string()),
+    name: v.string(),
+    role: v.string(),
+    active: v.boolean(),
+    permissions: v.record(v.string(), v.boolean()),
+    passwordHash: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  }).index("by_username", ["username"]),
+
+  sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number()
+  }).index("by_token", ["token"])
 });

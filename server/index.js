@@ -1,6 +1,10 @@
 const cors = require('cors');
 const dotenv = require('dotenv');
 const express = require('express');
+const cheerio = require('cheerio');
+const bcrypt = require('bcryptjs');
+const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 const path = require('path');
 const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
@@ -18,7 +22,9 @@ const logger = pino({
 
 const config = {
   port: parseInt(process.env.PORT || '3000', 10),
-  convexUrl: process.env.CONVEX_URL
+  convexUrl: process.env.CONVEX_URL,
+  sessionCookie: 'session_token',
+  sessionDays: 7
 };
 
 if (!config.convexUrl) {
@@ -30,14 +36,284 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+function defaultPermissions(role) {
+  const base = {
+    canPlaceOrders: true,
+    canMoveOrders: false,
+    canEditOrders: false,
+    canDeleteOrders: false,
+    canManageVendors: false,
+    canManageUsers: false
+  };
+  switch ((role || '').toLowerCase()) {
+    case 'admin':
+      return {
+        canPlaceOrders: true,
+        canMoveOrders: true,
+        canEditOrders: true,
+        canDeleteOrders: true,
+        canManageVendors: true,
+        canManageUsers: true
+      };
+    case 'mentor':
+      return {
+        canPlaceOrders: true,
+        canMoveOrders: true,
+        canEditOrders: true,
+        canDeleteOrders: true,
+        canManageVendors: true,
+        canManageUsers: false
+      };
+    case 'student':
+      return base;
+    default:
+      return base;
+  }
+}
+
+async function getSessionUser(token) {
+  if (!token) return null;
+  const session = await client.query('auth:getSession', { token });
+  if (!session) return null;
+  const policy = await client.query('roles:get', { role: session.user.role || 'student' });
+  const effectivePermissions = session.user.permissions || policy?.permissions || defaultPermissions(session.user.role);
+  return {
+    sessionId: session.sessionId,
+    ...session.user,
+    permissions: effectivePermissions
+  };
+}
+
+async function requireAuth(req, res, permission) {
+  const token = req.cookies[config.sessionCookie] || req.headers['x-session-token'];
+  const user = await getSessionUser(token);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  if (permission && !user.permissions?.[permission]) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  req.user = user;
+  req.sessionToken = token;
+  return user;
+}
+
+function setSessionCookie(res, token) {
+  const maxAge = config.sessionDays * 24 * 60 * 60 * 1000;
+  res.cookie(config.sessionCookie, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge
+  });
+}
+
+async function ensureAdminSeed() {
+  try {
+    const users = await client.query('auth:listUsers', {});
+    // Backfill usernames if missing
+    for (const u of users) {
+      if (!u.username) {
+        const fallback = (u.email || 'user').split('@')[0] || 'user';
+        const desired = fallback || 'user';
+        try {
+          await client.mutation('auth:updateUser', { id: u._id, username: desired });
+          logger.info(`Backfilled username for user ${u._id} -> ${desired}`);
+        } catch (e) {
+          logger.error(e, `Failed to backfill username for ${u._id}`);
+        }
+      }
+    }
+    if (!users || users.length === 0) {
+      const hash = await bcrypt.hash('password', 10);
+      await client.mutation('auth:createUser', {
+        username: 'admin',
+        name: 'Admin',
+        role: 'admin',
+        active: true,
+        permissions: defaultPermissions('admin'),
+        passwordHash: hash
+      });
+      logger.info('Seeded default admin account: admin / password');
+    }
+  } catch (error) {
+    logger.error(error, 'Failed to seed default admin');
+  }
+}
+
 app.get('/health', async (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), convexUrl: config.convexUrl });
+});
+
+app.get('/api/users', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  try {
+    const users = await client.query('auth:listUsers', {});
+    res.json({ users });
+  } catch (error) {
+    logger.error(error, 'Failed to list users');
+    res.status(500).json({ error: 'Unable to list users' });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  const { username, name, role, permissions, password, active = true } = req.body || {};
+  if (!username || !name || !role || !password) {
+    return res.status(400).json({ error: 'username, name, role, password required' });
+  }
+  try {
+    const perms = permissions || defaultPermissions(role);
+    const hash = await bcrypt.hash(password, 10);
+    const result = await client.mutation('auth:createUser', {
+      username: username.toLowerCase(),
+      name,
+      role,
+      active,
+      permissions: perms,
+      passwordHash: hash
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create user');
+    res.status(500).json({ error: 'Unable to create user' });
+  }
+});
+
+app.patch('/api/users/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  const { name, role, permissions, active, password } = req.body || {};
+  try {
+    const updates = {
+      id: req.params.id,
+      name,
+      role,
+      permissions,
+      active
+    };
+    if (password) {
+      updates.passwordHash = await bcrypt.hash(password, 10);
+    }
+    await client.mutation('auth:updateUser', updates);
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update user');
+    res.status(500).json({ error: 'Unable to update user' });
+  }
+});
+
+app.get('/api/roles', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  try {
+    const roles = await client.query('roles:list', {});
+    res.json({ roles });
+  } catch (error) {
+    logger.error(error, 'Failed to list roles');
+    res.status(500).json({ error: 'Unable to list roles' });
+  }
+});
+
+app.patch('/api/roles/:role', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  const { permissions } = req.body || {};
+  if (!permissions) return res.status(400).json({ error: 'permissions required' });
+  try {
+    await client.mutation('roles:upsert', { role: req.params.role, permissions });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update role');
+    res.status(500).json({ error: 'Unable to update role' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+  try {
+    const user = await client.query('auth:getUserByUsername', { username: username.toLowerCase() });
+    if (!user || !user.active) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const expiresAt = Date.now() + config.sessionDays * 24 * 60 * 60 * 1000;
+    await client.mutation('auth:createSession', {
+      userId: user._id,
+      token,
+      expiresAt
+    });
+
+    setSessionCookie(res, token);
+    res.json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        permissions: user.permissions
+      }
+    });
+  } catch (error) {
+    logger.error(error, 'Failed login');
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  const token = req.cookies[config.sessionCookie] || req.headers['x-session-token'];
+  if (token) {
+    try {
+      await client.mutation('auth:deleteSession', { token });
+    } catch (e) {
+      logger.error(e, 'Failed to delete session on logout');
+    }
+  }
+  res.clearCookie(config.sessionCookie);
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  const token = req.cookies[config.sessionCookie] || req.headers['x-session-token'];
+  const user = await getSessionUser(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json({ user });
+});
+
+app.patch('/api/auth/password', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'oldPassword and newPassword required' });
+  try {
+    const dbUser = await client.query('auth:getUserByUsername', { username: user.username });
+    const ok = await bcrypt.compare(oldPassword, dbUser.passwordHash);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await client.mutation('auth:updateUser', { id: dbUser._id, passwordHash: hash });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to change password');
+    res.status(500).json({ error: 'Unable to change password' });
+  }
 });
 
 app.get('/api/categories', async (req, res) => {
@@ -66,6 +342,8 @@ app.get('/api/inventory', async (req, res) => {
 });
 
 app.get('/api/orders', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
   try {
     const data = await client.query('orders:list', {
       status: req.query.status || undefined
@@ -78,12 +356,17 @@ app.get('/api/orders', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
+  const user = await requireAuth(req, res, 'canPlaceOrders');
+  if (!user) return;
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: 'Order payload is required' });
   }
 
   try {
-    const result = await client.mutation('orders:create', req.body);
+    const result = await client.mutation('orders:create', {
+      ...req.body,
+      studentName: req.body.studentName || user.name
+    });
     res.status(201).json({ order: result });
   } catch (error) {
     logger.error(error, 'Failed to create order');
@@ -92,6 +375,8 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.patch('/api/orders/:id/status', async (req, res) => {
+  const user = await requireAuth(req, res, 'canMoveOrders');
+  if (!user) return;
   const { status, trackingNumber } = req.body || {};
   if (!status) {
     return res.status(400).json({ error: 'status is required' });
@@ -110,6 +395,8 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 });
 
 app.patch('/api/orders/:id/group', async (req, res) => {
+  const user = await requireAuth(req, res, 'canMoveOrders');
+  if (!user) return;
   const { groupId } = req.body || {};
   if (!groupId) {
     return res.status(400).json({ error: 'groupId is required' });
@@ -127,6 +414,8 @@ app.patch('/api/orders/:id/group', async (req, res) => {
 });
 
 app.get('/api/order-groups', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
   try {
     const groups = await client.query('orderGroups:list', {});
     res.json({ groups });
@@ -137,6 +426,8 @@ app.get('/api/order-groups', async (req, res) => {
 });
 
 app.post('/api/order-groups', async (req, res) => {
+  const user = await requireAuth(req, res, 'canMoveOrders');
+  if (!user) return;
   if (!req.body) {
     return res.status(400).json({ error: 'Group payload is required' });
   }
@@ -150,6 +441,8 @@ app.post('/api/order-groups', async (req, res) => {
 });
 
 app.patch('/api/order-groups/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canMoveOrders');
+  if (!user) return;
   try {
     const group = await client.mutation('orderGroups:update', {
       groupId: req.params.id,
@@ -163,6 +456,8 @@ app.patch('/api/order-groups/:id', async (req, res) => {
 });
 
 app.get('/api/students', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
   try {
     const students = await client.query('students:list', {
       activeOnly: req.query.activeOnly === 'true'
@@ -175,6 +470,8 @@ app.get('/api/students', async (req, res) => {
 });
 
 app.post('/api/students', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
   const { name, subteam, active } = req.body || {};
   if (!name || active === undefined) {
     return res.status(400).json({ error: 'name and active are required' });
@@ -189,11 +486,143 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
+app.get('/api/vendors/configs', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const vendors = await client.query('vendors:list', {});
+    res.json({ vendors });
+  } catch (error) {
+    logger.error(error, 'Failed to load vendor configs');
+    res.status(500).json({ error: 'Unable to load vendor configs' });
+  }
+});
+
+app.post('/api/vendors/configs', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageVendors');
+  if (!user) return;
+  if (!req.body || !req.body.vendor) {
+    return res.status(400).json({ error: 'vendor is required' });
+  }
+  try {
+    const result = await client.mutation('vendors:upsert', req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create vendor config');
+    res.status(500).json({ error: 'Unable to create vendor config' });
+  }
+});
+
+app.patch('/api/vendors/configs/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageVendors');
+  if (!user) return;
+  try {
+    const result = await client.mutation('vendors:upsert', { id: req.params.id, ...req.body });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to update vendor config');
+    res.status(500).json({ error: 'Unable to update vendor config' });
+  }
+});
+
+app.delete('/api/vendors/configs/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageVendors');
+  if (!user) return;
+  try {
+    const result = await client.mutation('vendors:remove', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete vendor config');
+    res.status(500).json({ error: 'Unable to delete vendor config' });
+  }
+});
+
+function deriveSelector(el) {
+  if (!el || !el.tagName) return null;
+  const tag = el.tagName.toLowerCase();
+  const cls = (el.attribs?.class || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(c => `.${c}`)
+    .join('');
+  return cls ? `${tag}${cls}` : tag;
+}
+
+function collectCandidates($) {
+  const titleCandidates = [];
+  const priceCandidates = [];
+  const stockCandidates = [];
+
+  $('meta[property="og:title"], meta[name="twitter:title"]').each((_, el) => {
+    const content = $(el).attr('content');
+    if (content) titleCandidates.push({ text: content.trim(), selector: 'meta[og:title]' });
+  });
+  const commonTitles = ['h1', '.product-title', '.title', 'title'];
+  commonTitles.forEach(sel => {
+    $(sel).each((_, el) => {
+      const text = $(el).text().trim();
+      if (text) titleCandidates.push({ text, selector: deriveSelector(el) || sel });
+    });
+  });
+  $('body *').each((_, el) => {
+    const txt = $(el).text().trim();
+    if (!txt) return;
+    if (/\$\s*\d/.test(txt) || /\d+(\.\d{2})/.test(txt)) {
+      priceCandidates.push({ text: txt, selector: deriveSelector(el) });
+    }
+    if (/in stock|out of stock|backorder|lead time|ships|available/i.test(txt)) {
+      stockCandidates.push({ text: txt, selector: deriveSelector(el) });
+    }
+  });
+
+  const unique = (arr) => {
+    const seen = new Set();
+    return arr.filter(c => {
+      const key = (c.text || '') + '|' + (c.selector || '');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 10);
+  };
+
+  return {
+    titles: unique(titleCandidates),
+    prices: unique(priceCandidates),
+    stocks: unique(stockCandidates)
+  };
+}
+
+app.post('/api/vendors/extract', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const { url, selectors = {}, headers = {} } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url is required' });
+  try {
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
+    const html = await resp.text();
+    const $ = cheerio.load(html);
+
+    const picks = {};
+    if (selectors.nameSelector) picks.name = $(selectors.nameSelector).first().text().trim();
+    if (selectors.priceSelector) picks.price = $(selectors.priceSelector).first().text().trim();
+    if (selectors.stockSelector) picks.stock = $(selectors.stockSelector).first().text().trim();
+
+    const candidates = collectCandidates($);
+    res.json({ picks, candidates });
+  } catch (error) {
+    logger.error(error, 'Failed to extract vendor product');
+    res.status(500).json({ error: 'Extraction failed', details: error.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   logger.error(err, 'Unhandled error');
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(config.port, () => {
-  logger.info(`Inventory app server (Convex-backed) listening on port ${config.port}`);
+ensureAdminSeed().finally(() => {
+  app.listen(config.port, () => {
+    logger.info(`Inventory app server (Convex-backed) listening on port ${config.port}`);
+  });
 });

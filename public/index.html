@@ -286,6 +286,12 @@
       <input id="global-search" placeholder="Search parts, students, suppliers..." />
     </div>
     <div class="toolbar">
+      <div id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></div>
+      <button class="btn ghost" id="login-btn">Login</button>
+      <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
+      <button class="btn ghost" id="account-btn">Account</button>
+      <button class="btn ghost" id="admin-btn" style="display:none;">Admin</button>
+      <button class="btn ghost" id="vendor-btn" style="display:none;">Vendors</button>
       <button class="btn ghost" id="refresh-btn">Refresh</button>
       <button class="btn primary" id="new-order-btn">New order</button>
     </div>
@@ -300,6 +306,7 @@
       <div class="view-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
+        <button id="settings-btn" class="btn ghost" style="border:none; padding:8px 12px;">Settings</button>
       </div>
     </div>
 
@@ -328,6 +335,260 @@
     </section>
   </main>
 
+  <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:50; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:22px;">New Order</div>
+          <div class="subtitle" style="margin-bottom:12px;">Provide a vendor link or part number. We’ll fetch details when supported; otherwise enter manually.</div>
+        </div>
+        <button class="btn ghost" id="close-modal">Close</button>
+      </div>
+      <form id="order-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
+        <div>
+          <label class="small">Vendor</label>
+          <input name="vendor" class="input" placeholder="WCP, AM, McMaster, DigiKey..." />
+        </div>
+        <div>
+          <label class="small">Product number</label>
+          <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Product link</label>
+          <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
+        </div>
+        <div style="grid-column: span 2;">
+          <button type="button" class="btn primary" id="fetch-product">Fetch details</button>
+          <span class="small">Supported vendors: WCP (beta). Others: fill manually.</span>
+        </div>
+        <div>
+          <label class="small">Part name</label>
+          <input name="partName" class="input" required />
+        </div>
+        <div>
+          <label class="small">Unit price</label>
+          <input name="unitCost" class="input" type="number" min="0" step="0.01" />
+        </div>
+        <div>
+          <label class="small">Quantity</label>
+          <input name="quantityRequested" class="input" type="number" min="1" value="1" required />
+        </div>
+        <div>
+          <label class="small">Stock status</label>
+          <input name="stockStatus" class="input" placeholder="In stock / Backordered / Lead time" />
+        </div>
+        <div>
+          <label class="small">Priority</label>
+          <select name="priority" class="input">
+            <option>Low</option>
+            <option selected>Medium</option>
+            <option>High</option>
+            <option>Urgent</option>
+          </select>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="order-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="cancel-order">Cancel</button>
+            <button type="submit" class="btn primary">Submit order</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
+      <div class="page-title" style="font-size:22px;">Sign In</div>
+      <div class="subtitle" style="margin-bottom:12px;">Use your team-issued account.</div>
+      <form id="login-form" class="grid" style="grid-template-columns:1fr; gap:12px;">
+        <div>
+          <label class="small">Username</label>
+          <input name="username" class="input" required />
+        </div>
+        <div>
+          <label class="small">Password</label>
+          <input name="password" class="input" type="password" required />
+        </div>
+        <div class="flex-between">
+          <div id="login-message" class="small"></div>
+          <button type="submit" class="btn primary">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="account-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:65; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:500px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
+      <div class="page-title" style="font-size:22px;">My Account</div>
+      <div class="subtitle" style="margin-bottom:12px;">Update your password.</div>
+      <form id="password-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:8px;">
+        <div>
+          <label class="small">Old password</label>
+          <input name="oldPassword" class="input" type="password" required />
+        </div>
+        <div>
+          <label class="small">New password</label>
+          <input name="newPassword" class="input" type="password" required />
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="password-message" class="small"></div>
+          <button type="submit" class="btn primary">Update password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="admin-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:22px;">Admin Panel</div>
+          <div class="subtitle" style="margin-bottom:12px;">Manage users and role permissions.</div>
+        </div>
+        <button class="btn ghost" id="close-admin">Close</button>
+      </div>
+
+      <div class="card" style="background:var(--panel-2); margin-top:12px;">
+        <div class="page-title" style="font-size:18px;">User Management</div>
+        <div id="user-list" class="small" style="margin-top:8px;">Loading users...</div>
+        <form id="user-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
+          <input type="hidden" name="id" />
+          <div>
+            <label class="small">Username</label>
+            <input name="username" class="input" required />
+          </div>
+          <div>
+            <label class="small">Name</label>
+            <input name="name" class="input" required />
+          </div>
+          <div>
+            <label class="small">Role</label>
+            <select name="role" class="input">
+              <option>admin</option>
+              <option>mentor</option>
+              <option>student</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">Password (set/reset)</label>
+            <input name="password" class="input" type="password" placeholder="Leave blank to keep existing" />
+          </div>
+          <div>
+            <label class="small">Active</label>
+            <select name="active" class="input">
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+          <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+            <div id="user-message" class="small"></div>
+            <div class="flex-between" style="gap:8px;">
+              <button type="button" class="btn ghost" id="clear-user">Clear</button>
+              <button type="submit" class="btn primary">Save user</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" style="background:var(--panel-2); margin-top:12px;">
+        <div class="page-title" style="font-size:18px;">Role Permissions</div>
+        <div class="subtitle">Toggle what each role can do.</div>
+        <div id="role-list" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="vendor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:22px;">Vendor Extraction Settings</div>
+          <div class="subtitle" style="margin-bottom:12px;">Configure how to pull product details from each vendor.</div>
+        </div>
+        <button class="btn ghost" id="close-settings">Close</button>
+      </div>
+
+      <div class="card" style="background:var(--panel-2);">
+        <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
+          <input type="hidden" name="id" />
+          <div>
+            <label class="small">Vendor name</label>
+            <input name="vendor" class="input" placeholder="e.g., WCP" required />
+          </div>
+          <div>
+            <label class="small">Base URL</label>
+            <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
+          </div>
+          <div>
+            <label class="small">Product URL template</label>
+            <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
+          </div>
+          <div>
+            <label class="small">Part # example</label>
+            <input name="partNumberExample" class="input" placeholder="WCP-0921" />
+          </div>
+          <div>
+            <label class="small">Part # regex</label>
+            <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
+          </div>
+          <div>
+            <label class="small">Name selector</label>
+            <input name="nameSelector" class="input" placeholder=".product-title" />
+          </div>
+          <div>
+            <label class="small">Price selector</label>
+            <input name="priceSelector" class="input" placeholder=".price" />
+          </div>
+          <div>
+            <label class="small">Stock selector</label>
+            <input name="stockSelector" class="input" placeholder=".stock" />
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="small">Notes / headers JSON (optional)</label>
+            <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
+          </div>
+          <div style="grid-column: span 2;">
+            <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+              <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
+              <button type="button" class="btn primary" id="test-extract">Test</button>
+            </div>
+            <div id="extract-results" class="small" style="margin-top:8px;"></div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
+              <div>
+                <label class="small">Pick name</label>
+                <select id="pick-name" class="input"></select>
+              </div>
+              <div>
+                <label class="small">Pick price</label>
+                <select id="pick-price" class="input"></select>
+              </div>
+              <div>
+                <label class="small">Pick stock</label>
+                <select id="pick-stock" class="input"></select>
+              </div>
+            </div>
+          </div>
+          <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+            <div id="vendor-message" class="small"></div>
+            <div class="flex-between" style="gap:8px;">
+              <button type="button" class="btn ghost" id="clear-vendor">Clear</button>
+              <button type="submit" class="btn primary">Save vendor</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div id="vendor-list" style="margin-top:14px;"></div>
+
+    </div>
+  </div>
+
   <script>
     const boardEl = document.getElementById('board');
     const boardBtn = document.getElementById('board-view-btn');
@@ -347,6 +608,45 @@
     const groupTitle = document.getElementById('group-title');
     const groupVendor = document.getElementById('group-vendor');
     const groupTracking = document.getElementById('group-tracking');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('close-modal');
+    const cancelOrder = document.getElementById('cancel-order');
+    const orderForm = document.getElementById('order-form');
+    const orderMessage = document.getElementById('order-message');
+    const fetchProduct = document.getElementById('fetch-product');
+    const newOrderBtn = document.getElementById('new-order-btn');
+    const vendorBtn = document.getElementById('vendor-btn');
+    const settingsModal = document.getElementById('vendor-modal');
+    const closeSettings = document.getElementById('close-settings');
+    const adminBtn = document.getElementById('admin-btn');
+    const adminModal = document.getElementById('admin-modal');
+    const closeAdmin = document.getElementById('close-admin');
+    const accountBtn = document.getElementById('account-btn');
+    const accountModal = document.getElementById('account-modal');
+    const vendorForm = document.getElementById('vendor-form');
+    const vendorMessage = document.getElementById('vendor-message');
+    const clearVendor = document.getElementById('clear-vendor');
+    const vendorList = document.getElementById('vendor-list');
+    const testUrl = document.getElementById('test-url');
+    const testExtract = document.getElementById('test-extract');
+    const pickName = document.getElementById('pick-name');
+    const pickPrice = document.getElementById('pick-price');
+    const pickStock = document.getElementById('pick-stock');
+    const loginModal = document.getElementById('login-modal');
+    const loginForm = document.getElementById('login-form');
+    const loginMessage = document.getElementById('login-message');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userChip = document.getElementById('user-chip');
+    const userList = document.getElementById('user-list');
+    const userForm = document.getElementById('user-form');
+    const userMessage = document.getElementById('user-message');
+    const clearUser = document.getElementById('clear-user');
+    const passwordForm = document.getElementById('password-form');
+    const passwordMessage = document.getElementById('password-message');
+    const roleList = document.getElementById('role-list');
+    let vendorConfigs = [];
+    let currentUser = null;
 
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
@@ -368,6 +668,8 @@
       if (!term) return true;
       const hay = [
         order.partName,
+        order.vendorPartNumber,
+        order.partLink,
         order.studentName,
         order.supplier,
         order.productCode,
@@ -403,6 +705,7 @@
     }
 
     async function fetchOrders() {
+      if (!currentUser) return;
       const res = await fetch('/api/orders');
       const data = await res.json();
       orders = (data.orders || []).map(o => ({ ...o, _id: o._id || o.id || o.orderNumber }));
@@ -434,12 +737,14 @@
           </div>
           <input type="checkbox" class="checkbox" ${selected.has(order._id) ? 'checked' : ''}/>
         </div>
-        <div class="meta">
-          ${order.totalCost ? '$'+order.totalCost : (order.unitCost ? '$'+order.unitCost : '')}
+          <div class="meta">
+          ${order.totalCost ? '$'+order.totalCost : (order.unitCost ? '$'+order.unitCost : (order.fetchedPrice ? '$'+order.fetchedPrice : ''))}
           ${order.quantityRequested ? ' · x' + order.quantityRequested : ''}
         </div>
         <div class="meta">
-          ${order.supplier ? `<span class="tag supplier">${order.supplier}</span>` : ''}
+          ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ''}
+          ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
+          ${order.stockStatus ? `<span class="tag priority">${order.stockStatus}</span>` : ''}
           ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
           ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
         </div>
@@ -537,12 +842,17 @@
       const body = rows.map(o => `
         <tr data-id="${o._id}">
           <td><input type="checkbox" class="row-check" ${selected.has(o._id) ? 'checked' : ''}></td>
-          <td>${o.partName || ''} ${o.group ? `<span class="tag group">Group</span>` : ''}</td>
+          <td>
+            ${o.partName || ''}
+            ${o.vendorPartNumber ? `<div class="small">${o.vendorPartNumber}</div>` : ''}
+            ${o.partLink ? `<div class="small"><a href="${o.partLink}" target="_blank">link</a></div>` : ''}
+            ${o.group ? `<span class="tag group">Group</span>` : ''}
+          </td>
           <td><span class="status-chip status-${o.status || ''}">${o.status || ''}</span></td>
           <td>${o.quantityRequested || ''}</td>
-          <td>${o.unitCost ? '$'+o.unitCost : ''}</td>
+          <td>${o.unitCost ? '$'+o.unitCost : (o.fetchedPrice ? '$'+o.fetchedPrice : '')}</td>
           <td>${o.totalCost ? '$'+o.totalCost : ''}</td>
-          <td>${o.supplier || ''}</td>
+          <td>${o.supplier || o.vendor || ''}</td>
           <td>${o.studentName || ''}</td>
           <td>${fmtDate(o.requestedAt)}</td>
         </tr>
@@ -627,12 +937,558 @@
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     groupBtn.addEventListener('click', createGroup);
     document.getElementById('new-order-btn').addEventListener('click', () => {
-      alert('Order creation coming soon. Use the quick form in earlier UI or API /api/orders.');
+      modal.style.display = 'flex';
+    });
+    closeModal.addEventListener('click', () => { modal.style.display = 'none'; });
+    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; });
+
+    function findVendorConfig(name) {
+      if (!name) return null;
+      const lower = name.toLowerCase();
+      return vendorConfigs.find(v => (v.vendor || '').toLowerCase() === lower) || null;
+    }
+
+    function deriveUrl(config, partNum, link) {
+      if (link) return link;
+      if (!config) return null;
+      if (config.productUrlTemplate && partNum) {
+        return config.productUrlTemplate.replace('{partNumber}', partNum);
+      }
+      if (config.baseUrl && partNum) {
+        return `${config.baseUrl.replace(/\/$/, '')}/${partNum}`;
+      }
+      return null;
+    }
+
+    function parsePrice(text) {
+      if (!text) return undefined;
+      const num = parseFloat(text.replace(/[^0-9\\.]+/g, ''));
+      return Number.isFinite(num) ? num : undefined;
+    }
+
+    fetchProduct.addEventListener('click', async () => {
+      const formData = new FormData(orderForm);
+      const vendor = (formData.get('vendor') || '').toString().trim();
+      const vendorLower = vendor.toLowerCase();
+      const partNum = (formData.get('vendorPartNumber') || '').toString().trim();
+      const link = (formData.get('partLink') || '').toString().trim();
+      const config = findVendorConfig(vendorLower);
+      const url = deriveUrl(config, partNum, link);
+      if (!url) {
+        orderMessage.textContent = 'Provide a link or vendor part number.';
+        orderMessage.className = 'error';
+        return;
+      }
+      orderMessage.textContent = 'Fetching...';
+      orderMessage.className = 'small';
+      try {
+        const res = await fetch('/api/vendors/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            selectors: {
+              nameSelector: config?.nameSelector,
+              priceSelector: config?.priceSelector,
+              stockSelector: config?.stockSelector
+            }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fetch failed');
+
+        const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
+        const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
+        const pickStock = data.picks?.stock || data.candidates?.stocks?.[0]?.text;
+
+        if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
+        const priceNum = parsePrice(pickPrice);
+        if (priceNum !== undefined) {
+          orderForm.elements.unitCost.value = priceNum;
+        }
+        if (pickStock) orderForm.elements.stockStatus.value = pickStock;
+        if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
+
+        orderMessage.textContent = 'Fetched. Verify fields before submitting.';
+        orderMessage.className = 'success';
+      } catch (err) {
+        orderMessage.textContent = 'Fetch failed. Fill manually.';
+        orderMessage.className = 'error';
+      }
     });
 
-    fetchOrders().catch(() => {
-      boardEl.innerHTML = '<div class="empty">Failed to load orders. Check Convex URL and network.</div>';
+    orderForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(orderForm);
+      const payload = Object.fromEntries(formData.entries());
+      payload.quantityRequested = Number(payload.quantityRequested || 0);
+      payload.unitCost = payload.unitCost ? Number(payload.unitCost) : undefined;
+      payload.fetchedPrice = payload.unitCost || undefined;
+      payload.supplier = payload.vendor || payload.supplier;
+      orderMessage.textContent = 'Submitting...';
+      orderMessage.className = 'small';
+      try {
+        await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        orderMessage.textContent = 'Order created.';
+        orderMessage.className = 'success';
+        modal.style.display = 'none';
+        orderForm.reset();
+        await fetchOrders();
+      } catch (err) {
+        orderMessage.textContent = 'Failed to create order';
+        orderMessage.className = 'error';
+      }
     });
+
+    vendorBtn.addEventListener('click', () => {
+      settingsModal.style.display = 'flex';
+      loadVendors();
+    });
+    closeSettings.addEventListener('click', () => { settingsModal.style.display = 'none'; });
+    adminBtn.addEventListener('click', () => {
+      adminModal.style.display = 'flex';
+      loadUsers();
+      loadRoles();
+    });
+    closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
+    accountBtn.addEventListener('click', () => {
+      accountModal.style.display = 'flex';
+    });
+    clearVendor.addEventListener('click', () => { vendorForm.reset(); vendorForm.elements.id.value = ''; });
+
+    async function loadVendors() {
+      if (!currentUser) return;
+      vendorList.textContent = 'Loading...';
+      try {
+        const res = await fetch('/api/vendors/configs');
+        const data = await res.json();
+        vendorConfigs = data.vendors || [];
+        if (!vendorConfigs.length) {
+          vendorList.innerHTML = '<div class="empty">No vendor configs yet. Create one above.</div>';
+          return;
+        }
+        vendorList.innerHTML = vendorConfigs.map(v => `
+          <div class="card" data-id="${v._id}" style="margin-bottom:8px;">
+            <div class="flex-between">
+              <div>
+                <h4 style="margin:0 0 4px;">${v.vendor}</h4>
+                <div class="small">${v.baseUrl || ''}</div>
+                <div class="small">Template: ${v.productUrlTemplate || ''}</div>
+                <div class="small">Selectors: ${v.nameSelector || '-'} | ${v.priceSelector || '-'} | ${v.stockSelector || '-'}</div>
+              </div>
+              <div class="flex-between" style="gap:8px;">
+                <button class="btn ghost" data-action="edit">Edit</button>
+                <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        vendorList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const card = e.target.closest('.card');
+            const id = card.dataset.id;
+            const v = vendorConfigs.find(x => x._id === id);
+            if (!v) return;
+            vendorForm.elements.id.value = id;
+            vendorForm.elements.vendor.value = v.vendor || '';
+            vendorForm.elements.baseUrl.value = v.baseUrl || '';
+            vendorForm.elements.productUrlTemplate.value = v.productUrlTemplate || '';
+            vendorForm.elements.partNumberExample.value = v.partNumberExample || '';
+            vendorForm.elements.partNumberPattern.value = v.partNumberPattern || '';
+            vendorForm.elements.nameSelector.value = v.nameSelector || '';
+            vendorForm.elements.priceSelector.value = v.priceSelector || '';
+            vendorForm.elements.stockSelector.value = v.stockSelector || '';
+            vendorForm.elements.notes.value = v.notes || '';
+          });
+        });
+
+        vendorList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const card = e.target.closest('.card');
+            const id = card.dataset.id;
+            if (!id) return;
+            await fetch(`/api/vendors/configs/${id}`, { method: 'DELETE' });
+            loadVendors();
+          });
+        });
+      } catch (e) {
+        vendorList.textContent = 'Failed to load vendors';
+      }
+    }
+
+    vendorForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(vendorForm).entries());
+      const id = data.id || undefined;
+      if (!data.vendor) {
+        vendorMessage.textContent = 'Vendor is required';
+        vendorMessage.className = 'error';
+        return;
+      }
+      vendorMessage.textContent = 'Saving...';
+      vendorMessage.className = 'small';
+      let headersObj;
+      if (data.notes) {
+        try {
+          headersObj = JSON.parse(data.notes);
+        } catch (e) {
+          vendorMessage.textContent = 'Notes/headers not valid JSON.';
+          vendorMessage.className = 'error';
+          return;
+        }
+      }
+      const method = id ? 'PATCH' : 'POST';
+      const url = id ? `/api/vendors/configs/${id}` : '/api/vendors/configs';
+      try {
+        await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vendor: data.vendor,
+            baseUrl: data.baseUrl || undefined,
+            productUrlTemplate: data.productUrlTemplate || undefined,
+            partNumberExample: data.partNumberExample || undefined,
+            partNumberPattern: data.partNumberPattern || undefined,
+            nameSelector: data.nameSelector || undefined,
+            priceSelector: data.priceSelector || undefined,
+            stockSelector: data.stockSelector || undefined,
+            notes: data.notes || undefined,
+            headers: headersObj
+          })
+        });
+        vendorMessage.textContent = 'Saved.';
+        vendorMessage.className = 'success';
+        vendorForm.reset();
+        loadVendors();
+      } catch (err) {
+        vendorMessage.textContent = 'Failed to save vendor';
+        vendorMessage.className = 'error';
+      }
+    });
+
+    userForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(userForm).entries());
+      const id = data.id || undefined;
+      const payload = {
+        username: data.username,
+        name: data.name,
+        role: data.role,
+        active: data.active === 'true',
+        permissions: undefined
+      };
+      if (data.password) payload.password = data.password;
+      userMessage.textContent = 'Saving...';
+      userMessage.className = 'small';
+      const method = id ? 'PATCH' : 'POST';
+      const url = id ? `/api/users/${id}` : '/api/users';
+      try {
+        await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        userMessage.textContent = 'Saved user.';
+        userMessage.className = 'success';
+        userForm.reset();
+        loadUsers();
+      } catch (err) {
+        userMessage.textContent = 'Failed to save user';
+        userMessage.className = 'error';
+      }
+    });
+
+    clearUser.addEventListener('click', () => {
+      userForm.reset();
+      userForm.elements.id.value = '';
+    });
+
+    passwordForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(passwordForm).entries());
+      passwordMessage.textContent = 'Updating...';
+      passwordMessage.className = 'small';
+      const res = await fetch('/api/auth/password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const resp = await res.json();
+      if (!res.ok) {
+        passwordMessage.textContent = resp.error || 'Failed';
+        passwordMessage.className = 'error';
+        return;
+      }
+      passwordMessage.textContent = 'Password updated.';
+      passwordMessage.className = 'success';
+      passwordForm.reset();
+    });
+
+    async function testExtraction() {
+      const url = testUrl.value.trim();
+      if (!url) {
+        vendorMessage.textContent = 'Provide a URL to test.';
+        vendorMessage.className = 'error';
+        return;
+      }
+      const selectors = {
+        nameSelector: vendorForm.elements.nameSelector.value || undefined,
+        priceSelector: vendorForm.elements.priceSelector.value || undefined,
+        stockSelector: vendorForm.elements.stockSelector.value || undefined
+      };
+      const headers = {};
+      try {
+        const notes = vendorForm.elements.notes.value;
+        if (notes) {
+          const parsed = JSON.parse(notes);
+          Object.assign(headers, parsed);
+        }
+      } catch (e) {
+        vendorMessage.textContent = 'Notes/headers not valid JSON.';
+        vendorMessage.className = 'error';
+        return;
+      }
+
+      const resultsEl = document.getElementById('extract-results');
+      resultsEl.textContent = 'Testing...';
+      try {
+        const res = await fetch('/api/vendors/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, selectors, headers })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        resultsEl.textContent = 'Pick which value looks correct for each field.';
+
+        const nameOptions = (data.picks?.name ? [{ text: data.picks.name, selector: selectors.nameSelector }] : []).concat(data.candidates?.titles || []);
+        const priceOptions = (data.picks?.price ? [{ text: data.picks.price, selector: selectors.priceSelector }] : []).concat(data.candidates?.prices || []);
+        const stockOptions = (data.picks?.stock ? [{ text: data.picks.stock, selector: selectors.stockSelector }] : []).concat(data.candidates?.stocks || []);
+
+        const makeOptions = (opts) => opts.map(c => `<option value="${c.selector || ''}">${c.text || ''}</option>`).join('');
+        pickName.innerHTML = '<option value="">-- choose name --</option>' + makeOptions(nameOptions);
+        pickPrice.innerHTML = '<option value="">-- choose price --</option>' + makeOptions(priceOptions);
+        pickStock.innerHTML = '<option value="">-- choose stock --</option>' + makeOptions(stockOptions);
+
+        const applySelection = (selectEl, fieldName) => {
+          const apply = () => {
+            const selSelector = selectEl.value || '';
+            if (selSelector) {
+              vendorForm.elements[fieldName].value = selSelector;
+            }
+          };
+          selectEl.addEventListener('change', apply);
+          if (selectEl.options.length > 1) {
+            selectEl.selectedIndex = 1;
+            apply();
+          }
+        };
+        applySelection(pickName, 'nameSelector');
+        applySelection(pickPrice, 'priceSelector');
+        applySelection(pickStock, 'stockSelector');
+      } catch (err) {
+        resultsEl.textContent = 'Extraction failed. Check URL/headers.';
+        vendorMessage.textContent = err.message;
+        vendorMessage.className = 'error';
+      }
+    }
+
+    testExtract.addEventListener('click', testExtraction);
+
+    function updateUserUI() {
+      if (currentUser) {
+        userChip.textContent = `${currentUser.name || currentUser.username || 'User'} · ${currentUser.role || ''}`;
+        userChip.style.display = 'inline-flex';
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-flex';
+        accountBtn.style.display = 'inline-flex';
+      } else {
+        userChip.textContent = '';
+        userChip.style.display = 'none';
+        loginBtn.style.display = 'inline-flex';
+        logoutBtn.style.display = 'none';
+        accountBtn.style.display = 'none';
+        adminBtn.style.display = 'none';
+        vendorBtn.style.display = 'none';
+      }
+      // Permissions gating
+      if (currentUser?.permissions?.canPlaceOrders) {
+        newOrderBtn.disabled = false;
+      } else {
+        newOrderBtn.disabled = true;
+      }
+      vendorBtn.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
+      adminBtn.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+    }
+
+    async function loadUsers() {
+      if (!currentUser?.permissions?.canManageUsers) {
+        userList.innerHTML = '<div class="empty">No access to manage users.</div>';
+        return;
+      }
+      userList.textContent = 'Loading users...';
+      try {
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        const users = data.users || [];
+        if (!users.length) {
+          userList.innerHTML = '<div class="empty">No users.</div>';
+          return;
+        }
+        userList.innerHTML = users.map(u => `
+          <div class="card" data-id="${u._id}" style="margin-bottom:6px;">
+            <div class="flex-between">
+              <div>
+                <div><strong>${u.username}</strong> (${u.role})</div>
+                <div class="small">${u.name || ''}</div>
+                <div class="small">Active: ${u.active ? 'Yes' : 'No'}</div>
+              </div>
+              <div class="flex-between" style="gap:8px;">
+                <button class="btn ghost" data-action="edit-user">Edit</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        userList.querySelectorAll('button[data-action="edit-user"]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const card = e.target.closest('.card');
+            const id = card.dataset.id;
+            const u = users.find(x => x._id === id);
+            if (!u) return;
+            userForm.elements.id.value = u._id;
+            userForm.elements.username.value = u.username;
+            userForm.elements.name.value = u.name || '';
+            userForm.elements.role.value = u.role || 'student';
+            userForm.elements.active.value = u.active ? 'true' : 'false';
+          });
+        });
+      } catch (e) {
+        userList.textContent = 'Failed to load users';
+      }
+    }
+
+    async function loadRoles() {
+      if (!currentUser?.permissions?.canManageUsers) {
+        roleList.innerHTML = '<div class="empty">No access to manage roles.</div>';
+        return;
+      }
+      roleList.textContent = 'Loading roles...';
+      try {
+        const res = await fetch('/api/roles');
+        const data = await res.json();
+        const roles = data.roles || [];
+        const combined = {
+          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true },
+          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false },
+          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false }
+        };
+        roles.forEach(r => { combined[r.role] = r.permissions; });
+
+        const renderToggle = (role, key, label) => `
+          <label class="small" style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" data-role="${role}" data-key="${key}" ${combined[role]?.[key] ? 'checked' : ''}/>
+            ${label}
+          </label>`;
+
+        const roleCard = (role) => `
+          <div class="card" style="margin-bottom:8px;">
+            <div class="page-title" style="font-size:16px;">${role}</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
+              ${renderToggle(role, 'canPlaceOrders', 'Can place orders')}
+              ${renderToggle(role, 'canMoveOrders', 'Can move orders')}
+              ${renderToggle(role, 'canEditOrders', 'Can edit orders')}
+              ${renderToggle(role, 'canDeleteOrders', 'Can delete orders')}
+              ${renderToggle(role, 'canManageVendors', 'Can manage vendors')}
+              ${renderToggle(role, 'canManageUsers', 'Can manage users')}
+            </div>
+            <div class="flex-between" style="margin-top:8px;">
+              <button class="btn primary" data-action="save-role" data-role="${role}">Save ${role}</button>
+            </div>
+          </div>`;
+
+        roleList.innerHTML = ['admin', 'mentor', 'student'].map(roleCard).join('');
+
+        roleList.querySelectorAll('button[data-action="save-role"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const role = e.target.dataset.role;
+            const inputs = roleList.querySelectorAll(`input[data-role="${role}"]`);
+            const perms = {};
+            inputs.forEach(input => {
+              perms[input.dataset.key] = input.checked;
+            });
+            await fetch(`/api/roles/${role}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ permissions: perms })
+            });
+          });
+        });
+      } catch (e) {
+        roleList.textContent = 'Failed to load roles';
+      }
+    }
+
+    async function fetchMe() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) throw new Error('unauth');
+        const data = await res.json();
+        currentUser = data.user;
+        updateUserUI();
+        fetchOrders();
+        loadVendors();
+        loadUsers();
+      } catch {
+        currentUser = null;
+        updateUserUI();
+      }
+    }
+
+    loginBtn.addEventListener('click', () => {
+      loginModal.style.display = 'flex';
+    });
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      currentUser = null;
+      updateUserUI();
+      orders = [];
+      renderBoard();
+      renderTable();
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(loginForm);
+      const payload = Object.fromEntries(formData.entries());
+      loginMessage.textContent = 'Signing in...';
+      loginMessage.className = 'small';
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        loginMessage.textContent = data.error || 'Login failed';
+        loginMessage.className = 'error';
+        return;
+      }
+      currentUser = data.user;
+      loginMessage.textContent = '';
+      loginModal.style.display = 'none';
+      updateUserUI();
+      fetchOrders();
+      loadVendors();
+      loadUsers();
+    });
+
+    fetchMe();
   </script>
 </body>
 </html>

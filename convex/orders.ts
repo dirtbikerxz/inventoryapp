@@ -58,6 +58,12 @@ export const create = mutation({
     partId: v.optional(v.id("parts")),
     partCode: v.optional(v.string()),
     partName: v.string(),
+    vendor: v.optional(v.string()),
+    vendorPartNumber: v.optional(v.string()),
+    partLink: v.optional(v.string()),
+    fetchedName: v.optional(v.string()),
+    fetchedPrice: v.optional(v.number()),
+    stockStatus: v.optional(v.string()),
     category: v.optional(v.string()),
     quantityRequested: v.number(),
     priority: v.optional(v.string()),
@@ -81,8 +87,9 @@ export const create = mutation({
       ? ctx.db.normalizeId("orderGroups", args.groupId.toString())
       : undefined;
 
-    const computedTotal = args.totalCost ?? (args.unitCost !== undefined
-      ? Number((args.unitCost * args.quantityRequested).toFixed(2))
+    const computedUnit = args.unitCost ?? args.fetchedPrice;
+    const computedTotal = args.totalCost ?? (computedUnit !== undefined
+      ? Number((computedUnit * args.quantityRequested).toFixed(2))
       : undefined);
 
     const orderId = await ctx.db.insert("orders", {
@@ -92,6 +99,7 @@ export const create = mutation({
       requestedAt: now,
       status: args.status || "Requested",
       priority: args.priority || "Medium",
+      supplier: args.supplier || args.vendor,
       totalCost: computedTotal
     });
 
