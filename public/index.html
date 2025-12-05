@@ -394,7 +394,7 @@
       <div class="board" id="board"></div>
     </section>
 
-    <section id="table-section" style="display:none; flex:1; min-height:0; overflow:hidden;">
+    <section id="table-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column;">
       <div class="filters">
         <div><label class="small">Start date</label><input id="start-date" class="input" type="date" /></div>
         <div><label class="small">End date</label><input id="end-date" class="input" type="date" /></div>
@@ -890,25 +890,29 @@
     const testUrl = document.getElementById('test-url');
     function resizeColumns() {
       window.requestAnimationFrame(() => {
+        const main = document.querySelector('main');
+        if (!main) return;
+        const viewportH = document.documentElement.clientHeight;
+        const mainRect = main.getBoundingClientRect();
+        const padding = 24;
+        const baseAvailable = Math.max(0, viewportH - mainRect.top - padding);
         if (boardSection) {
-          const rect = boardSection.getBoundingClientRect();
-          const pad = 28;
-          const available = window.innerHeight - rect.top - pad;
+          const top = boardSection.getBoundingClientRect().top - mainRect.top;
+          const available = Math.max(0, baseAvailable - top);
           if (available > 240) {
             boardSection.style.height = `${available}px`;
             boardSection.style.maxHeight = `${available}px`;
           }
         }
         if (tableSection) {
-          const rect = tableSection.getBoundingClientRect();
-          const pad = 28;
-          const available = window.innerHeight - rect.top - pad;
+          const top = tableSection.getBoundingClientRect().top - mainRect.top;
+          const available = Math.max(0, baseAvailable - top);
           if (available > 240) {
             tableSection.style.height = `${available}px`;
             tableSection.style.maxHeight = `${available}px`;
             const filtersEl = tableSection.querySelector('.filters');
             const filtersH = filtersEl ? filtersEl.getBoundingClientRect().height : 0;
-            const tableAvail = available - filtersH - 12;
+            const tableAvail = available - filtersH - 24;
             if (tableContainer && tableAvail > 120) {
               tableContainer.style.height = `${tableAvail}px`;
               tableContainer.style.maxHeight = `${tableAvail}px`;
@@ -918,7 +922,8 @@
       });
     }
     window.addEventListener('resize', resizeColumns);
-    resizeColumns();
+    // Initial sizing after DOM paints
+    setTimeout(resizeColumns, 0);
     const testExtract = document.getElementById('test-extract');
     const pickName = document.getElementById('pick-name');
     const pickPrice = document.getElementById('pick-price');
@@ -1978,14 +1983,20 @@
     }
 
     // Event wiring
-    boardBtn.addEventListener('click', () => {
+    const switchToBoard = () => {
       boardBtn.classList.add('active'); tableBtn.classList.remove('active');
-      boardSection.style.display = 'block'; tableSection.style.display = 'none';
-    });
-    tableBtn.addEventListener('click', () => {
+      boardSection.style.display = 'flex'; tableSection.style.display = 'none';
+      resizeColumns();
+      setTimeout(resizeColumns, 30);
+    };
+    const switchToTable = () => {
       tableBtn.classList.add('active'); boardBtn.classList.remove('active');
-      boardSection.style.display = 'none'; tableSection.style.display = 'block';
-    });
+      boardSection.style.display = 'none'; tableSection.style.display = 'flex';
+      resizeColumns();
+      setTimeout(resizeColumns, 30);
+    };
+    boardBtn.addEventListener('click', switchToBoard);
+    tableBtn.addEventListener('click', switchToTable);
     refreshBtn.addEventListener('click', fetchOrders);
     undoBtn.addEventListener('click', doUndo);
     redoBtn.addEventListener('click', doRedo);
