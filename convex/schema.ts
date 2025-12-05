@@ -83,6 +83,7 @@ export default defineSchema({
     tracking: v.optional(v.array(trackingEntry)),
     notes: v.optional(v.string()),
     expectedDate: v.optional(v.number()),
+    requestedDisplayAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number()
   }),

@@ -54,10 +54,12 @@ export const create = mutation({
     tracking: v.optional(v.array(trackingArg)),
     notes: v.optional(v.string()),
     expectedDate: v.optional(v.number()),
+    requestedDisplayAt: v.optional(v.number()),
     orderIds: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const displayAt = args.requestedDisplayAt ?? now;
     let tracking = normalizeTracking(args.tracking as any, args.trackingNumber as any);
     const groupId = await ctx.db.insert("orderGroups", {
       title: args.title,
@@ -67,6 +69,7 @@ export const create = mutation({
       tracking,
       notes: args.notes,
       expectedDate: args.expectedDate,
+      requestedDisplayAt: displayAt,
       createdAt: now,
       updatedAt: now
     });
@@ -105,6 +108,7 @@ export const update = mutation({
     tracking: v.optional(v.array(trackingArg)),
     notes: v.optional(v.string()),
     expectedDate: v.optional(v.number()),
+    requestedDisplayAt: v.optional(v.number()),
     orderIds: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args) => {
@@ -115,7 +119,7 @@ export const update = mutation({
       updatedAt: Date.now()
     };
 
-    ["title", "supplier", "status", "trackingNumber", "notes", "expectedDate"].forEach(key => {
+    ["title", "supplier", "status", "trackingNumber", "notes", "expectedDate", "requestedDisplayAt"].forEach(key => {
       const value = (args as any)[key];
       if (value !== undefined) updates[key] = value;
     });
