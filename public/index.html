@@ -68,6 +68,12 @@
     }
     .toolbar {
       display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .toolbar-buttons {
+      display: flex;
       align-items: center;
       gap: 8px;
     }
@@ -298,15 +304,16 @@
       <input id="global-search" placeholder="Search parts, students, suppliers..." />
     </div>
     <div class="toolbar">
-      <div id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></div>
-      <button class="btn ghost" id="login-btn">Login</button>
-      <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
-      <button class="btn ghost" id="account-btn">Account</button>
-      <button class="btn ghost" id="admin-btn" style="display:none;">Admin</button>
-      <button class="btn ghost" id="vendor-btn" style="display:none;">Vendors</button>
-      <button class="btn ghost" id="refresh-btn">Refresh</button>
-      <button class="btn primary" id="new-order-btn">New order</button>
-      <div id="tracking-updated" class="small" style="margin-left:12px; color: var(--muted);"></div>
+      <div class="toolbar-buttons">
+        <div id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></div>
+        <button class="btn ghost" id="login-btn">Login</button>
+        <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
+        <button class="btn ghost" id="account-btn">Account</button>
+        <button class="btn ghost" id="admin-btn" style="display:none;">Admin</button>
+        <button class="btn ghost" id="refresh-btn">Refresh</button>
+        <button class="btn primary" id="new-order-btn">New order</button>
+      </div>
+      <div id="tracking-updated" class="small" style="color: var(--muted);"></div>
     </div>
   </header>
 
@@ -319,7 +326,6 @@
       <div class="view-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
-        <button id="settings-btn" class="btn ghost" style="border:none; padding:8px 12px;">Settings</button>
       </div>
     </div>
 
@@ -509,7 +515,16 @@
         <button class="btn ghost" id="close-admin">Close</button>
       </div>
 
-      <div class="card" style="background:var(--panel-2); margin-top:12px;">
+      <div class="flex-between" style="margin-top:12px; gap:8px;">
+        <div class="flex-between" style="gap:6px;">
+          <button class="btn ghost" id="admin-tab-users" style="padding:6px 12px;">Users</button>
+          <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
+          <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
+        </div>
+      </div>
+
+      <div id="admin-users-section" style="display:block;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
         <div class="page-title" style="font-size:18px;">User Management</div>
         <div id="user-list" class="small" style="margin-top:8px;">Loading users...</div>
         <form id="user-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
@@ -556,8 +571,10 @@
         <div class="subtitle">Toggle what each role can do.</div>
         <div id="role-list" style="margin-top:8px;"></div>
       </div>
+      </div>
 
-      <div class="card" style="background:var(--panel-2); margin-top:12px;">
+      <div id="admin-tracking-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
         <div class="page-title" style="font-size:18px;">Tracking Settings</div>
         <div class="subtitle">Carrier API keys, refresh cadence, and manual refresh.</div>
         <form id="tracking-settings-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:10px;">
@@ -582,8 +599,8 @@
             <input name="fedexClientSecret" class="input" placeholder="FedEx API secret" />
           </div>
           <div>
-            <label class="small">Refresh cadence (minutes)</label>
-            <input name="refreshMinutes" class="input" type="number" min="5" step="1" value="30" />
+            <label class="small">Tracking Refresh Interval (minutes)</label>
+            <input name="refreshMinutes" class="input" type="number" min="1" value="30" />
           </div>
         </form>
         <div class="flex-between" style="grid-column: span 2; margin-top:8px; flex-wrap:wrap; gap:8px;">
@@ -594,102 +611,93 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div id="vendor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
-    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
-      <div class="flex-between" style="align-items:flex-start;">
-        <div>
-          <div class="page-title" style="font-size:22px;">Vendor Extraction Settings</div>
-          <div class="subtitle" style="margin-bottom:12px;">Configure how to pull product details from each vendor.</div>
-        </div>
-        <button class="btn ghost" id="close-settings">Close</button>
       </div>
 
-      <div class="card" style="background:var(--panel-2);">
-        <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
-          <input type="hidden" name="id" />
-          <div>
-            <label class="small">Vendor name</label>
-            <input name="vendor" class="input" placeholder="e.g., WCP" required />
-          </div>
-          <div>
-            <label class="small">Base URL</label>
-            <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
-          </div>
-        <div>
-          <label class="small">Product URL template</label>
-          <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
-          <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
-        </div>
-        <div>
-          <label class="small">Part # example</label>
-          <input name="partNumberExample" class="input" placeholder="WCP-0921" />
-        </div>
-        <div>
-          <label class="small">Part # regex</label>
-          <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
-          <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
-        </div>
-          <div>
-            <label class="small">Name selector</label>
-            <input name="nameSelector" class="input" placeholder=".product-title" />
-          </div>
-          <div>
-            <label class="small">Price selector</label>
-            <input name="priceSelector" class="input" placeholder=".price" />
-          </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Paste copied selector or JS path</label>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
-            <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
-            <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
-            <select id="selector-target" class="input">
-              <option value="nameSelector">Apply to Name</option>
-              <option value="priceSelector">Apply to Price</option>
-            </select>
-                <button type="button" class="btn ghost" id="apply-selector">Apply</button>
+      <div id="admin-vendors-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="page-title" style="font-size:18px;">Vendor Extraction Settings</div>
+          <div class="subtitle" style="margin-bottom:12px;">Configure how to pull product details from each vendor.</div>
+          <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
+            <input type="hidden" name="id" />
+            <div>
+              <label class="small">Vendor name</label>
+              <input name="vendor" class="input" placeholder="e.g., WCP" required />
+            </div>
+            <div>
+              <label class="small">Base URL</label>
+              <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
+            </div>
+            <div>
+              <label class="small">Product URL template</label>
+              <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
+              <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
+            </div>
+            <div>
+              <label class="small">Part # example</label>
+              <input name="partNumberExample" class="input" placeholder="WCP-0921" />
+            </div>
+            <div>
+              <label class="small">Part # regex</label>
+              <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
+              <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
+            </div>
+            <div>
+              <label class="small">Name selector</label>
+              <input name="nameSelector" class="input" placeholder=".product-title" />
+            </div>
+            <div>
+              <label class="small">Price selector</label>
+              <input name="priceSelector" class="input" placeholder=".price" />
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="small">Paste copied selector or JS path</label>
+              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+                <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
+                <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
+                  <select id="selector-target" class="input">
+                    <option value="nameSelector">Apply to Name</option>
+                    <option value="priceSelector">Apply to Price</option>
+                  </select>
+                  <button type="button" class="btn ghost" id="apply-selector">Apply</button>
+                </div>
+              </div>
+              <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="small">Notes / headers JSON (optional)</label>
+              <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
+            </div>
+            <div style="grid-column: span 2;">
+              <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
+              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+                <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
+                <button type="button" class="btn primary" id="test-extract">Test</button>
+              </div>
+              <div id="extract-results" class="small" style="margin-top:8px;"></div>
+              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
+                <div>
+                  <label class="small">Pick name</label>
+                  <select id="pick-name" class="input"></select>
+                  <div id="preview-name" class="small"></div>
+                </div>
+                <div>
+                  <label class="small">Pick price</label>
+                  <select id="pick-price" class="input"></select>
+                  <div id="preview-price" class="small"></div>
+                </div>
               </div>
             </div>
-            <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
-          </div>
-          <div style="grid-column: span 2;">
-            <label class="small">Notes / headers JSON (optional)</label>
-            <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
-          </div>
-          <div style="grid-column: span 2;">
-            <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
-            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
-              <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
-              <button type="button" class="btn primary" id="test-extract">Test</button>
+            <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+              <div id="vendor-message" class="small"></div>
+              <div class="flex-between" style="gap:8px;">
+                <button type="button" class="btn ghost" id="clear-vendor">Clear</button>
+                <button type="submit" class="btn primary">Save vendor</button>
+              </div>
             </div>
-            <div id="extract-results" class="small" style="margin-top:8px;"></div>
-            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
-        <div>
-          <label class="small">Pick name</label>
-          <select id="pick-name" class="input"></select>
-          <div id="preview-name" class="small"></div>
+          </form>
         </div>
-        <div>
-          <label class="small">Pick price</label>
-          <select id="pick-price" class="input"></select>
-          <div id="preview-price" class="small"></div>
-        </div>
-            </div>
-          </div>
-          <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
-            <div id="vendor-message" class="small"></div>
-            <div class="flex-between" style="gap:8px;">
-              <button type="button" class="btn ghost" id="clear-vendor">Clear</button>
-              <button type="submit" class="btn primary">Save vendor</button>
-            </div>
-          </div>
-        </form>
+        <div id="vendor-list" style="margin-top:14px;"></div>
       </div>
-
-      <div id="vendor-list" style="margin-top:14px;"></div>
-
     </div>
   </div>
 
@@ -735,9 +743,6 @@
     const orderMessage = document.getElementById('order-message');
     const fetchProduct = document.getElementById('fetch-product');
     const newOrderBtn = document.getElementById('new-order-btn');
-    const vendorBtn = document.getElementById('vendor-btn');
-    const settingsModal = document.getElementById('vendor-modal');
-    const closeSettings = document.getElementById('close-settings');
     const adminBtn = document.getElementById('admin-btn');
     const adminModal = document.getElementById('admin-modal');
     const closeAdmin = document.getElementById('close-admin');
@@ -783,6 +788,12 @@
     const trackingSettingsForm = document.getElementById('tracking-settings-form');
     const trackingSettingsMessage = document.getElementById('tracking-settings-message');
     const refreshTrackingNow = document.getElementById('refresh-tracking-now');
+    const adminTabUsers = document.getElementById('admin-tab-users');
+    const adminTabTracking = document.getElementById('admin-tab-tracking');
+    const adminTabVendors = document.getElementById('admin-tab-vendors');
+    const adminUsersSection = document.getElementById('admin-users-section');
+    const adminTrackingSection = document.getElementById('admin-tracking-section');
+    const adminVendorsSection = document.getElementById('admin-vendors-section');
     let vendorConfigs = [];
     let currentUser = null;
     function detectVendor(partNum, link) {
@@ -949,6 +960,13 @@
       if (c === 'usps') return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(num)}`;
       if (c === 'fedex') return `https://www.fedex.com/fedextrack/?tracknumbers=${encodeURIComponent(num)}`;
       return '';
+    }
+
+    function attachBackdropClose(el, handler) {
+      if (!el || typeof handler !== 'function') return;
+      el.addEventListener('click', (e) => {
+        if (e.target === el) handler();
+      });
     }
 
     function trackingPhase(tracking) {
@@ -1555,6 +1573,12 @@
     closeGroup.addEventListener('click', resetGroupModal);
     cancelGroup.addEventListener('click', resetGroupModal);
 
+    attachBackdropClose(modal, () => { modal.style.display = 'none'; });
+    attachBackdropClose(groupModal, resetGroupModal);
+    attachBackdropClose(loginModal, () => { loginModal.style.display = 'none'; });
+    attachBackdropClose(accountModal, () => { accountModal.style.display = 'none'; });
+    attachBackdropClose(adminModal, () => { adminModal.style.display = 'none'; });
+
     function findVendorConfig(name) {
       if (!name) return null;
       const lower = name.toLowerCase();
@@ -1720,16 +1744,12 @@
       }
     });
 
-    vendorBtn.addEventListener('click', () => {
-      settingsModal.style.display = 'flex';
-      loadVendors();
-    });
-    closeSettings.addEventListener('click', () => { settingsModal.style.display = 'none'; });
     adminBtn.addEventListener('click', () => {
       adminModal.style.display = 'flex';
       loadUsers();
       loadRoles();
       loadTrackingSettings();
+      showAdminSection('users');
     });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
     accountBtn.addEventListener('click', () => {
@@ -2101,15 +2121,14 @@
         logoutBtn.style.display = 'none';
         accountBtn.style.display = 'none';
         adminBtn.style.display = 'none';
-        vendorBtn.style.display = 'none';
-      }
-      // Permissions gating
-      if (currentUser?.permissions?.canPlaceOrders) {
-        newOrderBtn.disabled = false;
-      } else {
-        newOrderBtn.disabled = true;
-      }
-      vendorBtn.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
+      // vendor button removed; use Admin modal tabs
+    }
+    // Permissions gating
+    if (currentUser?.permissions?.canPlaceOrders) {
+      newOrderBtn.disabled = false;
+    } else {
+      newOrderBtn.disabled = true;
+    }
       adminBtn.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
     }
 
@@ -2291,6 +2310,20 @@
         trackingSettingsMessage.className = 'error';
       }
     });
+
+    function showAdminSection(which) {
+      if (!adminUsersSection || !adminTrackingSection || !adminVendorsSection) return;
+      adminUsersSection.style.display = which === 'users' ? 'block' : 'none';
+      adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
+      adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
+      [adminTabUsers, adminTabTracking, adminTabVendors].forEach(btn => btn?.classList.remove('primary'));
+      if (which === 'users') adminTabUsers?.classList.add('primary');
+      if (which === 'tracking') adminTabTracking?.classList.add('primary');
+      if (which === 'vendors') adminTabVendors?.classList.add('primary');
+    }
+    adminTabUsers?.addEventListener('click', () => showAdminSection('users'));
+    adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
+    adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
 
     async function fetchMe() {
       try {
