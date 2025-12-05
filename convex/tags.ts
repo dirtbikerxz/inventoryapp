@@ -37,3 +37,21 @@ export const remove = mutation({
     return { id: args.id };
   }
 });
+
+export const update = mutation({
+  args: {
+    id: v.string(),
+    label: v.optional(v.string()),
+    color: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("tags", args.id);
+    if (!id) throw new Error("Invalid tag id");
+    const patch: any = {};
+    if (args.label !== undefined) patch.label = args.label;
+    if (args.color !== undefined) patch.color = args.color;
+    if (!Object.keys(patch).length) return { id: args.id };
+    await ctx.db.patch(id, patch);
+    return { id: args.id };
+  }
+});

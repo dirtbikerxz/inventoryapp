@@ -131,6 +131,13 @@ export default defineSchema({
     createdAt: v.number()
   }).index("by_label", ["label"]),
 
+  priorityTags: defineTable({
+    label: v.string(),
+    color: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
+    createdAt: v.number()
+  }).index("by_label", ["label"]),
+
   users: defineTable({
     username: v.optional(v.string()),
     email: v.optional(v.string()),

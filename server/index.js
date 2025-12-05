@@ -667,6 +667,70 @@ app.delete('/api/tags/:id', async (req, res) => {
   }
 });
 
+app.patch('/api/tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color } = req.body || {};
+  try {
+    await client.mutation('tags:update', { id: req.params.id, label, color });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update tag');
+    res.status(500).json({ error: 'Unable to update tag' });
+  }
+});
+
+app.get('/api/priority-tags', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const items = await client.query('priorityTags:list', {});
+    res.json({ priorities: items });
+  } catch (error) {
+    logger.error(error, 'Failed to list priority tags');
+    res.status(500).json({ error: 'Unable to load priority tags' });
+  }
+});
+
+app.post('/api/priority-tags', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  if (!label) return res.status(400).json({ error: 'label required' });
+  try {
+    const result = await client.mutation('priorityTags:create', { label, color, sortOrder });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create priority');
+    res.status(500).json({ error: 'Unable to create priority' });
+  }
+});
+
+app.patch('/api/priority-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  try {
+    await client.mutation('priorityTags:update', { id: req.params.id, label, color, sortOrder });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update priority');
+    res.status(500).json({ error: 'Unable to update priority' });
+  }
+});
+
+app.delete('/api/priority-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  try {
+    const result = await client.mutation('priorityTags:remove', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete priority');
+    res.status(500).json({ error: 'Unable to delete priority' });
+  }
+});
+
 app.post('/api/vendors/configs', async (req, res) => {
   const user = await requireAuth(req, res, 'canManageVendors');
   if (!user) return;

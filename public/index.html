@@ -251,8 +251,10 @@
     .tag-option.selected { border-color: var(--accent); background: rgba(70,29,124,0.15); }
     .tag-manager-list { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
     .tag-manager-item { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel); }
-    .tag-manager-meta { display:flex; align-items:center; gap:10px; }
+    .tag-manager-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .admin-inline-form { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .tag-modal-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto; }
+    .inline-color { width:40px; height:40px; padding:0; border:none; border-radius:50%; background:transparent; cursor:pointer; }
     .card-footer {
       display: flex;
       align-items: center;
@@ -460,10 +462,7 @@
               <div id="tag-picker-options" class="tag-picker-options"></div>
             </div>
           </div>
-          <div class="flex-between" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn ghost" id="manage-tags-btn" style="display:none;">Manage tags</button>
-            <div class="small">Tags categorize requests. Mentors/Admins can manage tags.</div>
-          </div>
+          <div class="small" style="margin-top:8px;">Tags categorize requests. Mentors/Admins can manage tags in Admin &rarr; Tags.</div>
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Tracking numbers</label>
@@ -485,28 +484,6 @@
           </div>
         </div>
       </form>
-    </div>
-  </div>
-
-  <div id="tags-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:52; align-items:center; justify-content:center; padding:16px;">
-    <div class="tag-modal-card">
-      <div class="flex-between" style="align-items:flex-start;">
-        <div>
-          <div class="page-title" style="font-size:22px;">Organization tags</div>
-          <div class="subtitle" style="margin-bottom:12px;">Manage tags used to categorize requests.</div>
-        </div>
-        <div class="flex-between" style="gap:8px;">
-          <button class="btn ghost" id="refresh-tags">Refresh</button>
-          <button class="btn primary" id="close-tags">Close</button>
-        </div>
-      </div>
-      <form id="create-tag-form" class="grid" style="grid-template-columns: 2fr 1fr auto; gap:8px; margin-top:8px;">
-        <input id="tag-label-input" class="input" placeholder="New tag name" required />
-        <input id="tag-color-input" class="input" type="color" value="#fdd023" />
-        <button type="submit" class="btn primary">New tag</button>
-      </form>
-      <div id="tags-message" class="small" style="margin-top:6px;"></div>
-      <div id="tags-list" class="tag-manager-list"></div>
     </div>
   </div>
 
@@ -597,11 +574,13 @@
         <button class="btn ghost" id="close-admin">Close</button>
       </div>
 
-      <div class="flex-between" style="margin-top:12px; gap:8px;">
+        <div class="flex-between" style="margin-top:12px; gap:8px;">
         <div class="flex-between" style="gap:6px;">
           <button class="btn ghost" id="admin-tab-users" style="padding:6px 12px;">Users</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
+          <button class="btn ghost" id="admin-tab-tags" style="padding:6px 12px;">Tags</button>
+          <button class="btn ghost" id="admin-tab-priorities" style="padding:6px 12px;">Priorities</button>
         </div>
       </div>
 
@@ -780,6 +759,49 @@
         </div>
         <div id="vendor-list" style="margin-top:14px;"></div>
       </div>
+
+      <div id="admin-tags-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="flex-between" style="align-items:flex-start;">
+            <div>
+              <div class="page-title" style="font-size:18px;">Organization tags</div>
+              <div class="subtitle" style="margin-bottom:12px;">Manage tags used to categorize requests.</div>
+            </div>
+            <div class="flex-between" style="gap:8px;">
+              <button class="btn ghost" id="refresh-tags">Refresh</button>
+            </div>
+          </div>
+          <form id="create-tag-form" class="admin-inline-form" style="margin-top:10px;">
+            <input id="tag-color-input" class="inline-color" type="color" value="#fdd023" />
+            <input id="tag-label-input" class="input" placeholder="New tag name" required style="flex:1; min-width:180px;" />
+            <button type="submit" class="btn primary">New tag</button>
+          </form>
+          <div id="tags-message" class="small" style="margin-top:6px;"></div>
+          <div id="tags-list" class="tag-manager-list" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div id="admin-priorities-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="flex-between" style="align-items:flex-start;">
+            <div>
+              <div class="page-title" style="font-size:18px;">Priority tags</div>
+              <div class="subtitle" style="margin-bottom:12px;">Customize priority labels and colors.</div>
+            </div>
+            <div class="flex-between" style="gap:8px;">
+              <button class="btn ghost" id="refresh-priorities">Refresh</button>
+            </div>
+          </div>
+          <form id="create-priority-form" class="admin-inline-form" style="margin-top:10px;">
+            <input id="priority-color-input" class="inline-color" type="color" value="#fdd023" />
+            <input id="priority-label-input" class="input" placeholder="Priority name (e.g., Medium)" required style="flex:1; min-width:180px;" />
+            <input id="priority-sort-input" class="input" type="number" placeholder="Sort" style="width:80px;" />
+            <button type="submit" class="btn primary">New priority</button>
+          </form>
+          <div id="priorities-message" class="small" style="margin-top:6px;"></div>
+          <div id="priorities-list" class="tag-manager-list" style="margin-top:10px;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -841,15 +863,12 @@
     const tagPickerPanel = document.getElementById('tag-picker-panel');
     const tagPickerOptions = document.getElementById('tag-picker-options');
     const tagPickerSearch = document.getElementById('tag-picker-search');
-    const manageTagsBtn = document.getElementById('manage-tags-btn');
-    const tagsModal = document.getElementById('tags-modal');
-    const closeTags = document.getElementById('close-tags');
+    const tagPicker = document.getElementById('tag-picker');
     const refreshTagsBtn = document.getElementById('refresh-tags');
     const tagsList = document.getElementById('tags-list');
     const tagsMessage = document.getElementById('tags-message');
     const tagLabelInput = document.getElementById('tag-label-input');
     const tagColorInput = document.getElementById('tag-color-input');
-    const tagPicker = document.getElementById('tag-picker');
     const createTagForm = document.getElementById('create-tag-form');
     const adminBtn = document.getElementById('admin-btn');
     const adminModal = document.getElementById('admin-modal');
@@ -930,9 +949,20 @@
     const adminTabUsers = document.getElementById('admin-tab-users');
     const adminTabTracking = document.getElementById('admin-tab-tracking');
     const adminTabVendors = document.getElementById('admin-tab-vendors');
+    const adminTabTags = document.getElementById('admin-tab-tags');
+    const adminTabPriorities = document.getElementById('admin-tab-priorities');
     const adminUsersSection = document.getElementById('admin-users-section');
     const adminTrackingSection = document.getElementById('admin-tracking-section');
     const adminVendorsSection = document.getElementById('admin-vendors-section');
+    const adminTagsSection = document.getElementById('admin-tags-section');
+    const adminPrioritiesSection = document.getElementById('admin-priorities-section');
+    const refreshPrioritiesBtn = document.getElementById('refresh-priorities');
+    const prioritiesList = document.getElementById('priorities-list');
+    const prioritiesMessage = document.getElementById('priorities-message');
+    const priorityLabelInput = document.getElementById('priority-label-input');
+    const priorityColorInput = document.getElementById('priority-color-input');
+    const prioritySortInput = document.getElementById('priority-sort-input');
+    const createPriorityForm = document.getElementById('create-priority-form');
     let vendorConfigs = [];
     let currentUser = null;
     function detectVendor(partNum, link) {
@@ -985,6 +1015,13 @@
     const undoStack = [];
     const redoStack = [];
     let tagList = [];
+    let priorityList = [];
+    const defaultPriorities = [
+      { label: 'Low', color: '#5aa0ff', sortOrder: 1 },
+      { label: 'Medium', color: '#fdd023', sortOrder: 2 },
+      { label: 'High', color: '#ff8b55', sortOrder: 3 },
+      { label: 'Urgent', color: '#ff5565', sortOrder: 4 }
+    ];
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -1189,6 +1226,10 @@
     function getTagColor(id) {
       const t = tagList.find(t => String(t._id || t.id || t.label) === String(id));
       return t ? (t.color || '#fdd023') : '#fdd023';
+    }
+    function getPriorityColor(label) {
+      const p = priorityList.find(p => (p.label || '').toLowerCase() === (label || '').toLowerCase());
+      return p ? (p.color || '#fdd023') : '#fdd023';
     }
     function renderTagChips(ids = []) {
       if (!ids || !ids.length) return '';
@@ -1460,6 +1501,7 @@
       orderTrackingList.style.display = order.group ? 'none' : 'block';
       orderMessage.textContent = order.group ? 'Tracking managed at group level.' : '';
       renderTagOptions(order.tags || []);
+      renderPriorityOptions();
       orderForm.elements.notes.value = order.notes || '';
       modal.style.display = 'flex';
     }
@@ -1492,7 +1534,7 @@
             <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
               ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ''}
               ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
-              ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
+              ${order.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(order.priority)}; color:${getPriorityColor(order.priority)};">${order.priority}</span>` : ''}
               ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
               ${renderTagChips(order.tags || [])}
               ${order.approvalStatus === 'approved'
@@ -1962,6 +2004,7 @@
       orderForm.reset();
       orderForm.elements.quantityRequested.value = 1;
       renderTagOptions([]);
+      renderPriorityOptions();
       setTrackingRows(orderTrackingList, []);
       addOrderTracking.disabled = false;
       orderTrackingList.style.display = 'block';
@@ -2185,10 +2228,19 @@
 
     adminBtn.addEventListener('click', () => {
       adminModal.style.display = 'flex';
-      loadUsers();
-      loadRoles();
+      if (currentUser?.permissions?.canManageUsers) {
+        loadUsers();
+        loadRoles();
+        showAdminSection('users');
+      } else {
+        showAdminSection(currentUser?.permissions?.canManageTags ? 'tags' : 'tracking');
+      }
       loadTrackingSettings();
-      showAdminSection('users');
+      loadVendors();
+      if (currentUser?.permissions?.canManageTags) {
+        loadTags();
+        loadPriorityTags();
+      }
     });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
     accountBtn.addEventListener('click', () => {
@@ -2308,6 +2360,21 @@
       }
     }
 
+    async function loadPriorityTags() {
+      try {
+        const res = await fetch('/api/priority-tags');
+        const data = await res.json();
+        priorityList = (data.priorities && data.priorities.length ? data.priorities : defaultPriorities) || defaultPriorities;
+        renderPriorityOptions();
+        renderPriorityManager();
+      } catch (e) {
+        console.warn('Failed to load priorities', e);
+        priorityList = defaultPriorities;
+        renderPriorityOptions();
+        renderPriorityManager();
+      }
+    }
+
     function renderTagOptions(selected = []) {
       if (!tagSelect) return;
       const selSet = new Set(selected.map(String));
@@ -2379,12 +2446,26 @@
         const color = t.color || '#fdd023';
         return `<div class="tag-manager-item" data-id="${id}">
           <div class="tag-manager-meta">
-            <span class="tag-dot" style="background:${color}; width:12px; height:12px;"></span>
+            <input type="color" class="tag-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
             <div>${escapeHtml(t.label || id)}</div>
           </div>
           ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-tag" style="color: var(--danger);">Delete</button>` : ''}
         </div>`;
       }).join('');
+      if (currentUser?.permissions?.canManageTags) {
+        tagsList.querySelectorAll('.tag-color-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            await fetch(`/api/tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ color: e.target.value })
+            });
+            await loadTags();
+          });
+        });
+      }
       tagsList.querySelectorAll('button[data-action="delete-tag"]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const id = e.target.closest('.tag-manager-item')?.dataset.id;
@@ -2396,16 +2477,7 @@
       });
     }
 
-    manageTagsBtn?.addEventListener('click', () => {
-      if (!currentUser?.permissions?.canManageTags) return;
-      if (tagPickerSearch) tagPickerSearch.value = '';
-      tagsModal.style.display = 'flex';
-      renderTagsManager();
-      toggleTagPanel(false);
-    });
-    tagsModal?.addEventListener('click', (e) => { if (e.target === tagsModal) tagsModal.style.display = 'none'; });
-    closeTags?.addEventListener('click', () => { tagsModal.style.display = 'none'; });
-    refreshTagsBtn?.addEventListener('click', () => loadTags());
+      refreshTagsBtn?.addEventListener('click', () => loadTags());
     createTagForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!currentUser?.permissions?.canManageTags) return;
@@ -2432,6 +2504,100 @@
       }
     });
 
+    function renderPriorityOptions() {
+      const select = orderForm.elements.priority;
+      if (!select) return;
+      const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
+      const current = select.value || 'Medium';
+      select.innerHTML = list.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
+      if (list.some(p => p.label === current)) select.value = current;
+    }
+
+    function renderPriorityManager() {
+      if (!prioritiesList) return;
+      if (!priorityList.length) {
+        prioritiesList.innerHTML = '<div class="empty">No priorities yet.</div>';
+        return;
+      }
+      prioritiesList.innerHTML = priorityList.map(p => {
+        const id = p._id || p.id || p.label;
+        const color = p.color || '#fdd023';
+        const sort = p.sortOrder ?? '';
+        return `<div class="tag-manager-item" data-id="${id}">
+          <div class="tag-manager-meta" style="gap:12px;">
+            <input type="color" class="priority-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+            <div style="min-width:140px;">${escapeHtml(p.label || '')}</div>
+            <input type="number" class="priority-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          </div>
+          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-priority" style="color: var(--danger);">Delete</button>` : ''}
+        </div>`;
+      }).join('');
+      if (currentUser?.permissions?.canManageTags) {
+        prioritiesList.querySelectorAll('.priority-color-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            await fetch(`/api/priority-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ color: e.target.value })
+            });
+            await loadPriorityTags();
+          });
+        });
+        prioritiesList.querySelectorAll('.priority-sort-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            const sort = Number(e.target.value);
+            await fetch(`/api/priority-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+            });
+            await loadPriorityTags();
+          });
+        });
+        prioritiesList.querySelectorAll('button[data-action="delete-priority"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.target.closest('.tag-manager-item')?.dataset.id;
+            if (!id) return;
+            if (!confirm('Delete this priority?')) return;
+            await fetch(`/api/priority-tags/${id}`, { method: 'DELETE' });
+            await loadPriorityTags();
+          });
+        });
+      }
+    }
+
+    refreshPrioritiesBtn?.addEventListener('click', () => loadPriorityTags());
+    createPriorityForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentUser?.permissions?.canManageTags) return;
+      const label = (priorityLabelInput?.value || '').trim();
+      const color = priorityColorInput?.value || '#fdd023';
+      const sortOrder = Number(prioritySortInput?.value);
+      if (!label) return;
+      prioritiesMessage.textContent = 'Saving...';
+      prioritiesMessage.className = 'small';
+      try {
+        const res = await fetch('/api/priority-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, color, sortOrder: Number.isFinite(sortOrder) ? sortOrder : undefined })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create priority');
+        priorityLabelInput.value = '';
+        prioritySortInput.value = '';
+        prioritiesMessage.textContent = 'Priority created';
+        prioritiesMessage.className = 'success';
+        await loadPriorityTags();
+      } catch (err) {
+        prioritiesMessage.textContent = err.message || 'Failed to create priority';
+        prioritiesMessage.className = 'error';
+      }
+    });
     vendorForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(vendorForm).entries());
@@ -2699,8 +2865,9 @@
       }
       if (currentUser?.permissions?.canPlaceOrders) newOrderBtn.disabled = false;
       else newOrderBtn.disabled = true;
-      adminBtn.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
-      if (manageTagsBtn) manageTagsBtn.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
+      adminBtn.style.display = (currentUser?.permissions?.canManageUsers || currentUser?.permissions?.canManageTags) ? 'inline-flex' : 'none';
+      if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
+      if (adminTabPriorities) adminTabPriorities.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
     }
 
     async function loadUsers() {
@@ -2906,14 +3073,20 @@
       adminUsersSection.style.display = which === 'users' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
-      [adminTabUsers, adminTabTracking, adminTabVendors].forEach(btn => btn?.classList.remove('primary'));
+      if (adminTagsSection) adminTagsSection.style.display = which === 'tags' ? 'block' : 'none';
+      if (adminPrioritiesSection) adminPrioritiesSection.style.display = which === 'priorities' ? 'block' : 'none';
+      [adminTabUsers, adminTabTracking, adminTabVendors, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
+      if (which === 'tags') adminTabTags?.classList.add('primary');
+      if (which === 'priorities') adminTabPriorities?.classList.add('primary');
     }
     adminTabUsers?.addEventListener('click', () => showAdminSection('users'));
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
+    adminTabTags?.addEventListener('click', () => { showAdminSection('tags'); loadTags(); });
+    adminTabPriorities?.addEventListener('click', () => { showAdminSection('priorities'); loadPriorityTags(); });
 
     async function fetchMe() {
       try {
@@ -2926,6 +3099,7 @@
         fetchOrders();
         loadVendors();
         loadTags();
+        loadPriorityTags();
         loadUsers();
       } catch {
         currentUser = null;
