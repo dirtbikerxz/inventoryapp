@@ -963,6 +963,7 @@
     const priorityColorInput = document.getElementById('priority-color-input');
     const prioritySortInput = document.getElementById('priority-sort-input');
     const createPriorityForm = document.getElementById('create-priority-form');
+    let activeAdminTab = null;
     let vendorConfigs = [];
     let currentUser = null;
     function detectVendor(partNum, link) {
@@ -2228,19 +2229,21 @@
 
     adminBtn.addEventListener('click', () => {
       adminModal.style.display = 'flex';
-      if (currentUser?.permissions?.canManageUsers) {
+      updateAdminTabsVisibility();
+      const allowed = allowedAdminTabs();
+      if (!allowed.length) { adminModal.style.display = 'none'; return; }
+      const target = allowed[0];
+      if (allowed.includes('users')) {
         loadUsers();
         loadRoles();
-        showAdminSection('users');
-      } else {
-        showAdminSection(currentUser?.permissions?.canManageTags ? 'tags' : 'tracking');
       }
-      loadTrackingSettings();
-      loadVendors();
-      if (currentUser?.permissions?.canManageTags) {
+      if (allowed.includes('tracking')) loadTrackingSettings();
+      if (allowed.includes('vendors')) loadVendors();
+      if (allowed.includes('tags') || allowed.includes('priorities')) {
         loadTags();
         loadPriorityTags();
       }
+      showAdminSection(target);
     });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
     accountBtn.addEventListener('click', () => {
@@ -2865,9 +2868,8 @@
       }
       if (currentUser?.permissions?.canPlaceOrders) newOrderBtn.disabled = false;
       else newOrderBtn.disabled = true;
-      adminBtn.style.display = (currentUser?.permissions?.canManageUsers || currentUser?.permissions?.canManageTags) ? 'inline-flex' : 'none';
-      if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
-      if (adminTabPriorities) adminTabPriorities.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
+      adminBtn.style.display = (currentUser?.permissions?.canManageUsers || currentUser?.permissions?.canManageTags || currentUser?.permissions?.canManageVendors) ? 'inline-flex' : 'none';
+      updateAdminTabsVisibility();
     }
 
     async function loadUsers() {
@@ -3068,8 +3070,42 @@
       }
     });
 
+    function allowedAdminTabs() {
+      const tabs = [];
+      if (currentUser?.permissions?.canManageUsers) {
+        tabs.push('users', 'tracking');
+      }
+      if (currentUser?.permissions?.canManageVendors) {
+        tabs.push('vendors');
+      }
+      if (currentUser?.permissions?.canManageTags) {
+        tabs.push('tags', 'priorities');
+      }
+      return tabs;
+    }
+
+    function updateAdminTabsVisibility() {
+      const allowed = allowedAdminTabs();
+      if (adminTabUsers) adminTabUsers.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
+      if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
+      if (adminTabPriorities) adminTabPriorities.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
+      if (!allowed.includes(activeAdminTab)) {
+        activeAdminTab = allowed[0] || null;
+      }
+      if (adminUsersSection) adminUsersSection.style.display = 'none';
+      if (adminTrackingSection) adminTrackingSection.style.display = 'none';
+      if (adminVendorsSection) adminVendorsSection.style.display = 'none';
+      if (adminTagsSection) adminTagsSection.style.display = 'none';
+      if (adminPrioritiesSection) adminPrioritiesSection.style.display = 'none';
+    }
+
     function showAdminSection(which) {
-      if (!adminUsersSection || !adminTrackingSection || !adminVendorsSection) return;
+      const allowed = allowedAdminTabs();
+      if (!allowed.length) return;
+      if (!allowed.includes(which)) which = allowed[0];
+      activeAdminTab = which;
       adminUsersSection.style.display = which === 'users' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
