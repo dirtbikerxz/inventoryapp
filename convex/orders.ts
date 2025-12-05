@@ -134,7 +134,11 @@ export const create = mutation({
     groupId: v.optional(v.id("orderGroups")),
     trackingNumber: v.optional(v.string()),
     tracking: v.optional(v.array(trackingArg)),
-    requestedDisplayAt: v.optional(v.number())
+    requestedDisplayAt: v.optional(v.number()),
+    approvalStatus: v.optional(v.string()),
+    approvedBy: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    tags: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -157,6 +161,10 @@ export const create = mutation({
       orderNumber,
       requestedAt: now,
       requestedDisplayAt: args.requestedDisplayAt ?? now,
+      approvalStatus: args.approvalStatus || "pending",
+      approvedBy: args.approvedBy,
+      approvedAt: args.approvedAt,
+      tags: args.tags || [],
       status: args.status || "Requested",
       priority: args.priority || "Medium",
       supplier: args.supplier || args.vendor,
@@ -267,13 +275,17 @@ export const update = mutation({
     status: v.optional(v.string()),
     unitCost: v.optional(v.number()),
     fetchedPrice: v.optional(v.number()),
-    notes: v.optional(v.string())
+    notes: v.optional(v.string()),
+    approvalStatus: v.optional(v.string()),
+    approvedBy: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    tags: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("orders", args.orderId);
     if (!id) throw new Error("Invalid order id");
     const updates: Record<string, any> = {};
-    ["partName","quantityRequested","priority","supplier","vendor","partLink","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","notes"].forEach(k => {
+    ["partName","quantityRequested","priority","supplier","vendor","partLink","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","notes","approvalStatus","approvedBy","approvedAt","tags"].forEach(k => {
       const val = (args as any)[k];
       if (val !== undefined) updates[k] = val;
     });

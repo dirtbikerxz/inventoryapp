@@ -241,6 +241,18 @@
     .tracking-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .tracking-row select { min-width:120px; }
     .tracking-list { display:flex; flex-direction:column; gap:6px; }
+    .tag-dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--gold); }
+    .tag-picker { position: relative; max-width: 420px; }
+    .tag-picker-display { border:1px solid var(--border); background: var(--panel); padding:10px 12px; border-radius:10px; cursor:pointer; }
+    .tag-picker-panel { position:absolute; top:110%; left:0; right:0; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; box-shadow:var(--card-shadow); padding:8px; z-index:25; max-height:260px; display:flex; flex-direction:column; gap:8px; }
+    .tag-picker-options { overflow:auto; max-height:180px; display:flex; flex-direction:column; gap:6px; }
+    .tag-option { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+    .tag-option:hover { background: rgba(255,255,255,0.04); }
+    .tag-option.selected { border-color: var(--accent); background: rgba(70,29,124,0.15); }
+    .tag-manager-list { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+    .tag-manager-item { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+    .tag-manager-meta { display:flex; align-items:center; gap:10px; }
+    .tag-modal-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto; }
     .card-footer {
       display: flex;
       align-items: center;
@@ -376,18 +388,18 @@
       </div>
     </div>
 
-    <section id="board-section" style="flex:1; min-height:0; max-height: calc(100vh - 300px); overflow:hidden; display:flex; flex-direction:column; padding-bottom: 12px;">
+    <section id="board-section" style="flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; padding-bottom: 12px;">
       <div class="board" id="board"></div>
     </section>
 
-    <section id="table-section" style="display:none; flex:1; min-height:0; max-height: calc(100vh - 300px); overflow:hidden;">
+    <section id="table-section" style="display:none; flex:1; min-height:0; overflow:hidden;">
       <div class="filters">
         <div><label class="small">Start date</label><input id="start-date" class="input" type="date" /></div>
         <div><label class="small">End date</label><input id="end-date" class="input" type="date" /></div>
         <div><label class="small">Status</label><select id="status-filter" class="input"></select></div>
         <div><label class="small">Vendor</label><select id="vendor-filter" class="input"></select></div>
       </div>
-      <div id="table-container" style="overflow:auto; flex:1; min-height:0; max-height: calc(100vh - 340px); padding-bottom: 12px;"></div>
+      <div id="table-container" style="overflow:auto; flex:1; min-height:0; padding-bottom: 12px;"></div>
     </section>
   </main>
 
@@ -439,6 +451,21 @@
           </select>
         </div>
         <div style="grid-column: span 2;">
+          <label class="small">Tags</label>
+          <select id="order-tags" name="tags" class="input" multiple size="4" style="min-height:90px; display:none;"></select>
+          <div class="tag-picker" id="tag-picker">
+            <div id="tag-picker-display" class="tag-picker-display">Select tags</div>
+            <div id="tag-picker-panel" class="tag-picker-panel" style="display:none;">
+              <input id="tag-picker-search" class="input tag-picker-search" placeholder="Search tags..." />
+              <div id="tag-picker-options" class="tag-picker-options"></div>
+            </div>
+          </div>
+          <div class="flex-between" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn ghost" id="manage-tags-btn" style="display:none;">Manage tags</button>
+            <div class="small">Tags categorize requests. Mentors/Admins can manage tags.</div>
+          </div>
+        </div>
+        <div style="grid-column: span 2;">
           <label class="small">Tracking numbers</label>
           <div id="order-tracking-list" class="tracking-list"></div>
           <div class="flex-between" style="margin-top:6px; gap:8px; flex-wrap:wrap;">
@@ -458,6 +485,28 @@
           </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="tags-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:52; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:22px;">Organization tags</div>
+          <div class="subtitle" style="margin-bottom:12px;">Manage tags used to categorize requests.</div>
+        </div>
+        <div class="flex-between" style="gap:8px;">
+          <button class="btn ghost" id="refresh-tags">Refresh</button>
+          <button class="btn primary" id="close-tags">Close</button>
+        </div>
+      </div>
+      <form id="create-tag-form" class="grid" style="grid-template-columns: 2fr 1fr auto; gap:8px; margin-top:8px;">
+        <input id="tag-label-input" class="input" placeholder="New tag name" required />
+        <input id="tag-color-input" class="input" type="color" value="#fdd023" />
+        <button type="submit" class="btn primary">New tag</button>
+      </form>
+      <div id="tags-message" class="small" style="margin-top:6px;"></div>
+      <div id="tags-list" class="tag-manager-list"></div>
     </div>
   </div>
 
@@ -787,6 +836,21 @@
     const orderMessage = document.getElementById('order-message');
     const fetchProduct = document.getElementById('fetch-product');
     const newOrderBtn = document.getElementById('new-order-btn');
+    const tagSelect = document.getElementById('order-tags');
+    const tagPickerDisplay = document.getElementById('tag-picker-display');
+    const tagPickerPanel = document.getElementById('tag-picker-panel');
+    const tagPickerOptions = document.getElementById('tag-picker-options');
+    const tagPickerSearch = document.getElementById('tag-picker-search');
+    const manageTagsBtn = document.getElementById('manage-tags-btn');
+    const tagsModal = document.getElementById('tags-modal');
+    const closeTags = document.getElementById('close-tags');
+    const refreshTagsBtn = document.getElementById('refresh-tags');
+    const tagsList = document.getElementById('tags-list');
+    const tagsMessage = document.getElementById('tags-message');
+    const tagLabelInput = document.getElementById('tag-label-input');
+    const tagColorInput = document.getElementById('tag-color-input');
+    const tagPicker = document.getElementById('tag-picker');
+    const createTagForm = document.getElementById('create-tag-form');
     const adminBtn = document.getElementById('admin-btn');
     const adminModal = document.getElementById('admin-modal');
     const closeAdmin = document.getElementById('close-admin');
@@ -804,6 +868,37 @@
     const clearVendor = document.getElementById('clear-vendor');
     const vendorList = document.getElementById('vendor-list');
     const testUrl = document.getElementById('test-url');
+    function resizeColumns() {
+      window.requestAnimationFrame(() => {
+        if (boardSection) {
+          const rect = boardSection.getBoundingClientRect();
+          const pad = 28;
+          const available = window.innerHeight - rect.top - pad;
+          if (available > 240) {
+            boardSection.style.height = `${available}px`;
+            boardSection.style.maxHeight = `${available}px`;
+          }
+        }
+        if (tableSection) {
+          const rect = tableSection.getBoundingClientRect();
+          const pad = 28;
+          const available = window.innerHeight - rect.top - pad;
+          if (available > 240) {
+            tableSection.style.height = `${available}px`;
+            tableSection.style.maxHeight = `${available}px`;
+            const filtersEl = tableSection.querySelector('.filters');
+            const filtersH = filtersEl ? filtersEl.getBoundingClientRect().height : 0;
+            const tableAvail = available - filtersH - 12;
+            if (tableContainer && tableAvail > 120) {
+              tableContainer.style.height = `${tableAvail}px`;
+              tableContainer.style.maxHeight = `${tableAvail}px`;
+            }
+          }
+        }
+      });
+    }
+    window.addEventListener('resize', resizeColumns);
+    resizeColumns();
     const testExtract = document.getElementById('test-extract');
     const pickName = document.getElementById('pick-name');
     const pickPrice = document.getElementById('pick-price');
@@ -889,6 +984,7 @@
     let expandedGroups = new Set();
     const undoStack = [];
     const redoStack = [];
+    let tagList = [];
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -899,6 +995,14 @@
       undoStack.push(record);
       redoStack.length = 0;
       updateUndoRedoUI();
+    }
+
+    async function approveOrder(id, status = 'approved') {
+      await fetch(`/api/orders/${id}/approval`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalStatus: status })
+      });
     }
     function getOrderById(id) {
       return orders.find(o => o._id === id);
@@ -914,7 +1018,8 @@
       const allowed = [
         'category','csvFileLink','department','fetchedName','fetchedPrice','groupId','justification','notes',
         'partCode','partId','partLink','partName','priority','productCode','quantityRequested','status','studentId',
-        'studentName','supplier','supplierLink','totalCost','tracking','trackingNumber','unitCost','vendor','vendorPartNumber','requestedDisplayAt'
+        'studentName','supplier','supplierLink','totalCost','tracking','trackingNumber','unitCost','vendor','vendorPartNumber','requestedDisplayAt',
+        'approvalStatus','approvedBy','approvedAt','tags'
       ];
       const clean = {};
       allowed.forEach(k => {
@@ -1076,6 +1181,26 @@
       const parsed = Date.parse(value);
       if (!Number.isNaN(parsed)) return formatDateOnly(parsed);
       return value;
+    }
+    function getTagLabel(id) {
+      const t = tagList.find(t => String(t._id || t.id || t.label) === String(id));
+      return t ? t.label : id;
+    }
+    function getTagColor(id) {
+      const t = tagList.find(t => String(t._id || t.id || t.label) === String(id));
+      return t ? (t.color || '#fdd023') : '#fdd023';
+    }
+    function renderTagChips(ids = []) {
+      if (!ids || !ids.length) return '';
+      return ids.map(tid => {
+        const label = getTagLabel(tid);
+        const color = getTagColor(tid);
+        return `<span class="tag"><span class="tag-dot" style="background:${color};"></span>${escapeHtml(label)}</span>`;
+      }).join('');
+    }
+    function getSelectedTagIds() {
+      if (!tagSelect) return [];
+      return Array.from(tagSelect.selectedOptions || []).map(o => o.value);
     }
     function escapeHtml(str = '') {
       return String(str || '')
@@ -1334,6 +1459,7 @@
       addOrderTracking.disabled = !!order.group;
       orderTrackingList.style.display = order.group ? 'none' : 'block';
       orderMessage.textContent = order.group ? 'Tracking managed at group level.' : '';
+      renderTagOptions(order.tags || []);
       orderForm.elements.notes.value = order.notes || '';
       modal.style.display = 'flex';
     }
@@ -1368,10 +1494,15 @@
               ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
               ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
               ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
+              ${renderTagChips(order.tags || [])}
+              ${order.approvalStatus === 'approved'
+                ? `<span class="tag" style="background:rgba(74,210,143,0.16); color:var(--success);">Approved${order.approvedBy ? ' · ' + order.approvedBy : ''}</span>`
+                : `<span class="tag" style="background:rgba(253,208,35,0.16); color:var(--gold);">Pending approval</span>`}
             </div>
             ${renderTrackingBadges(order.tracking || [])}
           </div>
-          <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end;">
+          <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
+            ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === 'approved' ? 'Unapprove' : 'Approve'}</button>` : ''}
             ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
             ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
           </div>
@@ -1386,6 +1517,14 @@
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           openEdit(order);
+        });
+      });
+      card.querySelectorAll('button[data-action="approve"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const next = order.approvalStatus === 'approved' ? 'pending' : 'approved';
+          await approveOrder(order._id, next);
+          fetchOrders();
         });
       });
 
@@ -1632,6 +1771,7 @@
 
         boardEl.appendChild(column);
       });
+      resizeColumns();
     }
 
     function renderTable() {
@@ -1663,10 +1803,16 @@
         <tr data-id="${o._id}">
           <td><input type="checkbox" class="row-check" ${selected.has(o._id) ? 'checked' : ''}></td>
           <td>
-            ${o.partName || ''}
+            <div>${o.partName || ''}</div>
             ${o.vendorPartNumber ? `<div class="small">${o.vendorPartNumber}</div>` : ''}
             ${o.partLink ? `<div class="small"><a href="${o.partLink}" target="_blank">link</a></div>` : ''}
-            ${o.group ? `<span class="tag group">Group</span>` : ''}
+            ${(o.tags && o.tags.length) ? `<div class="small" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">${renderTagChips(o.tags)}</div>` : ''}
+            <div class="small" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
+              ${o.approvalStatus === 'approved'
+                ? `<span class="tag" style="background:rgba(74,210,143,0.16); color:var(--success);">Approved${o.approvedBy ? ' · ' + o.approvedBy : ''}</span>`
+                : `<span class="tag" style="background:rgba(253,208,35,0.16); color:var(--gold);">Pending approval</span>`}
+              ${o.group ? `<span class="tag group">Group</span>` : ''}
+            </div>
           </td>
           <td><span class="status-chip status-${o.status || ''}">${o.status || ''}</span></td>
           <td>${renderTrackingBadges(o.tracking?.length ? o.tracking : (o.group?.tracking || []))}</td>
@@ -1697,6 +1843,7 @@
           renderBoard(); updateSelectionBar();
         });
       });
+      resizeColumns();
     }
 
     function toggleSelect(id) {
@@ -1814,6 +1961,7 @@
       editingOrderId = null;
       orderForm.reset();
       orderForm.elements.quantityRequested.value = 1;
+      renderTagOptions([]);
       setTrackingRows(orderTrackingList, []);
       addOrderTracking.disabled = false;
       orderTrackingList.style.display = 'block';
@@ -1970,6 +2118,7 @@
       payload.fetchedPrice = payload.unitCost || undefined;
       payload.tracking = collectTrackingRows(orderTrackingList);
       payload.trackingNumber = payload.tracking[0]?.trackingNumber || undefined;
+      payload.tags = tagSelect ? Array.from(tagSelect.selectedOptions).map(o => o.value) : [];
       if (!payload.vendor) {
         const auto = detectVendor(payload.vendorPartNumber, payload.partLink);
         if (auto?.vendor) {
@@ -2146,6 +2295,142 @@
         vendorList.textContent = 'Failed to load vendors';
       }
     }
+
+    async function loadTags() {
+      try {
+        const res = await fetch('/api/tags');
+        const data = await res.json();
+        tagList = data.tags || [];
+        renderTagOptions(getSelectedTagIds());
+        renderTagsManager();
+      } catch (e) {
+        console.warn('Failed to load tags', e);
+      }
+    }
+
+    function renderTagOptions(selected = []) {
+      if (!tagSelect) return;
+      const selSet = new Set(selected.map(String));
+      tagSelect.innerHTML = tagList.map(t => `<option value="${t._id || t.id || t.label}" ${selSet.has(String(t._id || t.id || t.label)) ? 'selected' : ''}>${t.label}</option>`).join('');
+      updateTagSelection(selected);
+    }
+
+    function updateTagSelection(ids = []) {
+      if (tagSelect) {
+        const selSet = new Set(ids.map(String));
+        Array.from(tagSelect.options || []).forEach(opt => { opt.selected = selSet.has(opt.value); });
+      }
+      if (tagPickerDisplay) {
+        const labels = ids.map(getTagLabel).filter(Boolean);
+        tagPickerDisplay.textContent = labels.length ? labels.join(', ') : 'Select tags';
+      }
+      renderTagDropdownList(ids);
+    }
+
+    function renderTagDropdownList(selected = getSelectedTagIds()) {
+      if (!tagPickerOptions) return;
+      const term = (tagPickerSearch?.value || '').toLowerCase().trim();
+      const filtered = tagList.filter(t => !term || (t.label || '').toLowerCase().includes(term));
+      const selSet = new Set(selected.map(String));
+      tagPickerOptions.innerHTML = filtered.length ? filtered.map(t => {
+        const id = String(t._id || t.id || t.label);
+        const selectedCls = selSet.has(id) ? 'selected' : '';
+        const color = t.color || '#fdd023';
+        return `<div class="tag-option ${selectedCls}" data-id="${id}">
+          <span class="tag-dot" style="background:${color};"></span>
+          <span>${escapeHtml(t.label || id)}</span>
+        </div>`;
+      }).join('') : `<div class="small" style="padding:8px 10px;">No tags</div>`;
+    }
+
+    function toggleTagPanel(open) {
+      if (!tagPickerPanel) return;
+      const shouldOpen = open !== undefined ? open : tagPickerPanel.style.display !== 'block';
+      tagPickerPanel.style.display = shouldOpen ? 'block' : 'none';
+    }
+
+    tagPickerDisplay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTagPanel(true);
+    });
+    document.addEventListener('click', (e) => {
+      if (!tagPicker) return;
+      if (!tagPicker.contains(e.target)) toggleTagPanel(false);
+    });
+    tagPickerSearch?.addEventListener('input', () => renderTagDropdownList(getSelectedTagIds()));
+    tagPickerOptions?.addEventListener('click', (e) => {
+      const row = e.target.closest('.tag-option');
+      if (!row) return;
+      const id = row.dataset.id;
+      if (!id) return;
+      const selected = new Set(getSelectedTagIds().map(String));
+      if (selected.has(id)) selected.delete(id); else selected.add(id);
+      updateTagSelection(Array.from(selected));
+    });
+
+    function renderTagsManager() {
+      if (!tagsList) return;
+      if (!tagList.length) {
+        tagsList.innerHTML = '<div class="empty">No tags yet.</div>';
+        return;
+      }
+      tagsList.innerHTML = tagList.map(t => {
+        const id = String(t._id || t.id || t.label);
+        const color = t.color || '#fdd023';
+        return `<div class="tag-manager-item" data-id="${id}">
+          <div class="tag-manager-meta">
+            <span class="tag-dot" style="background:${color}; width:12px; height:12px;"></span>
+            <div>${escapeHtml(t.label || id)}</div>
+          </div>
+          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-tag" style="color: var(--danger);">Delete</button>` : ''}
+        </div>`;
+      }).join('');
+      tagsList.querySelectorAll('button[data-action="delete-tag"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.closest('.tag-manager-item')?.dataset.id;
+          if (!id) return;
+          if (!confirm('Delete this tag?')) return;
+          await fetch(`/api/tags/${id}`, { method: 'DELETE' });
+          await loadTags();
+        });
+      });
+    }
+
+    manageTagsBtn?.addEventListener('click', () => {
+      if (!currentUser?.permissions?.canManageTags) return;
+      if (tagPickerSearch) tagPickerSearch.value = '';
+      tagsModal.style.display = 'flex';
+      renderTagsManager();
+      toggleTagPanel(false);
+    });
+    tagsModal?.addEventListener('click', (e) => { if (e.target === tagsModal) tagsModal.style.display = 'none'; });
+    closeTags?.addEventListener('click', () => { tagsModal.style.display = 'none'; });
+    refreshTagsBtn?.addEventListener('click', () => loadTags());
+    createTagForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentUser?.permissions?.canManageTags) return;
+      const label = (tagLabelInput?.value || '').trim();
+      const color = tagColorInput?.value || '#fdd023';
+      if (!label) return;
+      tagsMessage.textContent = 'Saving...';
+      tagsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create tag');
+        tagLabelInput.value = '';
+        tagsMessage.textContent = 'Tag created';
+        tagsMessage.className = 'success';
+        await loadTags();
+      } catch (err) {
+        tagsMessage.textContent = err.message || 'Failed to create tag';
+        tagsMessage.className = 'error';
+      }
+    });
 
     vendorForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2411,15 +2696,11 @@
         logoutBtn.style.display = 'none';
         accountBtn.style.display = 'none';
         adminBtn.style.display = 'none';
-      // vendor button removed; use Admin modal tabs
-    }
-    // Permissions gating
-    if (currentUser?.permissions?.canPlaceOrders) {
-      newOrderBtn.disabled = false;
-    } else {
-      newOrderBtn.disabled = true;
-    }
+      }
+      if (currentUser?.permissions?.canPlaceOrders) newOrderBtn.disabled = false;
+      else newOrderBtn.disabled = true;
       adminBtn.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (manageTagsBtn) manageTagsBtn.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
     }
 
     async function loadUsers() {
@@ -2480,9 +2761,9 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true },
-          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false },
-          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false }
+          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true },
+          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true },
+          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false }
         };
         roles.forEach(r => { combined[r.role] = r.permissions; });
 
@@ -2502,6 +2783,7 @@
               ${renderToggle(role, 'canDeleteOrders', 'Can delete orders')}
               ${renderToggle(role, 'canManageVendors', 'Can manage vendors')}
               ${renderToggle(role, 'canManageUsers', 'Can manage users')}
+              ${renderToggle(role, 'canManageTags', 'Can manage tags')}
             </div>
             <div class="flex-between" style="margin-top:8px;">
               <button class="btn primary" data-action="save-role" data-role="${role}">Save ${role}</button>
@@ -2643,6 +2925,7 @@
         await syncTrackingAutoRefreshFromServer();
         fetchOrders();
         loadVendors();
+        loadTags();
         loadUsers();
       } catch {
         currentUser = null;

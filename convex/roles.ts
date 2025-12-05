@@ -8,7 +8,8 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canEditOrders: true,
     canDeleteOrders: true,
     canManageVendors: true,
-    canManageUsers: true
+    canManageUsers: true,
+    canManageTags: true
   },
   mentor: {
     canPlaceOrders: true,
@@ -16,7 +17,8 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canEditOrders: true,
     canDeleteOrders: true,
     canManageVendors: true,
-    canManageUsers: false
+    canManageUsers: false,
+    canManageTags: true
   },
   student: {
     canPlaceOrders: true,
@@ -24,7 +26,8 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canEditOrders: false,
     canDeleteOrders: false,
     canManageVendors: false,
-    canManageUsers: false
+    canManageUsers: false,
+    canManageTags: false
   }
 };
 

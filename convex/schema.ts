@@ -44,6 +44,10 @@ export default defineSchema({
     orderNumber: v.string(),
     requestedAt: v.number(),
     requestedDisplayAt: v.optional(v.number()),
+    approvalStatus: v.optional(v.string()), // 'pending' | 'approved'
+    approvedBy: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    tags: v.optional(v.array(v.string())),
     department: v.optional(v.string()),
     studentName: v.string(),
     studentId: v.optional(v.id("students")),
@@ -120,6 +124,12 @@ export default defineSchema({
     permissions: v.record(v.string(), v.boolean()),
     updatedAt: v.number()
   }).index("by_role", ["role"]),
+
+  tags: defineTable({
+    label: v.string(),
+    color: v.optional(v.string()),
+    createdAt: v.number()
+  }).index("by_label", ["label"]),
 
   users: defineTable({
     username: v.optional(v.string()),

@@ -52,7 +52,8 @@ function defaultPermissions(role) {
     canEditOrders: false,
     canDeleteOrders: false,
     canManageVendors: false,
-    canManageUsers: false
+    canManageUsers: false,
+    canManageTags: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -62,7 +63,8 @@ function defaultPermissions(role) {
         canEditOrders: true,
         canDeleteOrders: true,
         canManageVendors: true,
-        canManageUsers: true
+        canManageUsers: true,
+        canManageTags: true
       };
     case 'mentor':
       return {
@@ -71,7 +73,8 @@ function defaultPermissions(role) {
         canEditOrders: true,
         canDeleteOrders: true,
         canManageVendors: true,
-        canManageUsers: false
+        canManageUsers: false,
+        canManageTags: true
       };
     case 'student':
       return base;
@@ -85,7 +88,11 @@ async function getSessionUser(token) {
   const session = await client.query('auth:getSession', { token });
   if (!session) return null;
   const policy = await client.query('roles:get', { role: session.user.role || 'student' });
-  const effectivePermissions = session.user.permissions || policy?.permissions || defaultPermissions(session.user.role);
+  const effectivePermissions = {
+    ...defaultPermissions(session.user.role),
+    ...(policy?.permissions || {}),
+    ...(session.user.permissions || {})
+  };
   return {
     sessionId: session.sessionId,
     ...session.user,
@@ -385,11 +392,16 @@ app.post('/api/orders', async (req, res) => {
 
   try {
     const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
+    const isPrivileged = ['admin','mentor'].includes((user.role || '').toLowerCase()) || user.permissions?.canEditOrders;
+    const approvalStatus = isPrivileged ? 'approved' : 'pending';
     const payload = {
       ...req.body,
       tracking,
       trackingNumber: tracking[0]?.trackingNumber || req.body.trackingNumber,
-      studentName: req.body.studentName || user.name
+      studentName: req.body.studentName || user.name,
+      approvalStatus,
+      approvedBy: isPrivileged ? user.name : undefined,
+      approvedAt: isPrivileged ? Date.now() : undefined
     };
     const result = await client.mutation('orders:create', {
       ...payload
@@ -462,6 +474,27 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to update order status');
     res.status(500).json({ error: 'Unable to update order status' });
+  }
+});
+
+app.patch('/api/orders/:id/approval', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditOrders');
+  if (!user) return;
+  const { approvalStatus } = req.body || {};
+  if (!approvalStatus) {
+    return res.status(400).json({ error: 'approvalStatus is required' });
+  }
+  try {
+    await client.mutation('orders:update', {
+      orderId: req.params.id,
+      approvalStatus,
+      approvedBy: approvalStatus === 'approved' ? user.name : undefined,
+      approvedAt: approvalStatus === 'approved' ? Date.now() : undefined
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update approval');
+    res.status(500).json({ error: 'Unable to update approval' });
   }
 });
 
@@ -593,6 +626,44 @@ app.get('/api/vendors/configs', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to load vendor configs');
     res.status(500).json({ error: 'Unable to load vendor configs' });
+  }
+});
+
+app.get('/api/tags', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const tags = await client.query('tags:list', {});
+    res.json({ tags });
+  } catch (error) {
+    logger.error(error, 'Failed to list tags');
+    res.status(500).json({ error: 'Unable to load tags' });
+  }
+});
+
+app.post('/api/tags', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color } = req.body || {};
+  if (!label) return res.status(400).json({ error: 'label required' });
+  try {
+    const result = await client.mutation('tags:create', { label, color });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create tag');
+    res.status(500).json({ error: 'Unable to create tag' });
+  }
+});
+
+app.delete('/api/tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  try {
+    const result = await client.mutation('tags:remove', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete tag');
+    res.status(500).json({ error: 'Unable to delete tag' });
   }
 });
 
