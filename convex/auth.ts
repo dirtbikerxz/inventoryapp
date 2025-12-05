@@ -7,7 +7,8 @@ const DEFAULT_PERMISSIONS = {
   canEditOrders: false,
   canDeleteOrders: false,
   canManageVendors: false,
-  canManageUsers: false
+  canManageUsers: false,
+  canManageTags: false
 };
 
 function permissionsForRole(role: string) {
@@ -20,7 +21,8 @@ function permissionsForRole(role: string) {
         canEditOrders: true,
         canDeleteOrders: true,
         canManageVendors: true,
-        canManageUsers: true
+        canManageUsers: true,
+        canManageTags: true
       };
     case "mentor":
       return {
@@ -29,7 +31,8 @@ function permissionsForRole(role: string) {
         canEditOrders: true,
         canDeleteOrders: true,
         canManageVendors: true,
-        canManageUsers: false
+        canManageUsers: false,
+        canManageTags: true
       };
     case "student":
       return { ...DEFAULT_PERMISSIONS };
@@ -78,7 +81,7 @@ export const createUser = mutation({
       .unique();
     if (existing) throw new Error("User already exists");
 
-    const perms = args.permissions ?? permissionsForRole(args.role);
+    const perms = args.permissions ?? {};
     const id = await ctx.db.insert("users", {
       username: args.username.toLowerCase(),
       name: args.name,
@@ -110,7 +113,13 @@ export const updateUser = mutation({
 
     const updates: any = { updatedAt: Date.now() };
     if (args.name !== undefined) updates.name = args.name;
-    if (args.role !== undefined) updates.role = args.role;
+    if (args.role !== undefined) {
+      updates.role = args.role;
+      // If permissions were not explicitly provided, reset to empty (role policies/defaults will apply on session load)
+      if (args.permissions === undefined) {
+        updates.permissions = {};
+      }
+    }
     if (args.active !== undefined) updates.active = args.active;
     if (args.permissions !== undefined) updates.permissions = args.permissions;
     if (args.passwordHash !== undefined) updates.passwordHash = args.passwordHash;
@@ -126,6 +135,13 @@ export const deleteUser = mutation({
     const id = ctx.db.normalizeId("users", args.id);
     if (!id) throw new Error("Invalid user id");
     await ctx.db.delete(id);
+    // Cleanup sessions for this user (best-effort)
+    const sessions = await ctx.db.query("sessions").collect();
+    await Promise.all(
+      sessions
+        .filter(s => s.userId === id)
+        .map(s => ctx.db.delete(s._id))
+    );
     return { id: args.id };
   }
 });

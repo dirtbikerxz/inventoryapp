@@ -201,7 +201,7 @@ app.post('/api/users', async (req, res) => {
     return res.status(400).json({ error: 'username, name, role, password required' });
   }
   try {
-    const perms = permissions || defaultPermissions(role);
+    const perms = permissions || {};
     const hash = await bcrypt.hash(password, 10);
     const result = await client.mutation('auth:createUser', {
       username: username.toLowerCase(),
@@ -223,12 +223,19 @@ app.patch('/api/users/:id', async (req, res) => {
   if (!user) return;
   const { name, role, permissions, active, password } = req.body || {};
   try {
-    const updates = {
+    const updatesBase = {
       id: req.params.id,
       name,
       role,
       permissions,
       active
+    };
+    // If role provided and permissions not provided, reset to defaults for that role
+    if (role && permissions === undefined) {
+      updatesBase.permissions = {};
+    }
+    const updates = {
+      ...updatesBase
     };
     if (password) {
       updates.passwordHash = await bcrypt.hash(password, 10);
@@ -238,6 +245,18 @@ app.patch('/api/users/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to update user');
     res.status(500).json({ error: 'Unable to update user' });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  try {
+    const result = await client.mutation('auth:deleteUser', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete user');
+    res.status(500).json({ error: 'Unable to delete user' });
   }
 });
 
@@ -289,15 +308,9 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     setSessionCookie(res, token);
-    res.json({
-      user: {
-        _id: user._id,
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        permissions: user.permissions
-      }
-    });
+    // Return effective permissions (role policy + defaults)
+    const sessionUser = await getSessionUser(token);
+    res.json({ user: sessionUser });
   } catch (error) {
     logger.error(error, 'Failed login');
     res.status(500).json({ error: 'Login failed' });

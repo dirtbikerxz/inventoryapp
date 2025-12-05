@@ -620,8 +620,8 @@
           <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
             <div id="user-message" class="small"></div>
             <div class="flex-between" style="gap:8px;">
-              <button type="button" class="btn ghost" id="clear-user">Clear</button>
-              <button type="submit" class="btn primary">Save user</button>
+              <button type="button" class="btn ghost" id="clear-user">New user</button>
+              <button type="submit" class="btn primary" id="save-user-btn">Create user</button>
             </div>
           </div>
         </form>
@@ -631,6 +631,7 @@
         <div class="page-title" style="font-size:18px;">Role Permissions</div>
         <div class="subtitle">Toggle what each role can do.</div>
         <div id="role-list" style="margin-top:8px;"></div>
+        <div id="role-message" class="small" style="margin-top:6px;"></div>
       </div>
       </div>
 
@@ -940,9 +941,11 @@
     const userForm = document.getElementById('user-form');
     const userMessage = document.getElementById('user-message');
     const clearUser = document.getElementById('clear-user');
+    const saveUserBtn = document.getElementById('save-user-btn');
     const passwordForm = document.getElementById('password-form');
     const passwordMessage = document.getElementById('password-message');
     const roleList = document.getElementById('role-list');
+    const roleMessage = document.getElementById('role-message');
     const trackingSettingsForm = document.getElementById('tracking-settings-form');
     const trackingSettingsMessage = document.getElementById('tracking-settings-message');
     const refreshTrackingNow = document.getElementById('refresh-tracking-now');
@@ -964,6 +967,20 @@
     const prioritySortInput = document.getElementById('priority-sort-input');
     const createPriorityForm = document.getElementById('create-priority-form');
     let activeAdminTab = null;
+    const ROLE_DEFAULT_PERMS = {
+      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true },
+      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true },
+      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false }
+    };
+    function computePerms(user) {
+      const role = (user?.role || 'student').toLowerCase();
+      const defaults = ROLE_DEFAULT_PERMS[role] || ROLE_DEFAULT_PERMS.student;
+      const provided = user?.permissions || {};
+      // Only fill missing keys with defaults; honor server-provided permissions
+      const merged = { ...defaults };
+      Object.keys(provided).forEach(k => { merged[k] = provided[k]; });
+      return merged;
+    }
     let vendorConfigs = [];
     let currentUser = null;
     function detectVendor(partNum, link) {
@@ -2686,6 +2703,7 @@
     clearUser.addEventListener('click', () => {
       userForm.reset();
       userForm.elements.id.value = '';
+      saveUserBtn.textContent = 'Create user';
     });
 
     passwordForm.addEventListener('submit', async (e) => {
@@ -2866,9 +2884,10 @@
         accountBtn.style.display = 'none';
         adminBtn.style.display = 'none';
       }
-      if (currentUser?.permissions?.canPlaceOrders) newOrderBtn.disabled = false;
-      else newOrderBtn.disabled = true;
-      adminBtn.style.display = (currentUser?.permissions?.canManageUsers || currentUser?.permissions?.canManageTags || currentUser?.permissions?.canManageVendors) ? 'inline-flex' : 'none';
+      const perms = computePerms(currentUser);
+      currentUser.permissions = perms;
+      newOrderBtn.disabled = !perms.canPlaceOrders;
+      adminBtn.style.display = (perms.canManageUsers || perms.canManageTags || perms.canManageVendors) ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
     }
 
@@ -2896,6 +2915,7 @@
               </div>
               <div class="flex-between" style="gap:8px;">
                 <button class="btn ghost" data-action="edit-user">Edit</button>
+                <button class="btn ghost" data-action="delete-user" style="color: var(--danger);">Delete</button>
               </div>
             </div>
           </div>
@@ -2912,6 +2932,16 @@
             userForm.elements.name.value = u.name || '';
             userForm.elements.role.value = u.role || 'student';
             userForm.elements.active.value = u.active ? 'true' : 'false';
+            saveUserBtn.textContent = 'Update user';
+          });
+        });
+        userList.querySelectorAll('button[data-action="delete-user"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.target.closest('.card')?.dataset.id;
+            if (!id) return;
+            if (!confirm('Delete this user?')) return;
+            await fetch(`/api/users/${id}`, { method: 'DELETE' });
+            loadUsers();
           });
         });
       } catch (e) {
@@ -2936,11 +2966,14 @@
         };
         roles.forEach(r => { combined[r.role] = r.permissions; });
 
-        const renderToggle = (role, key, label) => `
+        const renderToggle = (role, key, label) => {
+          const disabled = role === 'admin' ? 'disabled' : '';
+          return `
           <label class="small" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-role="${role}" data-key="${key}" ${combined[role]?.[key] ? 'checked' : ''}/>
+            <input type="checkbox" data-role="${role}" data-key="${key}" ${combined[role]?.[key] ? 'checked' : ''} ${disabled}/>
             ${label}
           </label>`;
+        };
 
         const roleCard = (role) => `
           <div class="card" style="margin-bottom:8px;">
@@ -2954,16 +2987,26 @@
               ${renderToggle(role, 'canManageUsers', 'Can manage users')}
               ${renderToggle(role, 'canManageTags', 'Can manage tags')}
             </div>
-            <div class="flex-between" style="margin-top:8px;">
-              <button class="btn primary" data-action="save-role" data-role="${role}">Save ${role}</button>
-            </div>
+            ${role === 'admin'
+              ? `<div class="small" style="margin-top:8px;">Admin permissions are fixed and cannot be changed.</div>`
+              : `<div class="flex-between" style="margin-top:8px;">
+                  <button class="btn primary" data-action="save-role" data-role="${role}">Save ${role}</button>
+                </div>`}
           </div>`;
 
         roleList.innerHTML = ['admin', 'mentor', 'student'].map(roleCard).join('');
+        if (roleMessage) roleMessage.textContent = '';
 
         roleList.querySelectorAll('button[data-action="save-role"]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             const role = e.target.dataset.role;
+            if (role === 'admin') {
+              if (roleMessage) {
+                roleMessage.textContent = 'Admin permissions are fixed and cannot be edited.';
+                roleMessage.className = 'small';
+              }
+              return;
+            }
             const inputs = roleList.querySelectorAll(`input[data-role="${role}"]`);
             const perms = {};
             inputs.forEach(input => {
@@ -2974,10 +3017,18 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ permissions: perms })
             });
+            if (roleMessage) {
+              roleMessage.textContent = `Saved permissions for ${role}.`;
+              roleMessage.className = 'success';
+            }
           });
         });
       } catch (e) {
         roleList.textContent = 'Failed to load roles';
+        if (roleMessage) {
+          roleMessage.textContent = 'Failed to load roles.';
+          roleMessage.className = 'error';
+        }
       }
     }
 
@@ -3130,6 +3181,7 @@
         if (!res.ok) throw new Error('unauth');
         const data = await res.json();
         currentUser = data.user;
+        currentUser.permissions = computePerms(currentUser);
         updateUserUI();
         await syncTrackingAutoRefreshFromServer();
         fetchOrders();
@@ -3173,6 +3225,7 @@
         return;
       }
       currentUser = data.user;
+      currentUser.permissions = computePerms(currentUser);
       loginMessage.textContent = '';
       loginModal.style.display = 'none';
       updateUserUI();
