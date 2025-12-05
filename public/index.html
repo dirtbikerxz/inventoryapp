@@ -241,7 +241,7 @@
     .tracking-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .tracking-row select { min-width:120px; }
     .tracking-list { display:flex; flex-direction:column; gap:6px; }
-    .tag-dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: var(--gold); }
+    .tag-dot { width:10px; height:10px; border-radius:50%; display:inline-block; background: transparent; }
     .tag-picker { position: relative; max-width: 420px; }
     .tag-picker-display { border:1px solid var(--border); background: var(--panel); padding:10px 12px; border-radius:10px; cursor:pointer; }
     .tag-picker-panel { position:absolute; top:110%; left:0; right:0; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; box-shadow:var(--card-shadow); padding:8px; z-index:25; max-height:260px; display:flex; flex-direction:column; gap:8px; }
@@ -385,7 +385,7 @@
         <div id="group-vendor-note" class="small">Vendor: auto from selection</div>
       </div>
       <div class="flex-between selection-actions" style="gap:8px;">
-        <button class="btn primary" id="group-btn">Create group</button>
+        <button class="btn primary" id="group-btn">Create Order</button>
         <button class="btn ghost" id="delete-selected" style="color: var(--danger);">Delete selected</button>
       </div>
     </div>
@@ -1254,7 +1254,7 @@
       return ids.map(tid => {
         const label = getTagLabel(tid);
         const color = getTagColor(tid);
-        return `<span class="tag"><span class="tag-dot" style="background:${color};"></span>${escapeHtml(label)}</span>`;
+        return `<span class="tag" style="background:${color}22; border-color:${color}; color:${color};">${escapeHtml(label)}</span>`;
       }).join('');
     }
     function getSelectedTagIds() {
@@ -1703,13 +1703,11 @@
             </div>
             <div class="group-items-container" style="margin-top:6px; display:${expandedGroups.has(gid) ? 'block' : 'none'};">
               ${items.map(o => `
-                <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
+                <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
+                  <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ''}</span>
                   <span style="font-weight:700;">${o.partName || ''}</span>
-                  ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ''}
-                  ${o.priority ? `<span class="tag priority">${o.priority}</span>` : ''}
-                  ${o.supplier || o.vendor ? `<span class="tag supplier">${o.supplier || o.vendor}</span>` : ''}
-                  ${o.studentName ? `<span class="tag">${o.studentName}</span>` : ''}
-                  <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
+                  ${renderTagChips(o.tags || [])}
+                  ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ''}
                   ${renderTrackingBadges(o.tracking || [])}
                   ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
                   ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
@@ -2375,6 +2373,8 @@
         tagList = data.tags || [];
         renderTagOptions(getSelectedTagIds());
         renderTagsManager();
+        renderBoard();
+        renderTable();
       } catch (e) {
         console.warn('Failed to load tags', e);
       }
@@ -3184,10 +3184,10 @@
         currentUser.permissions = computePerms(currentUser);
         updateUserUI();
         await syncTrackingAutoRefreshFromServer();
+        await loadTags();
+        await loadPriorityTags();
         fetchOrders();
         loadVendors();
-        loadTags();
-        loadPriorityTags();
         loadUsers();
       } catch {
         currentUser = null;
@@ -3230,6 +3230,8 @@
       loginModal.style.display = 'none';
       updateUserUI();
       syncTrackingAutoRefreshFromServer();
+      await loadTags();
+      await loadPriorityTags();
       fetchOrders();
       loadVendors();
       loadUsers();

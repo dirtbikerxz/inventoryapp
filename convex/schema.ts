@@ -15,31 +15,6 @@ const trackingEntry = v.object({
 });
 
 export default defineSchema({
-  parts: defineTable({
-    partId: v.string(),
-    name: v.string(),
-    category: v.string(),
-    subcategory: v.optional(v.string()),
-    type: v.optional(v.string()),
-    spec1: v.optional(v.string()),
-    spec2: v.optional(v.string()),
-    spec3: v.optional(v.string()),
-    spec4: v.optional(v.string()),
-    spec5: v.optional(v.string()),
-    quantityPer: v.optional(v.string()),
-    unitCost: v.optional(v.number()),
-    supplier: v.optional(v.string()),
-    supplierLink: v.optional(v.string()),
-    productCode: v.optional(v.string()),
-    location: v.optional(v.string()),
-    status: v.optional(v.string()),
-    notes: v.optional(v.string()),
-    dateAdded: v.optional(v.number()),
-    addedBy: v.optional(v.string())
-  })
-    .index("by_partId", ["partId"])
-    .index("by_category", ["category"]),
-
   orders: defineTable({
     orderNumber: v.string(),
     requestedAt: v.number(),
@@ -50,8 +25,7 @@ export default defineSchema({
     tags: v.optional(v.array(v.string())),
     department: v.optional(v.string()),
     studentName: v.string(),
-    studentId: v.optional(v.id("students")),
-    partId: v.optional(v.id("parts")),
+    studentId: v.optional(v.string()),
     partCode: v.optional(v.string()), // original sheet Part ID
     partName: v.string(),
     vendorPartNumber: v.optional(v.string()),
@@ -91,18 +65,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number()
   }),
-
-  students: defineTable({
-    name: v.string(),
-    subteam: v.optional(v.string()),
-    active: v.boolean()
-  }).index("by_name", ["name"]),
-
-  categories: defineTable({
-    name: v.string(),
-    code: v.optional(v.string()),
-    sortOrder: v.optional(v.number())
-  }).index("by_name", ["name"]),
 
   vendorConfigs: defineTable({
     vendor: v.string(),

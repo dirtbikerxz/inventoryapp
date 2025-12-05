@@ -1,0 +1,29 @@
+<Container version="2">
+  <Name>venom-parts</Name>
+  <Repository>dirtbikerxz/venom-parts:latest</Repository>
+  <Network>bridge</Network>
+  <MyIP></MyIP>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/dirtbikerxz/inventoryapp</Support>
+  <Project></Project>
+  <Overview>Venom Parts — Convex-backed parts ordering board/table UI. Requires your Convex deployment URL.</Overview>
+  <Category>Productivity:</Category>
+  <Icon></Icon>
+  <ExtraParams></ExtraParams>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+
+  <!-- Port mapping: host 3000 to container 3000 -->
+  <Config Name="Web Port" Target="3000" Default="3000" Mode="tcp" Description="HTTP port for the web UI" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+
+  <!-- Convex deployment URL (public, used by browser) -->
+  <Config Name="CONVEX_URL" Target="CONVEX_URL" Default="" Mode="" Description="Convex deployment URL (e.g., https://yourproject.convex.cloud)" Type="Variable" Display="always" Required="true" Mask="false"></Config>
+
+  <!-- Admin credential overrides (optional) -->
+  <Config Name="ADMIN_USERNAME" Target="ADMIN_USERNAME" Default="admin" Mode="" Description="Override default admin username" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="ADMIN_PASSWORD" Target="ADMIN_PASSWORD" Default="password" Mode="" Description="Override default admin password" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <!-- Or supply a bcrypt hash instead of a plaintext password -->
+  <Config Name="ADMIN_PASSWORD_HASH" Target="ADMIN_PASSWORD_HASH" Default="" Mode="" Description="Optional bcrypt hash to set admin password" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+
+  <!-- No persistent volumes required; app is stateless. -->
+</Container>
