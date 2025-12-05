@@ -278,7 +278,7 @@
     .status-Received { background: rgba(74,210,143,0.16); color: var(--success); }
     .status-Cancelled { background: rgba(255,85,101,0.16); color: var(--danger); }
     .selection-bar {
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
@@ -288,7 +288,6 @@
       padding: 10px 14px;
       margin: 12px 0;
     }
-    .selection-bar.active { display: flex; }
     .input-inline {
       background: var(--panel-2);
       border: 1px solid var(--border);
@@ -352,7 +351,7 @@
         <div id="selection-count"></div>
         <div id="group-vendor-note" class="small">Vendor: auto from selection</div>
       </div>
-      <div class="flex-between" style="gap:8px;">
+      <div class="flex-between selection-actions" style="gap:8px;">
         <button class="btn primary" id="group-btn">Create group</button>
         <button class="btn ghost" id="delete-selected" style="color: var(--danger);">Delete selected</button>
       </div>
@@ -723,22 +722,6 @@
     const boardSection = document.getElementById('board-section');
     const tableSection = document.getElementById('table-section');
     const refreshBtn = document.getElementById('refresh-btn');
-    const undoBtn = document.createElement('button');
-    undoBtn.className = 'btn ghost';
-    undoBtn.id = 'undo-btn';
-    undoBtn.textContent = 'Undo';
-    undoBtn.style.display = 'inline-flex';
-    undoBtn.style.alignItems = 'center';
-    undoBtn.style.gap = '6px';
-    const redoBtn = document.createElement('button');
-    redoBtn.className = 'btn ghost';
-    redoBtn.id = 'redo-btn';
-    redoBtn.textContent = 'Redo';
-    redoBtn.style.display = 'inline-flex';
-    redoBtn.style.alignItems = 'center';
-    redoBtn.style.gap = '6px';
-    document.querySelector('.toolbar')?.insertBefore(undoBtn, refreshBtn);
-    document.querySelector('.toolbar')?.insertBefore(redoBtn, refreshBtn);
     const globalSearch = document.getElementById('global-search');
     const statusFilter = document.getElementById('status-filter');
     const vendorFilter = document.getElementById('vendor-filter');
@@ -750,6 +733,19 @@
     const groupBtn = document.getElementById('group-btn');
     const groupVendorNote = document.getElementById('group-vendor-note');
     const deleteSelectedBtn = document.getElementById('delete-selected');
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'btn ghost';
+    undoBtn.id = 'undo-btn';
+    undoBtn.textContent = 'Undo';
+    const redoBtn = document.createElement('button');
+    redoBtn.className = 'btn ghost';
+    redoBtn.id = 'redo-btn';
+    redoBtn.textContent = 'Redo';
+    const selectionControls = selectionBar.querySelector('.selection-actions');
+    if (selectionControls) {
+      selectionControls.appendChild(undoBtn);
+      selectionControls.appendChild(redoBtn);
+    }
     const boardMessage = document.createElement('div');
     boardMessage.id = 'board-message';
     boardMessage.style.position = 'fixed';
@@ -894,6 +890,32 @@
     function snapshotOrder(id) {
       return orders.find(o => o._id === id);
     }
+    function sanitizeOrderForCreate(order) {
+      if (!order) return null;
+      const allowed = [
+        'category','csvFileLink','department','fetchedName','fetchedPrice','groupId','justification','notes',
+        'partCode','partId','partLink','partName','priority','productCode','quantityRequested','status','studentId',
+        'studentName','supplier','supplierLink','totalCost','tracking','trackingNumber','unitCost','vendor','vendorPartNumber'
+      ];
+      const clean = {};
+      allowed.forEach(k => {
+        if (order[k] !== undefined) clean[k] = order[k];
+      });
+      if (Array.isArray(clean.tracking)) {
+        clean.tracking = clean.tracking.map(t => {
+          const { carrier, trackingNumber, status, eta, trackingUrl, lastCheckedAt, lastUpdated, lastEvent, delivered } = t || {};
+          if (!trackingNumber) return null;
+          return { carrier: carrier || 'other', trackingNumber, status, eta, trackingUrl, lastCheckedAt, lastUpdated, lastEvent, delivered };
+        }).filter(Boolean);
+      }
+      clean.quantityRequested = Number(clean.quantityRequested || 1);
+      clean.unitCost = clean.unitCost !== undefined ? Number(clean.unitCost) : clean.unitCost;
+      clean.totalCost = clean.totalCost !== undefined ? Number(clean.totalCost) : clean.totalCost;
+      if (!clean.partName) clean.partName = 'Restored order';
+      clean.studentName = clean.studentName || 'Restored';
+      clean.status = clean.status || 'Requested';
+      return clean;
+    }
 
     async function applyStep(step, counterpart) {
       switch (step.type) {
@@ -902,13 +924,13 @@
           break;
         }
         case 'restoreOrder': {
-          const o = step.payload.order;
+          const o = sanitizeOrderForCreate(step.payload.order);
+          if (!o) break;
           const res = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ...o,
-              status: o.status || 'Requested',
               groupId: undefined // will reassign after
             })
           });
@@ -1676,17 +1698,19 @@
     }
 
     function updateSelectionBar() {
-      if (selected.size === 0) {
-        selectionBar.classList.remove('active');
-        selectionCount.textContent = '';
-        groupVendorNote.textContent = 'Vendor: auto from selection';
-        return;
-      }
-      selectionBar.classList.add('active');
       const selectedOrders = orders.filter(o => selected.has(o._id));
-      const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
-      selectionCount.textContent = `${selected.size} selected`;
-      groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
+      if (selected.size === 0) {
+        selectionCount.textContent = 'No parts selected';
+        groupVendorNote.textContent = '';
+        document.getElementById('group-btn').style.display = 'none';
+        document.getElementById('delete-selected').style.display = 'none';
+      } else {
+        const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
+        selectionCount.textContent = `${selected.size} selected`;
+        groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
+        document.getElementById('group-btn').style.display = 'inline-flex';
+        document.getElementById('delete-selected').style.display = 'inline-flex';
+      }
     }
 
     async function createGroup() {
@@ -1745,7 +1769,14 @@
       if (!selected.size) return;
       if (!confirm(`Delete ${selected.size} selected item(s)?`)) return;
       for (const id of Array.from(selected)) {
+        const snapshot = snapshotOrder(id);
         await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (snapshot) {
+          recordAction({
+            undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
+            redo: { type: 'deleteOrder', payload: { orderId: id } }
+          });
+        }
       }
       selected.clear();
       await fetchOrders();
@@ -1922,17 +1953,43 @@
       orderMessage.className = 'small';
       try {
         if (editingOrderId) {
+          const prev = snapshotOrder(editingOrderId);
           await fetch(`/api/orders/${editingOrderId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          if (prev) {
+            recordAction({
+              undo: { type: 'updateOrder', payload: { orderId: editingOrderId, data: {
+                partName: prev.partName,
+                quantityRequested: prev.quantityRequested,
+                priority: prev.priority,
+                supplier: prev.supplier,
+                vendor: prev.vendor,
+                partLink: prev.partLink,
+                vendorPartNumber: prev.vendorPartNumber,
+                trackingNumber: prev.trackingNumber,
+                status: prev.status,
+                unitCost: prev.unitCost,
+                fetchedPrice: prev.fetchedPrice,
+                notes: prev.notes
+              }}},
+              redo: { type: 'updateOrder', payload: { orderId: editingOrderId, data: payload } }
+            });
+          }
           orderMessage.textContent = 'Order updated.';
         } else {
-          await fetch('/api/orders', {
+          const res = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          const newId = data.order?.orderId || data.orderId || data.order?._id;
+          recordAction({
+            undo: { type: 'deleteOrder', payload: { orderId: newId } },
+            redo: { type: 'restoreOrder', payload: { order: payload } }
           });
           orderMessage.textContent = 'Order created.';
         }
