@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { generateOrderNumber } from "./utils";
+import { normalizeTracking, trackingArg, trackingKey, TrackingInput } from "./trackingHelpers";
 
 export const list = query({
   args: {
@@ -35,18 +36,73 @@ export const list = query({
     );
 
     const groupsMap = new Map<string, any>();
-    groups.filter(Boolean).forEach(group => groupsMap.set(group!._id.toString(), group));
+    groups.filter(Boolean).forEach(group => {
+      if (group) groupsMap.set(group._id.toString(), group);
+    });
+
+    const trackingRefs: { carrier: string; trackingNumber: string }[] = [];
+    const addRefs = (entries?: TrackingInput[]) => {
+      (entries || []).forEach(t => {
+        if (t.trackingNumber) {
+          trackingRefs.push({ carrier: t.carrier || "unknown", trackingNumber: t.trackingNumber });
+        }
+      });
+    };
+
+    orders.forEach(order => addRefs(normalizeTracking(order.tracking as any, order.trackingNumber as any)));
+    groups.forEach(group => group && addRefs(normalizeTracking((group as any).tracking, (group as any).trackingNumber)));
+
+    const uniqueRefs = Array.from(new Set(trackingRefs.map(trackingKey)))
+      .map(key => {
+        const [carrier, ...rest] = key.split(":");
+        return { carrier, trackingNumber: rest.join(":") };
+      })
+      .filter(ref => ref.trackingNumber);
+
+    const cacheMap = new Map<string, any>();
+    await Promise.all(uniqueRefs.map(async ref => {
+      const row = await ctx.db
+        .query("trackingCache")
+        .withIndex("by_carrier_number", q => q.eq("carrier", ref.carrier).eq("trackingNumber", ref.trackingNumber))
+        .unique();
+      if (row) cacheMap.set(trackingKey(ref), { ...row, _id: row._id });
+    }));
+
+    const attachTracking = (entry: any) => {
+      const tracking = normalizeTracking(entry.tracking as any, entry.trackingNumber as any);
+      const withCache = tracking.map(t => {
+        const cache = cacheMap.get(trackingKey(t)) || null;
+        return {
+          ...t,
+          status: t.status || cache?.status || cache?.summary,
+          eta: t.eta || cache?.eta,
+          delivered: t.delivered ?? cache?.delivered,
+          lastCheckedAt: t.lastCheckedAt || cache?.lastCheckedAt,
+          lastUpdated: t.lastUpdated || cache?.lastEventTime || cache?.lastCheckedAt,
+          cache
+        };
+      });
+      return { ...entry, tracking: withCache };
+    };
+
+    // Hydrate groups map
+    Array.from(groupsMap.keys()).forEach(key => {
+      const g = groupsMap.get(key);
+      groupsMap.set(key, attachTracking(g));
+    });
 
     const withGroups = orders.map(order => {
       const gid = order.groupId ? order.groupId.toString() : undefined;
       return {
-        ...order,
+        ...attachTracking(order),
         _id: order._id,
         group: gid ? groupsMap.get(gid) : null
       };
     });
 
-    return { orders: withGroups, groups: Array.from(groupsMap.values()) };
+    const hydratedGroups = Array.from(groupsMap.values()).map(g => attachTracking(g));
+
+    return { orders: withGroups, groups: hydratedGroups };
   }
 });
 
@@ -76,7 +132,8 @@ export const create = mutation({
     justification: v.optional(v.string()),
     csvFileLink: v.optional(v.string()),
     groupId: v.optional(v.id("orderGroups")),
-    trackingNumber: v.optional(v.string())
+    trackingNumber: v.optional(v.string()),
+    tracking: v.optional(v.array(trackingArg))
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -91,6 +148,8 @@ export const create = mutation({
       ? Number((computedUnit * args.quantityRequested).toFixed(2))
       : undefined);
 
+    const tracking = normalizeTracking(args.tracking as any, args.trackingNumber as any);
+
     const orderId = await ctx.db.insert("orders", {
       ...args,
       groupId,
@@ -99,7 +158,9 @@ export const create = mutation({
       status: args.status || "Requested",
       priority: args.priority || "Medium",
       supplier: args.supplier || args.vendor,
-      totalCost: computedTotal
+      totalCost: computedTotal,
+      tracking,
+      trackingNumber: tracking[0]?.trackingNumber || args.trackingNumber
     });
 
     return { orderId, orderNumber };
@@ -110,18 +171,30 @@ export const updateStatus = mutation({
   args: {
     orderId: v.string(),
     status: v.string(),
-    trackingNumber: v.optional(v.string())
+    trackingNumber: v.optional(v.string()),
+    tracking: v.optional(v.array(trackingArg))
   },
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("orders", args.orderId);
     if (!id) throw new Error("Invalid order id");
     const order = await ctx.db.get(id);
     if (!order) throw new Error("Order not found");
+    if (order.groupId) {
+      // Tracking is managed at group level
+      await ctx.db.patch(id, { status: args.status });
+      return { orderId: id };
+    }
 
-    await ctx.db.patch(id, {
-      status: args.status,
-      trackingNumber: args.trackingNumber ?? order.trackingNumber
-    });
+    const updates: Record<string, any> = { status: args.status };
+    if (args.tracking !== undefined || args.trackingNumber !== undefined) {
+      const normalized = normalizeTracking(args.tracking as any, args.trackingNumber as any);
+      updates.tracking = normalized;
+      updates.trackingNumber = normalized[0]?.trackingNumber
+        || args.trackingNumber
+        || order.trackingNumber;
+    }
+
+    await ctx.db.patch(id, updates);
 
     return { orderId: id };
   }
@@ -147,6 +220,8 @@ export const assignGroup = mutation({
 
     const order = await ctx.db.get(orderId);
     if (!order) throw new Error("Order not found");
+    const group = await ctx.db.get(groupId);
+    if (!group) throw new Error("Group not found");
 
     const existingInGroup = await ctx.db.query("orders")
       .withIndex("by_groupId", q => q.eq("groupId", groupId))
@@ -156,7 +231,21 @@ export const assignGroup = mutation({
       throw new Error("Group contains different vendor orders");
     }
 
-    await ctx.db.patch(orderId, { groupId });
+    const updates: Record<string, any> = { groupId };
+
+    // If the order has tracking and group doesn't, move tracking to group and clear on order
+    const orderTracking = (order as any).tracking || (order as any).trackingNumber ? normalizeTracking((order as any).tracking, (order as any).trackingNumber) : [];
+    const groupTracking = (group as any).tracking || (group as any).trackingNumber ? normalizeTracking((group as any).tracking, (group as any).trackingNumber) : [];
+    if (orderTracking.length && groupTracking.length === 0) {
+      updates.tracking = [];
+      updates.trackingNumber = undefined;
+      await ctx.db.patch(groupId, {
+        tracking: orderTracking,
+        trackingNumber: orderTracking[0]?.trackingNumber
+      });
+    }
+
+    await ctx.db.patch(orderId, updates);
     return { orderId, groupId };
   }
 });
@@ -172,6 +261,7 @@ export const update = mutation({
     partLink: v.optional(v.string()),
     vendorPartNumber: v.optional(v.string()),
     trackingNumber: v.optional(v.string()),
+    tracking: v.optional(v.array(trackingArg)),
     status: v.optional(v.string()),
     unitCost: v.optional(v.number()),
     fetchedPrice: v.optional(v.number()),
@@ -185,6 +275,23 @@ export const update = mutation({
       const val = (args as any)[k];
       if (val !== undefined) updates[k] = val;
     });
+    const order = await ctx.db.get(id);
+    if (!order) throw new Error("Order not found");
+    const isGrouped = Boolean(order.groupId);
+    if (isGrouped) {
+      // Tracking managed at group level
+      delete updates.trackingNumber;
+      delete updates.tracking;
+    } else if (args.tracking !== undefined || args.trackingNumber !== undefined) {
+      const normalized = normalizeTracking(args.tracking as any, args.trackingNumber as any);
+      updates.tracking = normalized;
+      updates.trackingNumber = normalized[0]?.trackingNumber || args.trackingNumber;
+    }
+    if (args.tracking !== undefined || args.trackingNumber !== undefined) {
+      const normalized = normalizeTracking(args.tracking as any, args.trackingNumber as any);
+      updates.tracking = normalized;
+      updates.trackingNumber = normalized[0]?.trackingNumber || args.trackingNumber;
+    }
     // Recompute total cost if price or qty changed
     if (updates.quantityRequested !== undefined || updates.unitCost !== undefined || updates.fetchedPrice !== undefined) {
       const order = await ctx.db.get(id);

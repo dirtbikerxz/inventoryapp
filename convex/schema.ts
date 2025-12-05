@@ -1,6 +1,19 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const trackingEntry = v.object({
+  carrier: v.string(),
+  trackingNumber: v.string(),
+  status: v.optional(v.string()),
+  lastEvent: v.optional(v.string()),
+  lastUpdated: v.optional(v.number()),
+  delivered: v.optional(v.boolean()),
+  lastCheckedAt: v.optional(v.number()),
+  trackingUrl: v.optional(v.string()),
+  eta: v.optional(v.union(v.string(), v.number())),
+  parts: v.optional(v.array(v.string()))
+});
+
 export default defineSchema({
   parts: defineTable({
     partId: v.string(),
@@ -54,7 +67,8 @@ export default defineSchema({
     justification: v.optional(v.string()),
     csvFileLink: v.optional(v.string()),
     groupId: v.optional(v.id("orderGroups")),
-    trackingNumber: v.optional(v.string())
+    trackingNumber: v.optional(v.string()),
+    tracking: v.optional(v.array(trackingEntry))
   })
     .index("by_orderNumber", ["orderNumber"])
     .index("by_groupId", ["groupId"])
@@ -65,6 +79,7 @@ export default defineSchema({
     supplier: v.optional(v.string()),
     status: v.string(),
     trackingNumber: v.optional(v.string()),
+    tracking: v.optional(v.array(trackingEntry)),
     notes: v.optional(v.string()),
     expectedDate: v.optional(v.number()),
     createdAt: v.number(),
@@ -122,4 +137,30 @@ export default defineSchema({
     createdAt: v.number(),
     expiresAt: v.number()
   }).index("by_token", ["token"])
+  ,
+  trackingCache: defineTable({
+    carrier: v.string(),
+    trackingNumber: v.string(),
+    status: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    delivered: v.optional(v.boolean()),
+    lastEventTime: v.optional(v.number()),
+    lastCheckedAt: v.optional(v.number()),
+    nextCheckAfter: v.optional(v.number()),
+    eta: v.optional(v.union(v.string(), v.number())),
+    trackingUrl: v.optional(v.string()),
+    raw: v.optional(v.string())
+  }).index("by_carrier_number", ["carrier", "trackingNumber"])
+    .index("by_nextCheckAfter", ["nextCheckAfter"]),
+
+  trackingSettings: defineTable({
+    upsClientId: v.optional(v.string()),
+    upsClientSecret: v.optional(v.string()),
+    uspsUserId: v.optional(v.string()),
+    fedexClientId: v.optional(v.string()),
+    fedexClientSecret: v.optional(v.string()),
+    refreshMinutes: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
 });

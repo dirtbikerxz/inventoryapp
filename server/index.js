@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const path = require('path');
 const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
+const { TrackingService, buildTrackingUrl } = require('./trackingService');
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 dotenv.config();
@@ -33,6 +34,7 @@ if (!config.convexUrl) {
 
 const client = new ConvexHttpClient(config.convexUrl);
 const app = express();
+const trackingService = new TrackingService({ client, logger });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -114,6 +116,25 @@ function setSessionCookie(res, token) {
     sameSite: 'lax',
     maxAge
   });
+}
+
+function normalizeTrackingPayload(trackingInput, legacyNumber, legacyCarrier) {
+  const arr = Array.isArray(trackingInput) ? trackingInput : [];
+  const base = arr.length
+    ? arr
+    : (legacyNumber ? [{ carrier: legacyCarrier || 'unknown', trackingNumber: legacyNumber }] : []);
+  return base
+    .map(entry => {
+      const num = entry.trackingNumber || entry.number || legacyNumber;
+      if (!num) return null;
+      const carrier = (entry.carrier || legacyCarrier || 'unknown').toLowerCase();
+      return {
+        carrier,
+        trackingNumber: num,
+        trackingUrl: entry.trackingUrl || buildTrackingUrl(carrier, num)
+      };
+    })
+    .filter(Boolean);
 }
 
 async function ensureAdminSeed() {
@@ -363,10 +384,19 @@ app.post('/api/orders', async (req, res) => {
   }
 
   try {
-    const result = await client.mutation('orders:create', {
+    const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
+    const payload = {
       ...req.body,
+      tracking,
+      trackingNumber: tracking[0]?.trackingNumber || req.body.trackingNumber,
       studentName: req.body.studentName || user.name
+    };
+    const result = await client.mutation('orders:create', {
+      ...payload
     });
+    if (tracking.length) {
+      await trackingService.ensureCacheEntries(tracking, true);
+    }
     res.status(201).json({ order: result });
   } catch (error) {
     logger.error(error, 'Failed to create order');
@@ -378,10 +408,19 @@ app.patch('/api/orders/:id', async (req, res) => {
   const user = await requireAuth(req, res, 'canEditOrders');
   if (!user) return;
   try {
+    const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
+    const payload = { ...req.body };
+    if (Array.isArray(req.body.tracking) || req.body.trackingNumber !== undefined || tracking.length) {
+      payload.tracking = tracking;
+      payload.trackingNumber = tracking[0]?.trackingNumber || req.body.trackingNumber;
+    }
     const result = await client.mutation('orders:update', {
       orderId: req.params.id,
-      ...req.body
+      ...payload
     });
+    if (tracking.length) {
+      await trackingService.ensureCacheEntries(tracking, true);
+    }
     res.json({ orderId: result.orderId });
   } catch (error) {
     logger.error(error, 'Failed to update order');
@@ -409,11 +448,16 @@ app.patch('/api/orders/:id/status', async (req, res) => {
     return res.status(400).json({ error: 'status is required' });
   }
   try {
+    const tracking = normalizeTrackingPayload(req.body.tracking, trackingNumber, req.body.carrier);
     const result = await client.mutation('orders:updateStatus', {
       orderId: req.params.id,
       status,
-      trackingNumber
+      trackingNumber: tracking[0]?.trackingNumber || trackingNumber,
+      tracking: tracking.length ? tracking : undefined
     });
+    if (tracking.length) {
+      await trackingService.ensureCacheEntries(tracking, true);
+    }
     res.json(result);
   } catch (error) {
     logger.error(error, 'Failed to update order status');
@@ -456,7 +500,16 @@ app.post('/api/order-groups', async (req, res) => {
     return res.status(400).json({ error: 'Group payload is required' });
   }
   try {
-    const group = await client.mutation('orderGroups:create', req.body);
+    const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
+    const payload = {
+      ...req.body,
+      tracking,
+      trackingNumber: tracking[0]?.trackingNumber || req.body.trackingNumber
+    };
+    const group = await client.mutation('orderGroups:create', payload);
+    if (tracking.length) {
+      await trackingService.ensureCacheEntries(tracking, true);
+    }
     res.status(201).json(group);
   } catch (error) {
     logger.error(error, 'Failed to create order group');
@@ -468,10 +521,19 @@ app.patch('/api/order-groups/:id', async (req, res) => {
   const user = await requireAuth(req, res, 'canMoveOrders');
   if (!user) return;
   try {
+    const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
+    const payload = { ...req.body };
+    if (Array.isArray(req.body.tracking) || req.body.trackingNumber !== undefined || tracking.length) {
+      payload.tracking = tracking;
+      payload.trackingNumber = tracking[0]?.trackingNumber || req.body.trackingNumber;
+    }
     const group = await client.mutation('orderGroups:update', {
       groupId: req.params.id,
-      ...req.body
+      ...payload
     });
+    if (tracking.length) {
+      await trackingService.ensureCacheEntries(tracking, true);
+    }
     res.json(group);
   } catch (error) {
     logger.error(error, 'Failed to update order group');
@@ -570,6 +632,53 @@ app.delete('/api/vendors/configs/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to delete vendor config');
     res.status(500).json({ error: 'Unable to delete vendor config' });
+  }
+});
+
+app.get('/api/tracking/settings', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  try {
+    const settings = await client.query('tracking:getSettings', {});
+    res.json({ settings });
+  } catch (error) {
+    logger.error(error, 'Failed to load tracking settings');
+    res.status(500).json({ error: 'Unable to load tracking settings' });
+  }
+});
+
+app.patch('/api/tracking/settings', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  const refreshMinutes = Number(req.body?.refreshMinutes ?? 30);
+  if (!Number.isFinite(refreshMinutes) || refreshMinutes <= 0) {
+    return res.status(400).json({ error: 'refreshMinutes must be a positive number' });
+  }
+  try {
+    await trackingService.updateSettings({
+      upsClientId: req.body?.upsClientId,
+      upsClientSecret: req.body?.upsClientSecret,
+      uspsUserId: req.body?.uspsUserId,
+      fedexClientId: req.body?.fedexClientId,
+      fedexClientSecret: req.body?.fedexClientSecret,
+      refreshMinutes
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to save tracking settings');
+    res.status(500).json({ error: 'Unable to save tracking settings' });
+  }
+});
+
+app.post('/api/tracking/refresh', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageUsers');
+  if (!user) return;
+  try {
+    const result = await trackingService.refreshAllNow();
+    res.json({ ok: true, lastError: result.lastError });
+  } catch (error) {
+    logger.error(error, 'Manual tracking refresh failed');
+    res.status(500).json({ error: 'Unable to refresh tracking now' });
   }
 });
 
@@ -740,6 +849,7 @@ app.use((err, req, res, next) => {
 });
 
 ensureAdminSeed().finally(() => {
+  trackingService.init().catch(err => logger.error(err, 'Failed to start tracking service'));
   app.listen(config.port, () => {
     logger.info(`Inventory app server (Convex-backed) listening on port ${config.port}`);
   });

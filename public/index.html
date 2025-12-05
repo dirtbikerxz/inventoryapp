@@ -195,6 +195,15 @@
     .tag.supplier { background: rgba(79,180,255,0.12); color: var(--accent-2); }
     .tag.priority { background: rgba(248,197,82,0.16); color: var(--gold); }
     .tag.group { background: rgba(74,210,143,0.16); color: var(--success); }
+    .tag.tracking { background: rgba(79,180,255,0.14); color: var(--accent-2); cursor: pointer; }
+    .tag.tracking.pending { background: rgba(255,85,101,0.18); color: #ff8b95; border-color: rgba(255,85,101,0.5); }
+    .tag.tracking.intransit { background: rgba(79,180,255,0.18); color: #9bd0ff; border-color: rgba(79,180,255,0.5); }
+    .tag.tracking.delivered { background: rgba(74,210,143,0.2); color: #7be0b4; border-color: rgba(74,210,143,0.5); }
+    .tag.tracking.unknown { background: rgba(200,193,221,0.18); color: #d1cbe2; border-color: rgba(200,193,221,0.5); }
+    .tracking-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .tracking-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .tracking-row select { min-width:120px; }
+    .tracking-list { display:flex; flex-direction:column; gap:6px; }
     .card-footer {
       display: flex;
       align-items: center;
@@ -297,6 +306,7 @@
       <button class="btn ghost" id="vendor-btn" style="display:none;">Vendors</button>
       <button class="btn ghost" id="refresh-btn">Refresh</button>
       <button class="btn primary" id="new-order-btn">New order</button>
+      <div id="tracking-updated" class="small" style="margin-left:12px; color: var(--muted);"></div>
     </div>
   </header>
 
@@ -315,9 +325,13 @@
 
     <div id="selection-bar" class="selection-bar">
       <div id="selection-count"></div>
-      <div class="flex-between" style="gap:8px; flex:1;">
+      <div class="flex-between" style="gap:12px; flex:1; align-items:flex-start; flex-wrap:wrap;">
         <input id="group-title" class="input-inline" placeholder="Group title" />
-        <input id="group-tracking" class="input-inline" placeholder="Tracking number" />
+        <div style="flex:1; min-width:260px;">
+          <div class="small" style="margin-bottom:4px;">Tracking numbers (optional, supports UPS/USPS/FedEx/DHL)</div>
+          <div id="group-tracking-list" class="tracking-list"></div>
+          <button type="button" class="btn ghost" id="add-group-tracking" style="padding:6px 10px; margin-top:4px;">Add tracking</button>
+        </div>
         <div id="group-vendor-note" class="small" style="min-width:180px;">Vendor: auto from selection</div>
       </div>
       <button class="btn primary" id="group-btn">Create/Update Group</button>
@@ -385,9 +399,13 @@
             <option>Urgent</option>
           </select>
         </div>
-        <div>
-          <label class="small">Tracking number</label>
-          <input name="trackingNumber" class="input" placeholder="Optional tracking" />
+        <div style="grid-column: span 2;">
+          <label class="small">Tracking numbers</label>
+          <div id="order-tracking-list" class="tracking-list"></div>
+          <div class="flex-between" style="margin-top:6px; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn ghost" id="add-order-tracking" style="padding:6px 10px;">Add tracking</button>
+            <div class="small">Add one or more tracking numbers with carrier.</div>
+          </div>
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Notes</label>
@@ -419,9 +437,10 @@
           <label class="small">Group title</label>
           <input name="title" class="input" placeholder="Vendor - mm/dd/yy" />
         </div>
-        <div>
-          <label class="small">Tracking number</label>
-          <input name="trackingNumber" class="input" placeholder="Optional" />
+        <div style="grid-column: span 2;">
+          <label class="small">Tracking numbers</label>
+          <div id="group-modal-tracking-list" class="tracking-list"></div>
+          <button type="button" class="btn ghost" id="add-group-modal-tracking" style="padding:6px 10px; margin-top:4px;">Add tracking</button>
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Notes</label>
@@ -536,6 +555,44 @@
         <div class="page-title" style="font-size:18px;">Role Permissions</div>
         <div class="subtitle">Toggle what each role can do.</div>
         <div id="role-list" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="card" style="background:var(--panel-2); margin-top:12px;">
+        <div class="page-title" style="font-size:18px;">Tracking Settings</div>
+        <div class="subtitle">Carrier API keys, refresh cadence, and manual refresh.</div>
+        <form id="tracking-settings-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:10px;">
+          <div>
+            <label class="small">UPS Client ID</label>
+            <input name="upsClientId" class="input" placeholder="UPS OAuth client id" />
+          </div>
+          <div>
+            <label class="small">UPS Client Secret</label>
+            <input name="upsClientSecret" class="input" placeholder="UPS OAuth client secret" />
+          </div>
+          <div>
+            <label class="small">USPS User ID</label>
+            <input name="uspsUserId" class="input" placeholder="USPS WebTools user id" />
+          </div>
+          <div>
+            <label class="small">FedEx Client ID</label>
+            <input name="fedexClientId" class="input" placeholder="FedEx API key" />
+          </div>
+          <div>
+            <label class="small">FedEx Client Secret</label>
+            <input name="fedexClientSecret" class="input" placeholder="FedEx API secret" />
+          </div>
+          <div>
+            <label class="small">Refresh cadence (minutes)</label>
+            <input name="refreshMinutes" class="input" type="number" min="5" step="1" value="30" />
+          </div>
+        </form>
+        <div class="flex-between" style="grid-column: span 2; margin-top:8px; flex-wrap:wrap; gap:8px;">
+          <div id="tracking-settings-message" class="small"></div>
+          <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn ghost" id="refresh-tracking-now">Manual refresh</button>
+            <button type="submit" form="tracking-settings-form" class="btn primary">Save settings</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -653,7 +710,8 @@
     const selectionCount = document.getElementById('selection-count');
     const groupBtn = document.getElementById('group-btn');
     const groupTitle = document.getElementById('group-title');
-    const groupTracking = document.getElementById('group-tracking');
+    const groupTrackingList = document.getElementById('group-tracking-list');
+    const addGroupTracking = document.getElementById('add-group-tracking');
     const groupVendorNote = document.getElementById('group-vendor-note');
     const boardMessage = document.createElement('div');
     boardMessage.id = 'board-message';
@@ -672,6 +730,8 @@
     const closeModal = document.getElementById('close-modal');
     const cancelOrder = document.getElementById('cancel-order');
     const orderForm = document.getElementById('order-form');
+    const orderTrackingList = document.getElementById('order-tracking-list');
+    const addOrderTracking = document.getElementById('add-order-tracking');
     const orderMessage = document.getElementById('order-message');
     const fetchProduct = document.getElementById('fetch-product');
     const newOrderBtn = document.getElementById('new-order-btn');
@@ -687,6 +747,8 @@
     const closeGroup = document.getElementById('close-group');
     const cancelGroup = document.getElementById('cancel-group');
     const groupForm = document.getElementById('group-form');
+    const groupModalTrackingList = document.getElementById('group-modal-tracking-list');
+    const addGroupModalTracking = document.getElementById('add-group-modal-tracking');
     const groupMessage = document.getElementById('group-message');
     const vendorForm = document.getElementById('vendor-form');
     const vendorMessage = document.getElementById('vendor-message');
@@ -718,6 +780,9 @@
     const passwordForm = document.getElementById('password-form');
     const passwordMessage = document.getElementById('password-message');
     const roleList = document.getElementById('role-list');
+    const trackingSettingsForm = document.getElementById('tracking-settings-form');
+    const trackingSettingsMessage = document.getElementById('tracking-settings-message');
+    const refreshTrackingNow = document.getElementById('refresh-tracking-now');
     let vendorConfigs = [];
     let currentUser = null;
     function detectVendor(partNum, link) {
@@ -737,6 +802,20 @@
       { label: 'Ordered', status: 'Ordered', hint: 'Placed orders - awaiting arrival' },
       { label: 'Arrived', status: 'Received', hint: 'Items received' }
     ];
+    const carrierOptions = [
+      { value: 'ups', label: 'UPS' },
+      { value: 'usps', label: 'USPS' },
+      { value: 'fedex', label: 'FedEx' },
+      { value: 'other', label: 'Other/Unknown' }
+    ];
+
+    const emptyParts = [];
+    setTrackingRows(orderTrackingList, [], emptyParts);
+    setTrackingRows(groupTrackingList, [], emptyParts);
+    setTrackingRows(groupModalTrackingList, [], emptyParts);
+    addOrderTracking?.addEventListener('click', () => createTrackingRow(orderTrackingList, {}, emptyParts));
+    addGroupTracking?.addEventListener('click', () => createTrackingRow(groupTrackingList, {}, emptyParts));
+    addGroupModalTracking?.addEventListener('click', () => createTrackingRow(groupModalTrackingList, {}, emptyParts));
 
     let orders = [];
     let selected = new Set();
@@ -755,6 +834,165 @@
     function formatShortDate(date = new Date()) {
       return `${date.getMonth() + 1}/${date.getDate()}/${String(date.getFullYear()).slice(-2)}`;
     }
+    function formatDateOnly(input) {
+      if (!input) return '';
+      // If we get an ISO-ish string, parse the date portion explicitly to avoid TZ shifts.
+      if (typeof input === 'string') {
+        const match = input.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+          const y = Number(match[1]);
+          const m = Number(match[2]);
+          const d = Number(match[3]);
+          if (y && m && d) return `${m}/${d}/${String(y).slice(-2)}`;
+        }
+      }
+      const date = new Date(input);
+      if (Number.isNaN(date.getTime())) return '';
+      // Use UTC components to avoid local TZ shifting ETA dates.
+      const m = date.getUTCMonth() + 1;
+      const d = date.getUTCDate();
+      const y = String(date.getUTCFullYear()).slice(-2);
+      return `${m}/${d}/${y}`;
+    }
+    function formatDateMaybe(value) {
+      if (!value) return '';
+      if (typeof value === 'number') return formatDateOnly(value);
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) return formatDateOnly(parsed);
+      return value;
+    }
+    function escapeHtml(str = '') {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function createTrackingRow(container, data = {}, partsOptions = []) {
+      if (!container) return;
+      const row = document.createElement('div');
+      row.className = 'tracking-row';
+      row.innerHTML = `
+        <select class="input tracking-carrier">
+          ${carrierOptions.map(c => `<option value="${c.value}">${c.label}</option>`).join('')}
+        </select>
+        <input class="input tracking-number" placeholder="Tracking number" value="${data.trackingNumber || data.number || ''}" />
+        <button type="button" class="btn ghost remove-tracking" style="padding:6px 10px;">Remove</button>
+        <div class="small" style="width:100%;">Parts in this shipment (optional)</div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px; width:100%;">
+          <select class="input tracking-parts" multiple size="${Math.min(Math.max(partsOptions.length, 2), 6)}">
+            ${partsOptions.map(p => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('')}
+          </select>
+          <button type="button" class="btn ghost select-all-parts" style="padding:6px 10px;">Select all</button>
+        </div>
+      `;
+      const select = row.querySelector('.tracking-carrier');
+      const carrier = (data.carrier || '').toLowerCase();
+      if (carrier) select.value = carrier;
+      row.querySelector('.remove-tracking').addEventListener('click', () => {
+        row.remove();
+        if (!container.querySelector('.tracking-row')) {
+          createTrackingRow(container, {}, partsOptions);
+        }
+      });
+      const partsSelect = row.querySelector('.tracking-parts');
+      const selectAllBtn = row.querySelector('.select-all-parts');
+      if (partsSelect && Array.isArray(data.parts)) {
+        Array.from(partsSelect.options).forEach(opt => {
+          if (data.parts.includes(opt.value)) opt.selected = true;
+        });
+      }
+      selectAllBtn?.addEventListener('click', () => {
+        Array.from(partsSelect.options).forEach(opt => { opt.selected = true; });
+      });
+      container.appendChild(row);
+    }
+
+    function setTrackingRows(container, entries = [], partsOptions = []) {
+      if (!container) return;
+      container.innerHTML = '';
+      const list = Array.isArray(entries) && entries.length ? entries : [];
+      if (!list.length) {
+        createTrackingRow(container, {}, partsOptions);
+        return;
+      }
+      list.forEach(entry => createTrackingRow(container, entry, partsOptions));
+    }
+
+    function collectTrackingRows(container) {
+      if (!container) return [];
+      const rows = Array.from(container.querySelectorAll('.tracking-row'));
+      return rows.map(row => {
+        const number = row.querySelector('.tracking-number')?.value.trim();
+        const carrier = row.querySelector('.tracking-carrier')?.value || 'other';
+        if (!number) return null;
+        const partsSel = row.querySelector('.tracking-parts');
+        const parts = partsSel ? Array.from(partsSel.selectedOptions).map(o => o.value) : undefined;
+        return { carrier, trackingNumber: number, parts: parts && parts.length ? parts : undefined };
+      }).filter(Boolean);
+    }
+
+    function trackingFromOrder(order) {
+      if (!order) return [];
+      if (Array.isArray(order.tracking) && order.tracking.length) return order.tracking;
+      if (order.trackingNumber) return [{ carrier: order.carrier || 'unknown', trackingNumber: order.trackingNumber }];
+      return [];
+    }
+
+    function trackingLink(carrier, num, fallback) {
+      if (fallback) return fallback;
+      if (!num) return '';
+      const c = (carrier || '').toLowerCase();
+      if (c === 'ups') return `https://www.ups.com/track?tracknum=${encodeURIComponent(num)}`;
+      if (c === 'usps') return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(num)}`;
+      if (c === 'fedex') return `https://www.fedex.com/fedextrack/?tracknumbers=${encodeURIComponent(num)}`;
+      return '';
+    }
+
+    function trackingPhase(tracking) {
+      const carrierSupported = ['ups','usps','fedex'].includes((tracking.carrier || '').toLowerCase());
+      if (tracking.delivered || tracking.cache?.delivered) return 'delivered';
+      const statusText = (tracking.status || tracking.cache?.status || tracking.cache?.summary || '').toLowerCase();
+      if (!carrierSupported) return 'unknown';
+      if (/label|pending|ready for shipment|not shipped|waiting|created/i.test(statusText)) return 'pending';
+      return 'intransit';
+    }
+
+    function renderTrackingBadges(tracking = []) {
+      const list = Array.isArray(tracking) ? tracking.filter(t => t && t.trackingNumber) : [];
+      if (!list.length) return '';
+      return `<div class="tracking-badges">${
+        list.map(t => {
+          const url = trackingLink(t.carrier, t.trackingNumber, t.trackingUrl || t.cache?.trackingUrl);
+          const label = `${(t.carrier || 'TRACK').toUpperCase()} ${t.trackingNumber}`;
+          const status = t.cache?.status || t.cache?.summary || t.status || '';
+          const delivered = Boolean(t.cache?.delivered);
+          const deliveredOn = delivered
+            ? (t.cache?.lastEventTime || t.cache?.deliveredTime || t.deliveredTime || t.lastUpdated || t.lastEvent || t.lastUpdatedAt || t.lastCheckedAt || t.cache?.lastCheckedAt)
+            : undefined;
+          const etaText = !delivered ? (t.cache?.eta || t.eta) : undefined;
+          const subtitleParts = [];
+          if (delivered) {
+            subtitleParts.push(`Delivered${deliveredOn ? ' on ' + formatDateOnly(deliveredOn) : ''}`);
+          } else if (etaText) {
+            const etaFmt = formatDateMaybe(etaText);
+            subtitleParts.push(`ETA ${etaFmt || etaText}`);
+          } else if (status) {
+            subtitleParts.push(status);
+          } else {
+            subtitleParts.push('Refreshing status…');
+          }
+          const subtitle = subtitleParts.filter(Boolean).join(' · ');
+          const safeSubtitle = escapeHtml(subtitle || '');
+          const safeLabel = escapeHtml(label || '');
+          const phase = trackingPhase(t);
+          const badge = `<span class="tag tracking ${phase}" title="${safeSubtitle || 'Open tracking'}">${safeLabel}${subtitle ? ' · ' + safeSubtitle : ''}</span>`;
+          return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${badge}</a>` : badge;
+        }).join('')
+      }</div>`;
+    }
     function showBoardMessage(text, type = 'info', timeout = 3500) {
       boardMessage.textContent = text;
       boardMessage.style.borderColor = type === 'error' ? 'var(--danger)' : 'var(--border)';
@@ -766,6 +1004,8 @@
 
     function matchesSearch(order, term) {
       if (!term) return true;
+      const trackingText = (order.tracking || []).map(t => [t.trackingNumber, t.carrier, t.cache?.status, t.cache?.summary].filter(Boolean).join(' ')).join(' ');
+      const groupTrackingText = (order.group?.tracking || []).map(t => [t.trackingNumber, t.carrier, t.cache?.status, t.cache?.summary].filter(Boolean).join(' ')).join(' ');
       const hay = [
         order.partName,
         order.vendorPartNumber,
@@ -777,7 +1017,9 @@
         order.category,
         order.priority,
         order.group && order.group.title,
-        order.group && order.group.trackingNumber
+        order.group && order.group.trackingNumber,
+        trackingText,
+        groupTrackingText
       ].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(term.toLowerCase());
     }
@@ -808,7 +1050,35 @@
       if (!currentUser) return;
       const res = await fetch('/api/orders');
       const data = await res.json();
-      orders = (data.orders || []).map(o => ({ ...o, _id: o._id || o.id || o.orderNumber }));
+      orders = (data.orders || []).map(o => ({
+        ...o,
+        tracking: o.tracking || [],
+        group: o.group ? { ...o.group, tracking: o.group.tracking || [] } : null,
+        _id: o._id || o.id || o.orderNumber
+      }));
+      // Debug tracking payloads for visibility
+      console.log('[tracking] orders loaded', orders.map(o => ({
+        id: o._id,
+        tracking: o.tracking,
+        groupTracking: o.group?.tracking
+      })));
+      const allTracking = [];
+      orders.forEach(o => {
+        (o.tracking || []).forEach(t => allTracking.push(t));
+        (o.group?.tracking || []).forEach(t => allTracking.push(t));
+      });
+      const lastChecked = allTracking
+        .map(t => t.lastCheckedAt || t.cache?.lastCheckedAt || t.cache?.lastEventTime || t.lastUpdated)
+        .filter(Boolean)
+        .sort((a, b) => b - a)[0];
+      const trackingErrors = allTracking
+        .map(t => t.cache?.summary || t.cache?.status || t.status)
+        .filter(msg => msg && /error|missing|invalid|unauthorized|fail/i.test(msg));
+      const trackingUpdatedEl = document.getElementById('tracking-updated');
+      if (trackingUpdatedEl) {
+        const errText = trackingErrors.length ? ` · Tracking error: ${trackingErrors[0]}` : '';
+        trackingUpdatedEl.textContent = (lastChecked ? `Tracking updated ${fmtDate(lastChecked)}` : '') + errText;
+      }
       buildFilters();
       renderBoard();
       renderTable();
@@ -831,7 +1101,10 @@
       orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
       orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
       orderForm.elements.priority.value = order.priority || 'Medium';
-      orderForm.elements.trackingNumber.value = order.trackingNumber || '';
+      setTrackingRows(orderTrackingList, order.group ? [] : trackingFromOrder(order));
+      addOrderTracking.disabled = !!order.group;
+      orderTrackingList.style.display = order.group ? 'none' : 'block';
+      orderMessage.textContent = order.group ? 'Tracking managed at group level.' : '';
       orderForm.elements.notes.value = order.notes || '';
       modal.style.display = 'flex';
     }
@@ -866,6 +1139,7 @@
           ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
           ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
         </div>
+        ${renderTrackingBadges(order.tracking || [])}
         <div class="card-footer">
           <span class="muted">${order.productCode || ''}</span>
           <span class="muted">${fmtDate(order.requestedAt)}</span>
@@ -974,14 +1248,14 @@
           card.dataset.groupId = gid;
           const vendor = first.supplier || first.vendor || '';
           const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
-          const tracking = first.group?.trackingNumber || first.trackingNumber || '';
+          const trackingList = (first.group?.tracking && first.group.tracking.length ? first.group.tracking : trackingFromOrder(first));
           const groupTitle = first.group?.title || vendor || 'Grouped Order';
           const groupedAt = first.group?.updatedAt || first.group?.createdAt;
           card.innerHTML = `
             <div class="flex-between" style="gap:8px;">
               <div>
                 <h4>${groupTitle}</h4>
-                <div class="meta">Grouped items: ${items.length}${tracking ? ' · Tracking: '+tracking : ''}</div>
+                <div class="meta">Grouped items: ${items.length}</div>
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
                 ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
@@ -989,6 +1263,7 @@
               </div>
             </div>
             <div class="meta">${vendor ? `<span class="tag supplier">${vendor}</span>` : ''}</div>
+            ${renderTrackingBadges(trackingList)}
             <details style="margin-top:6px;">
               <summary class="small">Show parts</summary>
               <div class="group-items">
@@ -1000,6 +1275,7 @@
                     ${o.supplier || o.vendor ? `<span class="tag supplier">${o.supplier || o.vendor}</span>` : ''}
                     ${o.studentName ? `<span class="tag">${o.studentName}</span>` : ''}
                     <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
+                    ${renderTrackingBadges(o.tracking || [])}
                     ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
                     ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
                   </div>
@@ -1057,7 +1333,7 @@
               openGroupModal({
                 id: gid,
                 title: first.group?.title || groupTitle,
-                trackingNumber: tracking,
+                tracking: trackingList,
                 notes: first.group?.notes || ''
               });
             });
@@ -1120,6 +1396,7 @@
               <th><input type="checkbox" id="select-all"></th>
               <th>Part</th>
               <th>Status</th>
+              <th>Tracking</th>
               <th>Qty</th>
               <th>Unit</th>
               <th>Total</th>
@@ -1140,6 +1417,7 @@
             ${o.group ? `<span class="tag group">Group</span>` : ''}
           </td>
           <td><span class="status-chip status-${o.status || ''}">${o.status || ''}</span></td>
+          <td>${renderTrackingBadges(o.tracking?.length ? o.tracking : (o.group?.tracking || []))}</td>
           <td>${o.quantityRequested || ''}</td>
           <td>${o.unitCost ? '$'+o.unitCost : (o.fetchedPrice ? '$'+o.fetchedPrice : '')}</td>
           <td>${(() => {
@@ -1177,11 +1455,18 @@
       updateSelectionBar();
     }
 
-    async function updateStatus(id, status, trackingNumber) {
+    async function updateStatus(id, status, tracking) {
+      const trackingList = Array.isArray(tracking)
+        ? tracking
+        : (tracking ? [{ carrier: 'unknown', trackingNumber: tracking }] : undefined);
       await fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, trackingNumber })
+        body: JSON.stringify({
+          status,
+          tracking: trackingList,
+          trackingNumber: trackingList?.[0]?.trackingNumber
+        })
       });
       selected.delete(id);
       await fetchOrders();
@@ -1192,6 +1477,7 @@
         selectionBar.classList.remove('active');
         selectionCount.textContent = '';
         groupVendorNote.textContent = 'Vendor: auto from selection';
+        setTrackingRows(groupTrackingList, []);
         return;
       }
       selectionBar.classList.add('active');
@@ -1210,6 +1496,8 @@
         alert('Select orders from the same vendor to group.');
         return;
       }
+      const partsOptions = selectedOrders.map(o => ({ id: o._id, label: o.partName || o.vendorPartNumber || o.productCode || o._id }));
+      const tracking = collectTrackingRows(groupTrackingList).map(t => ({ ...t, parts: t.parts || partsOptions.map(p => p.id) }));
       const fallbackTitle = baseVendor ? `${baseVendor} - ${formatShortDate()}` : `Group - ${formatShortDate()}`;
       await fetch('/api/order-groups', {
         method: 'POST',
@@ -1217,13 +1505,14 @@
         body: JSON.stringify({
           title: groupTitle.value || fallbackTitle,
           supplier: baseVendor || undefined,
-          trackingNumber: groupTracking.value || undefined,
+          tracking: tracking.length ? tracking : undefined,
+          trackingNumber: tracking[0]?.trackingNumber || undefined,
           orderIds: Array.from(selected)
         })
       });
       selected.clear();
       groupTitle.value = '';
-      groupTracking.value = '';
+      setTrackingRows(groupTrackingList, [], partsOptions);
       groupVendorNote.textContent = 'Vendor: auto from selection';
       await fetchOrders();
     }
@@ -1248,12 +1537,23 @@
       editingOrderId = null;
       orderForm.reset();
       orderForm.elements.quantityRequested.value = 1;
+      setTrackingRows(orderTrackingList, []);
+      addOrderTracking.disabled = false;
+      orderTrackingList.style.display = 'block';
+      orderMessage.textContent = '';
       modal.style.display = 'flex';
     });
     closeModal.addEventListener('click', () => { modal.style.display = 'none'; });
     cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; });
-    closeGroup.addEventListener('click', () => { groupModal.style.display = 'none'; });
-    cancelGroup.addEventListener('click', () => { groupModal.style.display = 'none'; });
+    const resetGroupModal = () => {
+      groupModal.style.display = 'none';
+      groupForm.reset();
+      setTrackingRows(groupModalTrackingList, []);
+      editingGroupId = null;
+      groupMessage.textContent = '';
+    };
+    closeGroup.addEventListener('click', resetGroupModal);
+    cancelGroup.addEventListener('click', resetGroupModal);
 
     function findVendorConfig(name) {
       if (!name) return null;
@@ -1287,11 +1587,18 @@
       });
     }
 
-    async function patchStatusOnly(id, status, trackingNumber) {
+    async function patchStatusOnly(id, status, tracking) {
+      const trackingList = Array.isArray(tracking)
+        ? tracking
+        : (tracking ? [{ carrier: 'unknown', trackingNumber: tracking }] : undefined);
       await fetch(`/api/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, trackingNumber })
+        body: JSON.stringify({
+          status,
+          tracking: trackingList,
+          trackingNumber: trackingList?.[0]?.trackingNumber
+        })
       });
     }
 
@@ -1373,6 +1680,8 @@
       payload.quantityRequested = Number(payload.quantityRequested || 0);
       payload.unitCost = payload.unitCost ? Number(payload.unitCost) : undefined;
       payload.fetchedPrice = payload.unitCost || undefined;
+      payload.tracking = collectTrackingRows(orderTrackingList);
+      payload.trackingNumber = payload.tracking[0]?.trackingNumber || undefined;
       if (!payload.vendor) {
         const auto = detectVendor(payload.vendorPartNumber, payload.partLink);
         if (auto?.vendor) {
@@ -1403,6 +1712,7 @@
         modal.style.display = 'none';
         orderForm.reset();
         editingOrderId = null;
+        setTrackingRows(orderTrackingList, []);
         await fetchOrders();
       } catch (err) {
         orderMessage.textContent = 'Failed to create order';
@@ -1419,6 +1729,7 @@
       adminModal.style.display = 'flex';
       loadUsers();
       loadRoles();
+      loadTrackingSettings();
     });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
     accountBtn.addEventListener('click', () => {
@@ -1430,7 +1741,8 @@
       editingGroupId = data?.id || null;
       groupForm.elements.id.value = data?.id || '';
       groupForm.elements.title.value = data?.title || '';
-      groupForm.elements.trackingNumber.value = data?.trackingNumber || '';
+      const parts = orders.filter(o => o.groupId === data?.id || o.group?._id === data?.id).map(o => ({ id: o._id, label: o.partName || o.vendorPartNumber || o.productCode || o._id }));
+      setTrackingRows(groupModalTrackingList, data?.tracking?.length ? data.tracking : (data?.trackingNumber ? [{ carrier: 'unknown', trackingNumber: data.trackingNumber }] : []), parts);
       groupForm.elements.notes.value = data?.notes || '';
       groupMessage.textContent = '';
       groupModal.style.display = 'flex';
@@ -1440,6 +1752,7 @@
       e.preventDefault();
       const formData = new FormData(groupForm);
       const payload = Object.fromEntries(formData.entries());
+      const tracking = collectTrackingRows(groupModalTrackingList);
       const id = payload.id;
       groupMessage.textContent = 'Saving...';
       groupMessage.className = 'small';
@@ -1449,14 +1762,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: payload.title || undefined,
-            trackingNumber: payload.trackingNumber || undefined,
+            trackingNumber: tracking[0]?.trackingNumber || undefined,
+            tracking: tracking.length ? tracking : [],
             notes: payload.notes || undefined
           })
         });
         groupMessage.textContent = 'Saved.';
         groupMessage.className = 'success';
-        groupModal.style.display = 'none';
-        editingGroupId = null;
+        resetGroupModal();
         await fetchOrders();
       } catch (err) {
         groupMessage.textContent = 'Failed to save group';
@@ -1907,6 +2220,77 @@
         roleList.textContent = 'Failed to load roles';
       }
     }
+
+    async function loadTrackingSettings() {
+      if (!trackingSettingsForm) return;
+      trackingSettingsMessage.textContent = 'Loading tracking settings...';
+      trackingSettingsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/tracking/settings');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load settings');
+        const settings = data.settings || {};
+        ['upsClientId','upsClientSecret','uspsUserId','fedexClientId','fedexClientSecret'].forEach(key => {
+          if (trackingSettingsForm.elements[key]) {
+            trackingSettingsForm.elements[key].value = settings[key] || '';
+          }
+        });
+        if (trackingSettingsForm.elements.refreshMinutes) {
+          trackingSettingsForm.elements.refreshMinutes.value = settings.refreshMinutes || 30;
+        }
+        trackingSettingsMessage.textContent = 'Tracking settings loaded.';
+        trackingSettingsMessage.className = 'small';
+      } catch (e) {
+        trackingSettingsMessage.textContent = e.message || 'Failed to load tracking settings';
+        trackingSettingsMessage.className = 'error';
+      }
+    }
+
+    trackingSettingsForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(trackingSettingsForm).entries());
+      payload.refreshMinutes = Number(payload.refreshMinutes || 30);
+      if (!Number.isFinite(payload.refreshMinutes) || payload.refreshMinutes <= 0) {
+        payload.refreshMinutes = 30;
+      }
+      trackingSettingsMessage.textContent = 'Saving...';
+      trackingSettingsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/tracking/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save settings');
+        trackingSettingsMessage.textContent = 'Saved tracking settings.';
+        trackingSettingsMessage.className = 'success';
+      } catch (err) {
+        trackingSettingsMessage.textContent = err.message || 'Failed to save settings';
+        trackingSettingsMessage.className = 'error';
+      }
+    });
+
+    refreshTrackingNow?.addEventListener('click', async () => {
+      trackingSettingsMessage.textContent = 'Refreshing tracking now...';
+      trackingSettingsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/tracking/refresh', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to refresh');
+        if (data.lastError) {
+          trackingSettingsMessage.textContent = `Refresh triggered, but tracking error: ${data.lastError}`;
+          trackingSettingsMessage.className = 'error';
+        } else {
+          trackingSettingsMessage.textContent = 'Refresh triggered. Data will update shortly.';
+          trackingSettingsMessage.className = 'success';
+        }
+        fetchOrders();
+      } catch (err) {
+        trackingSettingsMessage.textContent = err.message || 'Failed to refresh tracking';
+        trackingSettingsMessage.className = 'error';
+      }
+    });
 
     async function fetchMe() {
       try {
