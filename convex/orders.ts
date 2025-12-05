@@ -133,7 +133,8 @@ export const create = mutation({
     csvFileLink: v.optional(v.string()),
     groupId: v.optional(v.id("orderGroups")),
     trackingNumber: v.optional(v.string()),
-    tracking: v.optional(v.array(trackingArg))
+    tracking: v.optional(v.array(trackingArg)),
+    requestedDisplayAt: v.optional(v.number())
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -155,6 +156,7 @@ export const create = mutation({
       groupId,
       orderNumber,
       requestedAt: now,
+      requestedDisplayAt: args.requestedDisplayAt ?? now,
       status: args.status || "Requested",
       priority: args.priority || "Medium",
       supplier: args.supplier || args.vendor,

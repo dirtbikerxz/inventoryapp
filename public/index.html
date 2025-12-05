@@ -895,12 +895,13 @@
       const allowed = [
         'category','csvFileLink','department','fetchedName','fetchedPrice','groupId','justification','notes',
         'partCode','partId','partLink','partName','priority','productCode','quantityRequested','status','studentId',
-        'studentName','supplier','supplierLink','totalCost','tracking','trackingNumber','unitCost','vendor','vendorPartNumber'
+        'studentName','supplier','supplierLink','totalCost','tracking','trackingNumber','unitCost','vendor','vendorPartNumber','requestedDisplayAt'
       ];
       const clean = {};
       allowed.forEach(k => {
         if (order[k] !== undefined) clean[k] = order[k];
       });
+      if (order.requestedAt && !clean.requestedDisplayAt) clean.requestedDisplayAt = order.requestedAt;
       if (Array.isArray(clean.tracking)) {
         clean.tracking = clean.tracking.map(t => {
           const { carrier, trackingNumber, status, eta, trackingUrl, lastCheckedAt, lastUpdated, lastEvent, delivered } = t || {};
@@ -926,6 +927,9 @@
         case 'restoreOrder': {
           const o = sanitizeOrderForCreate(step.payload.order);
           if (!o) break;
+          if (step.payload.order?.requestedDisplayAt || step.payload.order?.requestedAt) {
+            o.requestedDisplayAt = step.payload.order.requestedDisplayAt || step.payload.order.requestedAt;
+          }
           const res = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1227,7 +1231,7 @@
 
     function withinDate(order, start, end) {
       if (!start && !end) return true;
-      const ts = order.requestedAt || Date.parse(order.createdAt || '') || 0;
+      const ts = order.requestedDisplayAt || order.requestedAt || Date.parse(order.createdAt || '') || 0;
       if (start && ts < start) return false;
       if (end && ts > end) return false;
       return true;
@@ -1322,7 +1326,7 @@
         <div class="flex-between" style="gap:8px;">
           <div>
             <h4>${order.partName || 'Untitled part'}</h4>
-            <div class="meta">Requested by ${order.studentName || 'Unknown'} · ${fmtDate(order.requestedAt)}</div>
+            <div class="meta">Requested by ${order.studentName || 'Unknown'} · ${fmtDate(order.requestedDisplayAt || order.requestedAt)}</div>
           </div>
         </div>
           <div class="meta">
@@ -1705,12 +1709,12 @@
         document.getElementById('group-btn').style.display = 'none';
         document.getElementById('delete-selected').style.display = 'none';
       } else {
-        const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
-        selectionCount.textContent = `${selected.size} selected`;
-        groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
-        document.getElementById('group-btn').style.display = 'inline-flex';
-        document.getElementById('delete-selected').style.display = 'inline-flex';
-      }
+      const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
+      selectionCount.textContent = `${selected.size} selected`;
+      groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
+      document.getElementById('group-btn').style.display = 'inline-flex';
+      document.getElementById('delete-selected').style.display = 'inline-flex';
+    }
     }
 
     async function createGroup() {

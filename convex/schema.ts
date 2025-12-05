@@ -43,6 +43,7 @@ export default defineSchema({
   orders: defineTable({
     orderNumber: v.string(),
     requestedAt: v.number(),
+    requestedDisplayAt: v.optional(v.number()),
     department: v.optional(v.string()),
     studentName: v.string(),
     studentId: v.optional(v.id("students")),
