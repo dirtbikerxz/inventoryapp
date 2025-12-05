@@ -820,6 +820,20 @@
       { value: 'other', label: 'Other/Unknown' }
     ];
 
+    const DEFAULT_TRACKING_POLL_MINUTES = 1;
+    let trackingPollTimer = null;
+    let trackingPollMinutes = DEFAULT_TRACKING_POLL_MINUTES;
+    function startTrackingAutoRefresh(minutes = trackingPollMinutes) {
+      const next = Math.max(1, Number(minutes) || DEFAULT_TRACKING_POLL_MINUTES);
+      trackingPollMinutes = next;
+      const ms = next * 60 * 1000;
+      if (trackingPollTimer) clearInterval(trackingPollTimer);
+      trackingPollTimer = setInterval(() => {
+        if (!currentUser) return;
+        fetchOrders();
+      }, ms);
+    }
+
     const emptyParts = [];
     setTrackingRows(orderTrackingList, [], emptyParts);
     setTrackingRows(groupTrackingList, [], emptyParts);
@@ -964,8 +978,13 @@
 
     function attachBackdropClose(el, handler) {
       if (!el || typeof handler !== 'function') return;
-      el.addEventListener('click', (e) => {
-        if (e.target === el) handler();
+      let downOnBackdrop = false;
+      el.addEventListener('pointerdown', (e) => {
+        downOnBackdrop = e.target === el;
+      });
+      el.addEventListener('pointerup', (e) => {
+        if (downOnBackdrop && e.target === el) handler();
+        downOnBackdrop = false;
       });
     }
 
@@ -2240,6 +2259,20 @@
       }
     }
 
+    async function syncTrackingAutoRefreshFromServer() {
+      try {
+        const res = await fetch('/api/tracking/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        const minutes = Number(data.settings?.refreshMinutes);
+        if (Number.isFinite(minutes) && minutes > 0) {
+          startTrackingAutoRefresh(minutes);
+        }
+      } catch (_) {
+        // ignore - auto refresh will keep existing cadence
+      }
+    }
+
     async function loadTrackingSettings() {
       if (!trackingSettingsForm) return;
       trackingSettingsMessage.textContent = 'Loading tracking settings...';
@@ -2256,6 +2289,9 @@
         });
         if (trackingSettingsForm.elements.refreshMinutes) {
           trackingSettingsForm.elements.refreshMinutes.value = settings.refreshMinutes || 30;
+        }
+        if (settings.refreshMinutes) {
+          startTrackingAutoRefresh(settings.refreshMinutes);
         }
         trackingSettingsMessage.textContent = 'Tracking settings loaded.';
         trackingSettingsMessage.className = 'small';
@@ -2284,6 +2320,7 @@
         if (!res.ok) throw new Error(data.error || 'Failed to save settings');
         trackingSettingsMessage.textContent = 'Saved tracking settings.';
         trackingSettingsMessage.className = 'success';
+        startTrackingAutoRefresh(payload.refreshMinutes);
       } catch (err) {
         trackingSettingsMessage.textContent = err.message || 'Failed to save settings';
         trackingSettingsMessage.className = 'error';
@@ -2332,6 +2369,7 @@
         const data = await res.json();
         currentUser = data.user;
         updateUserUI();
+        await syncTrackingAutoRefreshFromServer();
         fetchOrders();
         loadVendors();
         loadUsers();
@@ -2374,11 +2412,13 @@
       loginMessage.textContent = '';
       loginModal.style.display = 'none';
       updateUserUI();
+      syncTrackingAutoRefreshFromServer();
       fetchOrders();
       loadVendors();
       loadUsers();
     });
 
+    startTrackingAutoRefresh(DEFAULT_TRACKING_POLL_MINUTES);
     fetchMe();
   </script>
 </body>

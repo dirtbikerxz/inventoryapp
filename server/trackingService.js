@@ -39,7 +39,7 @@ class TrackingService {
   }
 
   intervalMs() {
-    return Math.max(5, this.refreshMinutes || 30) * 60 * 1000;
+    return Math.max(1, this.refreshMinutes || 30) * 60 * 1000;
   }
 
   stop() {
