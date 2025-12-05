@@ -3,23 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DV Parts Orders</title>
+  <title>Venom Parts</title>
+  <link rel="icon" type="image/png" href="/branding/logo.png" />
   <style>
+    @font-face {
+      font-family: 'Nasalization';
+      src: url('/branding/Nasalization.ttf') format('truetype');
+      font-display: swap;
+    }
     :root {
-      --purple: #461D7C;
-      --gold: #FDD023;
-      --bg: #110b1f;
-      --panel: #1a1230;
-      --panel-2: #140d25;
-      --accent: var(--gold);
-      --accent-2: #f7d96c;
-      --text: #f5efff;
+      color-scheme: dark;
+      --purple: #461d7c;
+      --gold: #fdd023;
+      --bg: radial-gradient(circle at top, rgba(70, 29, 124, 0.18), transparent 55%), #141414;
+      --panel: rgba(34, 34, 34, 0.92);
+      --panel-2: rgba(34, 34, 34, 0.98);
+      --accent: #461d7c;
+      --accent-2: #fdd023;
+      --text: #f2f4f8;
       --muted: #c8c1dd;
-      --border: #2a1f45;
+      --border: rgba(253, 208, 35, 0.25);
       --danger: #ff5565;
       --success: #4ad28f;
       --warning: var(--gold);
-      --card-shadow: 0 12px 30px rgba(0,0,0,0.35);
+      --card-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
     * { box-sizing: border-box; }
     body {
@@ -29,13 +36,14 @@
       color: var(--text);
       min-height: 100vh;
     }
+    h1, h2, h3, h4, .brand, .page-title { font-family: 'Nasalization', 'Inter', system-ui, sans-serif; letter-spacing: 0.4px; }
     a { color: inherit; text-decoration: none; }
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 14px 24px;
-      background: linear-gradient(120deg, #1b0f32, #120924);
+      background: linear-gradient(120deg, rgba(34,34,34,0.95), rgba(40,30,60,0.95));
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
@@ -48,10 +56,14 @@
       letter-spacing: 0.3px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 14px;
       color: var(--gold);
       text-shadow: 0 2px 10px rgba(253,208,35,0.2);
     }
+    .brand img { height: 36px; width: 36px; border-radius: 50%; object-fit: contain; }
+    .brand-text { display:flex; flex-direction:column; line-height:1.15; gap: 3px; }
+    .brand-title { font-size: 22px; font-family:'Nasalization', 'Inter', sans-serif; font-weight: 700; }
+    .brand-subtitle { font-size: 12px; font-weight: 500; letter-spacing: 0.5px; color: var(--gold); text-transform: uppercase; }
     .search {
       flex: 1;
       max-width: 400px;
@@ -79,27 +91,27 @@
     }
     .btn {
       border: 1px solid var(--border);
-      background: var(--panel);
-      color: var(--text);
-      border-radius: 10px;
+      background: var(--accent);
+      color: var(--gold);
+      border-radius: 12px;
       padding: 9px 14px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      transition: all 0.15s ease;
+      transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
-    .btn:hover { border-color: var(--accent); box-shadow: 0 6px 18px rgba(253,208,35,0.25); }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(70, 29, 124, 0.25); }
     .btn.primary {
-      background: var(--accent);
-      color: #2b1d00;
-      border-color: var(--accent);
-      font-weight: 700;
-      box-shadow: 0 8px 20px rgba(253,208,35,0.25);
+      background: var(--gold);
+      color: #1a1000;
+      border-color: var(--gold);
+      box-shadow: 0 12px 28px rgba(253,208,35,0.25);
     }
     .btn.ghost {
       background: transparent;
+      color: var(--text);
     }
     main { padding: 24px; }
     .page-title { font-size: 32px; font-weight: 800; margin: 0 0 4px; color: var(--gold); }
@@ -114,7 +126,7 @@
     .view-toggle button {
       border: none;
       background: transparent;
-      color: var(--text);
+      color: #f7f8fb;
       padding: 10px 14px;
       cursor: pointer;
       font-weight: 700;
@@ -122,7 +134,7 @@
     }
     .view-toggle button.active {
       background: var(--accent);
-      color: #0b1324;
+      color: #f7f8fb;
     }
     .flex-between {
       display: flex;
@@ -169,14 +181,14 @@
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 12px;
       margin-bottom: 10px;
       box-shadow: var(--card-shadow);
       cursor: grab;
       transition: transform 0.1s ease, border-color 0.1s ease, box-shadow 0.15s ease;
     }
-    .card:hover { border-color: var(--accent); box-shadow: 0 10px 28px rgba(253,208,35,0.18); }
+    .card:hover { border-color: var(--gold); box-shadow: 0 10px 28px rgba(253,208,35,0.2); }
     .card h4 { margin: 0 0 6px; font-size: 15px; }
     .meta {
       color: var(--muted);
@@ -299,7 +311,13 @@
 </head>
 <body>
   <header>
-    <div class="brand">DV Parts Orders</div>
+    <div class="brand">
+      <img src="/branding/logo.png" alt="Venom Parts logo" />
+      <div class="brand-text">
+        <span class="brand-title">Venom Parts</span>
+        <span class="brand-subtitle">FRC 8044 - Parts Ordering System</span>
+      </div>
+    </div>
     <div class="search">
       <input id="global-search" placeholder="Search parts, students, suppliers..." />
     </div>
@@ -330,17 +348,14 @@
     </div>
 
     <div id="selection-bar" class="selection-bar">
-      <div id="selection-count"></div>
-      <div class="flex-between" style="gap:12px; flex:1; align-items:flex-start; flex-wrap:wrap;">
-        <input id="group-title" class="input-inline" placeholder="Group title" />
-        <div style="flex:1; min-width:260px;">
-          <div class="small" style="margin-bottom:4px;">Tracking numbers (optional, supports UPS/USPS/FedEx/DHL)</div>
-          <div id="group-tracking-list" class="tracking-list"></div>
-          <button type="button" class="btn ghost" id="add-group-tracking" style="padding:6px 10px; margin-top:4px;">Add tracking</button>
-        </div>
-        <div id="group-vendor-note" class="small" style="min-width:180px;">Vendor: auto from selection</div>
+      <div style="display:flex; flex-direction:column; gap:4px; min-width:180px;">
+        <div id="selection-count"></div>
+        <div id="group-vendor-note" class="small">Vendor: auto from selection</div>
       </div>
-      <button class="btn primary" id="group-btn">Create/Update Group</button>
+      <div class="flex-between" style="gap:8px;">
+        <button class="btn primary" id="group-btn">Create group</button>
+        <button class="btn ghost" id="delete-selected" style="color: var(--danger);">Delete selected</button>
+      </div>
     </div>
 
     <section id="board-section">
@@ -708,6 +723,22 @@
     const boardSection = document.getElementById('board-section');
     const tableSection = document.getElementById('table-section');
     const refreshBtn = document.getElementById('refresh-btn');
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'btn ghost';
+    undoBtn.id = 'undo-btn';
+    undoBtn.textContent = 'Undo';
+    undoBtn.style.display = 'inline-flex';
+    undoBtn.style.alignItems = 'center';
+    undoBtn.style.gap = '6px';
+    const redoBtn = document.createElement('button');
+    redoBtn.className = 'btn ghost';
+    redoBtn.id = 'redo-btn';
+    redoBtn.textContent = 'Redo';
+    redoBtn.style.display = 'inline-flex';
+    redoBtn.style.alignItems = 'center';
+    redoBtn.style.gap = '6px';
+    document.querySelector('.toolbar')?.insertBefore(undoBtn, refreshBtn);
+    document.querySelector('.toolbar')?.insertBefore(redoBtn, refreshBtn);
     const globalSearch = document.getElementById('global-search');
     const statusFilter = document.getElementById('status-filter');
     const vendorFilter = document.getElementById('vendor-filter');
@@ -717,10 +748,8 @@
     const selectionBar = document.getElementById('selection-bar');
     const selectionCount = document.getElementById('selection-count');
     const groupBtn = document.getElementById('group-btn');
-    const groupTitle = document.getElementById('group-title');
-    const groupTrackingList = document.getElementById('group-tracking-list');
-    const addGroupTracking = document.getElementById('add-group-tracking');
     const groupVendorNote = document.getElementById('group-vendor-note');
+    const deleteSelectedBtn = document.getElementById('delete-selected');
     const boardMessage = document.createElement('div');
     boardMessage.id = 'board-message';
     boardMessage.style.position = 'fixed';
@@ -836,19 +865,132 @@
 
     const emptyParts = [];
     setTrackingRows(orderTrackingList, [], emptyParts);
-    setTrackingRows(groupTrackingList, [], emptyParts);
     setTrackingRows(groupModalTrackingList, [], emptyParts);
     addOrderTracking?.addEventListener('click', () => createTrackingRow(orderTrackingList, {}, emptyParts));
-    addGroupTracking?.addEventListener('click', () => createTrackingRow(groupTrackingList, {}, emptyParts));
     addGroupModalTracking?.addEventListener('click', () => createTrackingRow(groupModalTrackingList, {}, emptyParts));
 
     let orders = [];
     let selected = new Set();
+    let expandedGroups = new Set();
+    const undoStack = [];
+    const redoStack = [];
+
+    function updateUndoRedoUI() {
+      if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+      if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function recordAction(record) {
+      undoStack.push(record);
+      redoStack.length = 0;
+      updateUndoRedoUI();
+    }
     function getOrderById(id) {
       return orders.find(o => o._id === id);
     }
     function getOrderVendor(order) {
       return (order?.supplier || order?.vendor || '').toLowerCase();
+    }
+    function snapshotOrder(id) {
+      return orders.find(o => o._id === id);
+    }
+
+    async function applyStep(step, counterpart) {
+      switch (step.type) {
+        case 'deleteOrder': {
+          await fetch(`/api/orders/${step.payload.orderId}`, { method: 'DELETE' });
+          break;
+        }
+        case 'restoreOrder': {
+          const o = step.payload.order;
+          const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...o,
+              status: o.status || 'Requested',
+              groupId: undefined // will reassign after
+            })
+          });
+          const data = await res.json();
+          const newId = data.order?.orderId || data.orderId || data.order?._id;
+          if (step.payload.groupId && newId) {
+            await assignGroup(newId, step.payload.groupId);
+          }
+          if (counterpart && counterpart.type === 'deleteOrder') {
+            counterpart.payload.orderId = newId;
+          }
+          break;
+        }
+        case 'updateOrder': {
+          await fetch(`/api/orders/${step.payload.orderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(step.payload.data)
+          });
+          break;
+        }
+        case 'updateStatus': {
+          await patchStatusOnly(step.payload.orderId, step.payload.status, step.payload.trackingNumber);
+          if (step.payload.groupId !== undefined) {
+            await assignGroup(step.payload.orderId, step.payload.groupId);
+          }
+          break;
+        }
+        case 'assignGroup': {
+          await assignGroup(step.payload.orderId, step.payload.groupId);
+          break;
+        }
+        case 'createGroup': {
+          const res = await fetch('/api/order-groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: step.payload.title,
+              supplier: step.payload.supplier,
+              orderIds: step.payload.orderIds
+            })
+          });
+          const data = await res.json();
+          const newGroupId = data.groupId || data._id;
+          if (counterpart && counterpart.type === 'deleteGroup') {
+            counterpart.payload.groupId = newGroupId;
+          }
+          break;
+        }
+        case 'deleteGroup': {
+          await fetch(`/api/order-groups/${step.payload.groupId}`, { method: 'DELETE' });
+          break;
+        }
+        case 'updateGroup': {
+          await fetch(`/api/order-groups/${step.payload.groupId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(step.payload.data)
+          });
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    async function doUndo() {
+      const record = undoStack.pop();
+      if (!record) return;
+      await applyStep(record.undo, record.redo);
+      redoStack.push(record);
+      updateUndoRedoUI();
+      await fetchOrders();
+    }
+
+    async function doRedo() {
+      const record = redoStack.pop();
+      if (!record) return;
+      await applyStep(record.redo, record.undo);
+      undoStack.push(record);
+      updateUndoRedoUI();
+      await fetchOrders();
     }
 
     function fmtDate(ts) {
@@ -1120,6 +1262,7 @@
       renderBoard();
       renderTable();
       updateSelectionBar();
+      updateUndoRedoUI();
     }
 
     function buildFilters() {
@@ -1157,9 +1300,8 @@
         <div class="flex-between" style="gap:8px;">
           <div>
             <h4>${order.partName || 'Untitled part'}</h4>
-            <div class="meta">Requested by ${order.studentName || 'Unknown'}</div>
+            <div class="meta">Requested by ${order.studentName || 'Unknown'} · ${fmtDate(order.requestedAt)}</div>
           </div>
-          <input type="checkbox" class="checkbox" ${selected.has(order._id) ? 'checked' : ''}/>
         </div>
           <div class="meta">
           ${(() => {
@@ -1170,30 +1312,24 @@
           })()}
           ${order.quantityRequested ? ' · x' + order.quantityRequested : ''}
         </div>
-        <div class="meta">
-          ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ''}
-          ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
-          ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
-          ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
-        </div>
-        ${renderTrackingBadges(order.tracking || [])}
-        <div class="card-footer">
-          <span class="muted">${order.productCode || ''}</span>
-          <span class="muted">${fmtDate(order.requestedAt)}</span>
-          <div class="row-actions" style="display:flex; gap:6px;">
+        <div class="meta" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:200px;">
+            <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+              ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ''}
+              ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ''}
+              ${order.priority ? `<span class="tag priority">${order.priority}</span>` : ''}
+              ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || 'Grouped'}</span>` : ''}
+            </div>
+            ${renderTrackingBadges(order.tracking || [])}
+          </div>
+          <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end;">
             ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
             ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
           </div>
         </div>
       `;
-
-      card.querySelector('.checkbox').addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleSelect(order._id);
-      });
-
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.checkbox')) return;
+        if (e.target.closest('button')) return;
         toggleSelect(order._id);
       });
 
@@ -1208,7 +1344,14 @@
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           if (!confirm('Delete this order?')) return;
+          const snapshot = snapshotOrder(order._id);
           await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
+          if (snapshot) {
+            recordAction({
+              undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
+              redo: { type: 'deleteOrder', payload: { orderId: order._id } }
+            });
+          }
           fetchOrders();
         });
       });
@@ -1281,50 +1424,56 @@
           if (status !== col.status) return;
           const card = document.createElement('div');
           card.className = 'card';
+          card.style.display = 'flex';
+          card.style.flexDirection = 'column';
+          card.style.gap = '8px';
           card.draggable = true;
           card.dataset.groupId = gid;
           const vendor = first.supplier || first.vendor || '';
           const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
           const trackingList = (first.group?.tracking && first.group.tracking.length ? first.group.tracking : trackingFromOrder(first));
-          const groupTitle = first.group?.title || vendor || 'Grouped Order';
-          const groupedAt = first.group?.updatedAt || first.group?.createdAt;
+          const groupedAt = first.group?.updatedAt || first.group?.createdAt || Date.now();
+          const timePart = new Date(groupedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const groupTitle = first.group?.title || `${vendor || 'Grouped Order'} - ${formatShortDate(new Date(groupedAt))} ${timePart}`;
           card.innerHTML = `
             <div class="flex-between" style="gap:8px;">
               <div>
                 <h4>${groupTitle}</h4>
-                <div class="meta">Grouped items: ${items.length}</div>
+                <div class="meta">Items in order: ${items.length}</div>
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
                 ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
                 ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
               </div>
             </div>
-            <div class="meta">${vendor ? `<span class="tag supplier">${vendor}</span>` : ''}</div>
-            ${renderTrackingBadges(trackingList)}
-            <details style="margin-top:6px;">
-              <summary class="small">Show parts</summary>
-              <div class="group-items">
-          ${items.map(o => `
-                  <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
-                    <span style="font-weight:700;">${o.partName || ''}</span>
-                    ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ''}
-                    ${o.priority ? `<span class="tag priority">${o.priority}</span>` : ''}
-                    ${o.supplier || o.vendor ? `<span class="tag supplier">${o.supplier || o.vendor}</span>` : ''}
-                    ${o.studentName ? `<span class="tag">${o.studentName}</span>` : ''}
-                    <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
-                    ${renderTrackingBadges(o.tracking || [])}
-                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
-                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
-                  </div>
-                `).join('')}
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div>${vendor ? `<span class="tag supplier">${vendor}</span>` : ''}</div>
+                ${renderTrackingBadges(trackingList)}
+              </div>
+              <div class="muted" style="min-width:80px; text-align:right; align-self:flex-end;">${total ? '$'+total.toFixed(2) : ''}</div>
             </div>
-            </details>
-            <div class="card-footer">
-              <span class="muted">${groupedAt ? fmtDate(groupedAt) : fmtDate(first.requestedAt)}</span>
-              <span class="muted">${total ? '$'+total.toFixed(2) : ''}</span>
+            <div class="group-items-container" style="margin-top:6px; display:${expandedGroups.has(gid) ? 'block' : 'none'};">
+              ${items.map(o => `
+                <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
+                  <span style="font-weight:700;">${o.partName || ''}</span>
+                  ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ''}
+                  ${o.priority ? `<span class="tag priority">${o.priority}</span>` : ''}
+                  ${o.supplier || o.vendor ? `<span class="tag supplier">${o.supplier || o.vendor}</span>` : ''}
+                  ${o.studentName ? `<span class="tag">${o.studentName}</span>` : ''}
+                  <span class="muted">${o.quantityRequested ? 'x'+o.quantityRequested : ''}</span>
+                  ${renderTrackingBadges(o.tracking || [])}
+                  ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
+                  ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
+                </div>
+              `).join('')}
             </div>
           `;
           card.addEventListener('dragstart', (e) => {
+            if (e.target.closest('.group-item')) {
+              e.preventDefault();
+              return;
+            }
             e.dataTransfer.setData('text/plain', `group:${gid}`);
             card.style.opacity = '0.6';
           });
@@ -1345,15 +1494,27 @@
                 showBoardMessage('Cannot assign part to an order from a different vendor', 'error', 4000);
                 return;
               }
+              const prev = snapshotOrder(id);
               const res = await assignGroup(id, gid);
               if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 showBoardMessage(data.error || 'Cannot assign part to an order from a different vendor', 'error');
                 return;
               }
+              recordAction({
+                undo: { type: 'assignGroup', payload: { orderId: id, groupId: prev?.groupId || prev?.group?._id || undefined } },
+                redo: { type: 'assignGroup', payload: { orderId: id, groupId: gid } }
+              });
               await patchStatusOnly(id, status);
               await fetchOrders();
             })();
+          });
+
+          card.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('.group-item')) return;
+            if (expandedGroups.has(gid)) expandedGroups.delete(gid); else expandedGroups.add(gid);
+            const container = card.querySelector('.group-items-container');
+            if (container) container.style.display = expandedGroups.has(gid) ? 'block' : 'none';
           });
 
           card.querySelectorAll('.group-item').forEach(el => {
@@ -1380,7 +1541,12 @@
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
               if (!confirm('Delete this group? Orders will be ungrouped.')) return;
+              const orderIds = items.map(o => o._id);
               await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
+              recordAction({
+                undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, orderIds } },
+                redo: { type: 'deleteGroup', payload: { groupId: gid } }
+              });
               fetchOrders();
             });
           });
@@ -1514,7 +1680,6 @@
         selectionBar.classList.remove('active');
         selectionCount.textContent = '';
         groupVendorNote.textContent = 'Vendor: auto from selection';
-        setTrackingRows(groupTrackingList, []);
         return;
       }
       selectionBar.classList.add('active');
@@ -1530,26 +1695,26 @@
       const baseVendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor;
       const mixed = selectedOrders.some(o => (o.supplier || o.vendor) !== baseVendor);
       if (mixed) {
-        alert('Select orders from the same vendor to group.');
+        showBoardMessage('Select orders from the same vendor to group.', 'error');
         return;
       }
-      const partsOptions = selectedOrders.map(o => ({ id: o._id, label: o.partName || o.vendorPartNumber || o.productCode || o._id }));
-      const tracking = collectTrackingRows(groupTrackingList).map(t => ({ ...t, parts: t.parts || partsOptions.map(p => p.id) }));
       const fallbackTitle = baseVendor ? `${baseVendor} - ${formatShortDate()}` : `Group - ${formatShortDate()}`;
-      await fetch('/api/order-groups', {
+      const res = await fetch('/api/order-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: groupTitle.value || fallbackTitle,
+          title: fallbackTitle,
           supplier: baseVendor || undefined,
-          tracking: tracking.length ? tracking : undefined,
-          trackingNumber: tracking[0]?.trackingNumber || undefined,
           orderIds: Array.from(selected)
         })
       });
+      const data = await res.json();
+      const newGroupId = data.groupId || data._id;
+      recordAction({
+        undo: { type: 'deleteGroup', payload: { groupId: newGroupId } },
+        redo: { type: 'createGroup', payload: { title: fallbackTitle, supplier: baseVendor || undefined, orderIds: Array.from(selected) } }
+      });
       selected.clear();
-      groupTitle.value = '';
-      setTrackingRows(groupTrackingList, [], partsOptions);
       groupVendorNote.textContent = 'Vendor: auto from selection';
       await fetchOrders();
     }
@@ -1564,12 +1729,27 @@
       boardSection.style.display = 'none'; tableSection.style.display = 'block';
     });
     refreshBtn.addEventListener('click', fetchOrders);
+    undoBtn.addEventListener('click', doUndo);
+    redoBtn.addEventListener('click', doRedo);
     globalSearch.addEventListener('input', () => { renderBoard(); renderTable(); });
     statusFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
     vendorFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
     startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     groupBtn.addEventListener('click', createGroup);
+    deleteSelectedBtn?.addEventListener('click', async () => {
+      if (!currentUser?.permissions?.canDeleteOrders) {
+        showBoardMessage('No permission to delete orders.', 'error');
+        return;
+      }
+      if (!selected.size) return;
+      if (!confirm(`Delete ${selected.size} selected item(s)?`)) return;
+      for (const id of Array.from(selected)) {
+        await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      }
+      selected.clear();
+      await fetchOrders();
+    });
     document.getElementById('new-order-btn').addEventListener('click', () => {
       editingOrderId = null;
       orderForm.reset();
@@ -1646,8 +1826,13 @@
     }
 
     async function moveOrderToStatus(orderId, status) {
+      const prev = snapshotOrder(orderId);
       await assignGroup(orderId, undefined);
       await patchStatusOnly(orderId, status);
+      recordAction({
+        undo: { type: 'updateStatus', payload: { orderId, status: prev?.status, groupId: prev?.groupId || prev?.group?._id } },
+        redo: { type: 'updateStatus', payload: { orderId, status, groupId: undefined } }
+      });
       await fetchOrders();
       selected.delete(orderId);
       updateSelectionBar();
