@@ -1631,7 +1631,7 @@
               <th>Total</th>
               <th>Vendor</th>
               <th>Requested by</th>
-              <th>Updated</th>
+            <th>Order placed</th>
             </tr>
           </thead>
           <tbody>
@@ -1657,7 +1657,7 @@
           })()}</td>
           <td>${o.supplier || o.vendor || ''}</td>
           <td>${o.studentName || ''}</td>
-          <td>${fmtDate(o.requestedAt)}</td>
+          <td>${fmtDate(o.requestedDisplayAt || o.requestedAt)}</td>
         </tr>
       `).join('');
       tableContainer.innerHTML = header + body + '</tbody></table>';
