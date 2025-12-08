@@ -570,6 +570,7 @@
         <div class="flex-between" style="margin-top:12px; gap:8px;">
         <div class="flex-between" style="gap:6px;">
           <button class="btn ghost" id="admin-tab-users" style="padding:6px 12px;">Users</button>
+          <button class="btn ghost" id="admin-tab-roles" style="padding:6px 12px;">Roles</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
           <button class="btn ghost" id="admin-tab-tags" style="padding:6px 12px;">Tags</button>
@@ -577,14 +578,7 @@
         </div>
       </div>
 
-      <div class="card" style="background:var(--panel-2); margin-top:12px;">
-        <div class="page-title" style="font-size:18px;">Role Permissions</div>
-        <div class="subtitle">Toggle what each role can do.</div>
-        <div id="role-list" style="margin-top:8px;"></div>
-        <div id="role-message" class="small" style="margin-top:6px;"></div>
-      </div>
-
-      <div id="admin-users-section" style="display:block;">
+      <div id="admin-users-section" style="display:none;">
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
         <div class="page-title" style="font-size:18px;">User Management</div>
         <div id="user-list" class="small" style="margin-top:8px;">Loading users...</div>
@@ -628,6 +622,15 @@
       </div>
       </div>
 
+      <div id="admin-roles-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="page-title" style="font-size:18px;">Role Permissions</div>
+          <div class="subtitle">Toggle what each role can do.</div>
+          <div id="role-list" style="margin-top:8px;"></div>
+          <div id="role-message" class="small" style="margin-top:6px;"></div>
+        </div>
+      </div>
+
       <div id="admin-tracking-section" style="display:none;">
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
         <div class="page-title" style="font-size:18px;">Tracking Settings</div>
@@ -669,6 +672,7 @@
       </div>
 
       <div id="admin-vendors-section" style="display:none;">
+        <div id="vendor-list" style="margin-top:14px;"></div>
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
           <div class="page-title" style="font-size:18px;">Vendor Extraction Settings</div>
           <div class="subtitle" style="margin-bottom:12px;">Configure how to pull product details from each vendor.</div>
@@ -751,7 +755,6 @@
             </div>
           </form>
         </div>
-        <div id="vendor-list" style="margin-top:14px;"></div>
       </div>
 
       <div id="admin-tags-section" style="display:none;">
@@ -948,11 +951,13 @@
     const trackingSettingsMessage = document.getElementById('tracking-settings-message');
     const refreshTrackingNow = document.getElementById('refresh-tracking-now');
     const adminTabUsers = document.getElementById('admin-tab-users');
+    const adminTabRoles = document.getElementById('admin-tab-roles');
     const adminTabTracking = document.getElementById('admin-tab-tracking');
     const adminTabVendors = document.getElementById('admin-tab-vendors');
     const adminTabTags = document.getElementById('admin-tab-tags');
     const adminTabPriorities = document.getElementById('admin-tab-priorities');
     const adminUsersSection = document.getElementById('admin-users-section');
+    const adminRolesSection = document.getElementById('admin-roles-section');
     const adminTrackingSection = document.getElementById('admin-tracking-section');
     const adminVendorsSection = document.getElementById('admin-vendors-section');
     const adminTagsSection = document.getElementById('admin-tags-section');
@@ -967,7 +972,7 @@
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
       admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true },
-      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: false, canManageUsers: false, canManageTags: true },
+      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true },
       student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false }
     };
     function computePerms(user) {
@@ -2274,8 +2279,8 @@
       const target = allowed[0];
       if (allowed.includes('users')) {
         loadUsers();
-        loadRoles();
       }
+      if (allowed.includes('roles')) loadRoles();
       if (allowed.includes('tracking')) loadTrackingSettings();
       if (allowed.includes('vendors')) loadVendors();
       if (allowed.includes('tags') || allowed.includes('priorities')) {
@@ -3148,7 +3153,7 @@
     function allowedAdminTabs() {
       const tabs = [];
       if (currentUser?.permissions?.canManageUsers) {
-        tabs.push('users', 'tracking');
+        tabs.push('users', 'roles', 'tracking');
       }
       if (currentUser?.permissions?.canManageVendors) {
         tabs.push('vendors');
@@ -3162,6 +3167,7 @@
     function updateAdminTabsVisibility() {
       const allowed = allowedAdminTabs();
       if (adminTabUsers) adminTabUsers.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
       if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
@@ -3170,6 +3176,7 @@
         activeAdminTab = allowed[0] || null;
       }
       if (adminUsersSection) adminUsersSection.style.display = 'none';
+      if (adminRolesSection) adminRolesSection.style.display = 'none';
       if (adminTrackingSection) adminTrackingSection.style.display = 'none';
       if (adminVendorsSection) adminVendorsSection.style.display = 'none';
       if (adminTagsSection) adminTagsSection.style.display = 'none';
@@ -3182,18 +3189,21 @@
       if (!allowed.includes(which)) which = allowed[0];
       activeAdminTab = which;
       adminUsersSection.style.display = which === 'users' ? 'block' : 'none';
+      if (adminRolesSection) adminRolesSection.style.display = which === 'roles' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
       if (adminTagsSection) adminTagsSection.style.display = which === 'tags' ? 'block' : 'none';
       if (adminPrioritiesSection) adminPrioritiesSection.style.display = which === 'priorities' ? 'block' : 'none';
-      [adminTabUsers, adminTabTracking, adminTabVendors, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
+      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
+      if (which === 'roles') adminTabRoles?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
       if (which === 'tags') adminTabTags?.classList.add('primary');
       if (which === 'priorities') adminTabPriorities?.classList.add('primary');
     }
     adminTabUsers?.addEventListener('click', () => showAdminSection('users'));
+    adminTabRoles?.addEventListener('click', () => { showAdminSection('roles'); loadRoles(); });
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
     adminTabTags?.addEventListener('click', () => { showAdminSection('tags'); loadTags(); });
