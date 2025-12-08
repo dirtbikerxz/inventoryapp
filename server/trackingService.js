@@ -289,17 +289,117 @@ class TrackingService {
       throw new Error(`UPS tracking failed ${resp.status}: ${text.slice(0, 200)}`);
     }
     const data = await resp.json();
-    const pkg = data?.trackResponse?.shipment?.[0]?.package?.[0];
-    const activity = pkg?.activity?.[0] || pkg?.currentStatus;
-    const status = activity?.description || activity?.status?.description || activity?.statusDescription;
-    const delivered = /delivered/i.test(status || '');
-    const timeStr = activity?.date || activity?.dateTime || activity?.time;
-    const lastEventTime = timeStr ? Date.parse(timeStr) || undefined : undefined;
+    const shipment = data?.trackResponse?.shipment?.[0];
+    const pkg = shipment?.package?.[0] || {};
+    const activities = Array.isArray(pkg.activity) ? pkg.activity : [];
+    const primaryActivity = activities[0] || null;
+    const statusObj = pkg.currentStatus || primaryActivity?.status || null;
+    const statusText = (statusObj?.simplifiedTextDescription || statusObj?.description || pkg.statusDescription || '').trim();
+    const status = statusText || undefined;
+    const delivered = /delivered/i.test(statusText || '') || statusObj?.statusCode === '003';
+
+    const toIsoDate = (ymd) => {
+      if (!ymd || typeof ymd !== 'string' || ymd.length < 8) return undefined;
+      const y = ymd.slice(0, 4);
+      const m = ymd.slice(4, 6);
+      const d = ymd.slice(6, 8);
+      if (!/^\d{4}$/.test(y) || !/^\d{2}$/.test(m) || !/^\d{2}$/.test(d)) return undefined;
+      return `${y}-${m}-${d}`;
+    };
+    const toEpochMiddayUtc = (ymd) => {
+      const iso = toIsoDate(ymd);
+      if (!iso) return undefined;
+      const t = Date.parse(`${iso}T12:00:00Z`);
+      return Number.isNaN(t) ? undefined : t;
+    };
+    const toEpochFromYmdTime = (ymd, hhmmss) => {
+      const iso = toIsoDate(ymd);
+      if (!iso) return undefined;
+      let h = '12', m = '00', s = '00';
+      if (typeof hhmmss === 'string' && hhmmss.length >= 2) {
+        h = hhmmss.slice(0, 2) || '00';
+        if (hhmmss.length >= 4) m = hhmmss.slice(2, 4) || '00';
+        if (hhmmss.length >= 6) s = hhmmss.slice(4, 6) || '00';
+      }
+      const t = Date.parse(`${iso}T${h}:${m}:${s}Z`);
+      return Number.isNaN(t) ? toEpochMiddayUtc(ymd) : t;
+    };
+
+    const deliveryDates = Array.isArray(pkg.deliveryDate) ? pkg.deliveryDate : [];
+    const deliveryTime = pkg.deliveryTime || null;
+
+    // Delivered timestamp
+    let deliveredTime;
+    if (delivered) {
+      const deliveredActivity = activities.find(a => {
+        const st = (a?.status?.simplifiedTextDescription || a?.status?.description || '').toLowerCase();
+        return /delivered/.test(st);
+      }) || primaryActivity;
+      if (deliveredActivity?.date || deliveredActivity?.gmtDate) {
+        deliveredTime = toEpochFromYmdTime(deliveredActivity.date || deliveredActivity.gmtDate, deliveredActivity.time);
+      }
+      if (!deliveredTime) {
+        const delDate = deliveryDates.find(d => (d?.type || '').toUpperCase() === 'DEL' && d.date);
+        if (delDate) {
+          deliveredTime = toEpochMiddayUtc(delDate.date);
+        }
+      }
+      if (!deliveredTime && deliveryTime?.type && deliveryTime.type.toUpperCase() === 'DEL') {
+        const delDate = deliveryDates.find(d => d?.date);
+        if (delDate) {
+          deliveredTime = toEpochFromYmdTime(delDate.date, deliveryTime.endTime || deliveryTime.startTime);
+        }
+      }
+    }
+
+    // Fallback last event time (most recent activity)
+    let lastEventTime = deliveredTime;
+    if (!lastEventTime && (primaryActivity?.date || primaryActivity?.gmtDate)) {
+      lastEventTime = toEpochFromYmdTime(primaryActivity.date || primaryActivity.gmtDate, primaryActivity.time);
+    }
+
+    // ETA (scheduled / rescheduled delivery date) as ISO date string
+    let eta;
+    const etaPriority = ['RDD', 'SDD'];
+    for (const t of etaPriority) {
+      const row = deliveryDates.find(d => (d?.type || '').toUpperCase() === t && d.date);
+      if (row) {
+        const iso = toIsoDate(row.date);
+        if (iso) {
+          eta = iso;
+          break;
+        }
+      }
+    }
+
+    const activitiesLog = activities.slice(0, 5).map(a => ({
+      date: a?.date,
+      time: a?.time,
+      gmtDate: a?.gmtDate,
+      gmtTime: a?.gmtTime,
+      status: a?.status?.description,
+      simplified: a?.status?.simplifiedTextDescription
+    }));
+    const deliveryDatesLog = deliveryDates.map(d => ({ type: d?.type, date: d?.date }));
+    this.logger.info({
+      carrier: 'ups',
+      trackingNumber: number,
+      delivered,
+      status,
+      eta,
+      deliveredTime,
+      lastEventTime,
+      deliveryDates: deliveryDatesLog,
+      deliveryTime,
+      activities: activitiesLog
+    }, 'UPS parsed tracking');
+
     return {
       status,
       summary: status || `UPS ${number}`,
       delivered,
       lastEventTime,
+      eta,
       trackingUrl: buildTrackingUrl('ups', number),
       raw: data
     };
