@@ -412,7 +412,6 @@
           <div class="page-title" style="font-size:22px;">New Order</div>
           <div class="subtitle" style="margin-bottom:12px;">Provide a vendor link or part number. We’ll fetch details when supported; otherwise enter manually.</div>
         </div>
-        <button class="btn ghost" id="close-modal">Close</button>
       </div>
       <form id="order-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
         <div>
@@ -847,7 +846,6 @@
     boardMessage.style.zIndex = '80';
     document.body.appendChild(boardMessage);
     const modal = document.getElementById('modal');
-    const closeModal = document.getElementById('close-modal');
     const cancelOrder = document.getElementById('cancel-order');
     const orderForm = document.getElementById('order-form');
     const orderTrackingList = document.getElementById('order-tracking-list');
@@ -1003,6 +1001,19 @@
       { label: 'Ordered', status: 'Ordered', hint: 'Placed orders - awaiting arrival' },
       { label: 'Arrived', status: 'Received', hint: 'Items received' }
     ];
+    const getOrderTimestamp = (order) => {
+      if (!order) return 0;
+      const raw = order.requestedDisplayAt || order.requestedAt || Date.parse(order.createdAt || '') || 0;
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : 0;
+    };
+    const getGroupTimestamp = (ordersInGroup = []) => {
+      const first = ordersInGroup[0];
+      if (!first) return 0;
+      const raw = first.group?.requestedDisplayAt || first.group?.createdAt || getOrderTimestamp(first);
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : 0;
+    };
     const carrierOptions = [
       { value: 'ups', label: 'UPS' },
       { value: 'usps', label: 'USPS' },
@@ -1142,6 +1153,17 @@
           await patchStatusOnly(step.payload.orderId, step.payload.status, step.payload.trackingNumber);
           if (step.payload.groupId !== undefined) {
             await assignGroup(step.payload.orderId, step.payload.groupId);
+          }
+          break;
+        }
+        case 'bulkStatus': {
+          if (Array.isArray(step.payload?.entries)) {
+            for (const entry of step.payload.entries) {
+              await patchStatusOnly(entry.orderId, entry.status, entry.trackingNumber);
+              if (entry.groupId !== undefined) {
+                await assignGroup(entry.orderId, entry.groupId);
+              }
+            }
           }
           break;
         }
@@ -1453,12 +1475,14 @@
       const v = vendorFilter.value;
       const start = startDate.value ? Date.parse(startDate.value) : null;
       const end = endDate.value ? Date.parse(endDate.value) + 24*60*60*1000 : null; // inclusive
-      return orders.filter(o =>
-        matchesSearch(o, term) &&
-        (!s || o.status === s) &&
-        (!v || (o.supplier || '').toLowerCase() === v.toLowerCase()) &&
-        withinDate(o, start, end)
-      );
+      return orders
+        .filter(o =>
+          matchesSearch(o, term) &&
+          (!s || o.status === s) &&
+          (!v || (o.supplier || '').toLowerCase() === v.toLowerCase()) &&
+          withinDate(o, start, end)
+        )
+        .sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
     }
 
     async function fetchOrders() {
@@ -1674,10 +1698,12 @@
           dropArea.appendChild(createCard(order));
         });
 
-        Object.entries(groupMap).forEach(([gid, items]) => {
+        const groupsForStatus = Object.entries(groupMap)
+          .filter(([, items]) => items[0]?.status === col.status)
+          .sort(([, a], [, b]) => getGroupTimestamp(b) - getGroupTimestamp(a));
+
+        groupsForStatus.forEach(([gid, items]) => {
           const first = items[0];
-          const status = first.status;
-          if (status !== col.status) return;
           const card = document.createElement('div');
           card.className = 'card';
           card.style.display = 'flex';
@@ -2050,7 +2076,6 @@
       orderMessage.textContent = 'Tracking is managed on grouped orders only.';
       modal.style.display = 'flex';
     });
-    closeModal.addEventListener('click', () => { modal.style.display = 'none'; });
     cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; });
     const resetGroupModal = () => {
       groupModal.style.display = 'none';
@@ -2136,8 +2161,19 @@
 
     async function updateGroupStatus(groupId, status) {
       const affected = orders.filter(o => (o.groupId && o.groupId === groupId) || (o.group && o.group._id === groupId));
+      const snapshot = affected.map(o => ({
+        orderId: o._id,
+        status: o.status,
+        groupId: o.groupId || o.group?._id
+      }));
       for (const o of affected) {
         await patchStatusOnly(o._id, status);
+      }
+      if (snapshot.length) {
+        recordAction({
+          undo: { type: 'bulkStatus', payload: { entries: snapshot } },
+          redo: { type: 'bulkStatus', payload: { entries: affected.map(o => ({ orderId: o._id, status, groupId: o.groupId || o.group?._id })) } }
+        });
       }
       await fetchOrders();
     }
