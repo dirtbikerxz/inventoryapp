@@ -427,6 +427,14 @@
           <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
         </div>
         <div style="grid-column: span 2;">
+          <label class="small">Saved catalog (optional)</label>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
+            <input id="catalog-lookup" class="input" placeholder="Search saved parts..." />
+            <div id="catalog-lookup-selected" class="small"></div>
+          </div>
+          <div id="catalog-lookup-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:180px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:6px;"></div>
+        </div>
+        <div style="grid-column: span 2;">
           <button type="button" class="btn primary" id="fetch-product">Fetch details</button>
           <span class="small">Supported vendors: WCP (beta). Others: fill manually.</span>
         </div>
@@ -462,6 +470,30 @@
             </div>
           </div>
           <div class="small" style="margin-top:8px;">Tags categorize requests. Mentors/Admins can manage tags in Admin &rarr; Tags.</div>
+        </div>
+        <div id="catalog-save-container" style="grid-column: span 2; display:none;">
+          <div class="flex-between" style="align-items:center; gap:6px; flex-wrap:wrap;">
+            <label class="small" style="display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" id="save-to-catalog-toggle" class="checkbox" />
+              Save this part to the inventory catalog
+            </label>
+            <button type="button" class="btn ghost" id="save-to-catalog-now" style="padding:6px 10px;">Save now</button>
+          </div>
+          <div id="catalog-save-fields" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px; display:none;">
+            <div>
+              <label class="small">Category path</label>
+              <input id="catalog-save-category" class="input" placeholder="Electrical/Connectors/Molex/Male Crimp" />
+            </div>
+            <div>
+              <label class="small">Subteam</label>
+              <input id="catalog-save-subteam" class="input" placeholder="Electrical" />
+            </div>
+            <div>
+              <label class="small">Type</label>
+              <input id="catalog-save-type" class="input" placeholder="Connector" />
+            </div>
+          </div>
+          <div id="catalog-save-message" class="small" style="margin-top:6px;"></div>
         </div>
         <!-- Tracking managed at group level; no tracking fields for individual parts -->
         <div style="grid-column: span 2;">
@@ -572,6 +604,7 @@
           <button class="btn ghost" id="admin-tab-roles" style="padding:6px 12px;">Roles</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
+          <button class="btn ghost" id="admin-tab-catalog" style="padding:6px 12px;">Catalog</button>
           <button class="btn ghost" id="admin-tab-tags" style="padding:6px 12px;">Tags</button>
           <button class="btn ghost" id="admin-tab-priorities" style="padding:6px 12px;">Priorities</button>
         </div>
@@ -753,6 +786,126 @@
               </div>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div id="admin-catalog-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="page-title" style="font-size:18px;">Saved Inventory Catalog</div>
+          <div class="subtitle" style="margin-bottom:12px;">Manage reusable parts, categories, and variations.</div>
+          <div class="grid" style="grid-template-columns: minmax(280px, 1fr) 2fr; gap:12px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div class="flex-between" style="align-items:center;">
+                <div class="page-title" style="font-size:15px;">Categories</div>
+                <button class="btn ghost" id="refresh-catalog-categories" style="padding:6px 10px;">Refresh</button>
+              </div>
+              <form id="catalog-category-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px;">
+                <input type="hidden" name="id" />
+                <div>
+                  <label class="small">Name</label>
+                  <input name="name" class="input" placeholder="Electrical" required />
+                </div>
+                <div>
+                  <label class="small">Parent</label>
+                  <select name="parentId" class="input"></select>
+                </div>
+                <div>
+                  <label class="small">Sort order</label>
+                  <input name="sortOrder" class="input" type="number" placeholder="0" />
+                </div>
+                <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
+                  <div id="catalog-category-message" class="small"></div>
+                  <div class="flex-between" style="gap:6px;">
+                    <button type="button" class="btn ghost" id="reset-category-form">New</button>
+                    <button type="button" class="btn ghost" id="delete-category" style="color:var(--danger);">Delete</button>
+                    <button type="submit" class="btn primary">Save</button>
+                  </div>
+                </div>
+              </form>
+              <div class="small">Click a category to select it. Nested paths are supported (e.g., Electrical → Connectors → Molex).</div>
+              <div id="catalog-category-tree" class="empty" style="min-height:140px;">Loading categories...</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
+                <div>
+                  <div class="page-title" style="font-size:15px;">Catalog items</div>
+                  <div class="small" id="catalog-item-hint">Select a category to focus results.</div>
+                </div>
+                <div class="flex-between" style="gap:6px; flex-wrap:wrap;">
+                  <input id="catalog-item-search" class="input" placeholder="Search saved parts..." style="min-width:180px;" />
+                  <button class="btn ghost" id="refresh-catalog-items" style="padding:6px 10px;">Refresh</button>
+                  <button class="btn primary" id="new-catalog-item" style="padding:6px 10px;">New item</button>
+                </div>
+              </div>
+              <div id="catalog-item-list" class="empty">No catalog items yet.</div>
+              <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px; display:none;">
+                <input type="hidden" name="id" />
+                <div>
+                  <label class="small">Name</label>
+                  <input name="name" class="input" required />
+                </div>
+                <div>
+                  <label class="small">Category path</label>
+                  <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
+                </div>
+                <div>
+                  <label class="small">Subteam</label>
+                  <input name="subteam" class="input" placeholder="Electrical" />
+                </div>
+                <div>
+                  <label class="small">Type</label>
+                  <input name="type" class="input" placeholder="Connector" />
+                </div>
+                <div>
+                  <label class="small">Vendor</label>
+                  <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
+                </div>
+                <div>
+                  <label class="small">Vendor part #</label>
+                  <input name="vendorPartNumber" class="input" placeholder="SKU" />
+                </div>
+                <div>
+                  <label class="small">Product code</label>
+                  <input name="productCode" class="input" placeholder="Internal code" />
+                </div>
+                <div>
+                  <label class="small">Supplier link</label>
+                  <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
+                </div>
+                <div>
+                  <label class="small">Unit cost</label>
+                  <input name="unitCost" class="input" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label class="small">Default qty</label>
+                  <input name="defaultQuantity" class="input" type="number" min="1" />
+                </div>
+                <div style="grid-column: span 2;">
+                  <label class="small">Aliases (comma separated)</label>
+                  <input name="aliases" class="input" placeholder="crimp, molex, male" />
+                </div>
+                <div style="grid-column: span 2;">
+                  <label class="small">Description</label>
+                  <textarea name="description" class="input" rows="2" placeholder="Notes for this saved part"></textarea>
+                </div>
+                <div style="grid-column: span 2;">
+                  <div class="flex-between" style="align-items:center; gap:8px;">
+                    <div class="small">Variations (e.g., Male/Female, size)</div>
+                    <button type="button" class="btn ghost" id="add-catalog-variation" style="padding:6px 10px;">Add variation</button>
+                  </div>
+                  <div id="catalog-variations"></div>
+                </div>
+                <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
+                  <div id="catalog-item-message" class="small"></div>
+                  <div class="flex-between" style="gap:6px;">
+                    <button type="button" class="btn ghost" id="cancel-catalog-item">Cancel</button>
+                    <button type="button" class="btn ghost" id="delete-catalog-item" style="color:var(--danger);">Delete</button>
+                    <button type="submit" class="btn primary">Save item</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -952,12 +1105,14 @@
     const adminTabRoles = document.getElementById('admin-tab-roles');
     const adminTabTracking = document.getElementById('admin-tab-tracking');
     const adminTabVendors = document.getElementById('admin-tab-vendors');
+    const adminTabCatalog = document.getElementById('admin-tab-catalog');
     const adminTabTags = document.getElementById('admin-tab-tags');
     const adminTabPriorities = document.getElementById('admin-tab-priorities');
     const adminUsersSection = document.getElementById('admin-users-section');
     const adminRolesSection = document.getElementById('admin-roles-section');
     const adminTrackingSection = document.getElementById('admin-tracking-section');
     const adminVendorsSection = document.getElementById('admin-vendors-section');
+    const adminCatalogSection = document.getElementById('admin-catalog-section');
     const adminTagsSection = document.getElementById('admin-tags-section');
     const adminPrioritiesSection = document.getElementById('admin-priorities-section');
     const refreshPrioritiesBtn = document.getElementById('refresh-priorities');
@@ -967,11 +1122,41 @@
     const priorityColorInput = document.getElementById('priority-color-input');
     const prioritySortInput = document.getElementById('priority-sort-input');
     const createPriorityForm = document.getElementById('create-priority-form');
+    const catalogLookupInput = document.getElementById('catalog-lookup');
+    const catalogLookupResults = document.getElementById('catalog-lookup-results');
+    const catalogLookupSelected = document.getElementById('catalog-lookup-selected');
+    const catalogSaveContainer = document.getElementById('catalog-save-container');
+    const catalogSaveFields = document.getElementById('catalog-save-fields');
+    const saveToCatalogToggle = document.getElementById('save-to-catalog-toggle');
+    const catalogSaveCategory = document.getElementById('catalog-save-category');
+    const catalogSaveSubteam = document.getElementById('catalog-save-subteam');
+    const catalogSaveType = document.getElementById('catalog-save-type');
+    const catalogSaveVariationLabel = document.getElementById('catalog-save-variation-label');
+    const catalogSaveVariationNotes = document.getElementById('catalog-save-variation-notes');
+    const saveToCatalogNowBtn = document.getElementById('save-to-catalog-now');
+    const catalogSaveMessage = document.getElementById('catalog-save-message');
+    const refreshCatalogCategoriesBtn = document.getElementById('refresh-catalog-categories');
+    const catalogCategoryForm = document.getElementById('catalog-category-form');
+    const catalogCategoryMessage = document.getElementById('catalog-category-message');
+    const resetCategoryFormBtn = document.getElementById('reset-category-form');
+    const deleteCategoryBtn = document.getElementById('delete-category');
+    const catalogCategoryTree = document.getElementById('catalog-category-tree');
+    const catalogItemSearch = document.getElementById('catalog-item-search');
+    const refreshCatalogItemsBtn = document.getElementById('refresh-catalog-items');
+    const newCatalogItemBtn = document.getElementById('new-catalog-item');
+    const catalogItemList = document.getElementById('catalog-item-list');
+    const catalogItemForm = document.getElementById('catalog-item-form');
+    const catalogItemMessage = document.getElementById('catalog-item-message');
+    const catalogVariations = document.getElementById('catalog-variations');
+    const addCatalogVariationBtn = document.getElementById('add-catalog-variation');
+    const deleteCatalogItemBtn = document.getElementById('delete-catalog-item');
+    const cancelCatalogItemBtn = document.getElementById('cancel-catalog-item');
+    const catalogItemHint = document.getElementById('catalog-item-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true },
-      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true },
-      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false }
+      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true },
+      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true },
+      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -1048,6 +1233,15 @@
     const redoStack = [];
     let tagList = [];
     let priorityList = [];
+    let catalogCategories = [];
+    let catalogTree = [];
+    let catalogItems = [];
+    let catalogLookupMatches = [];
+    let selectedCatalogMatch = null;
+    let selectedCatalogCategoryId = null;
+    let selectedCatalogItemId = null;
+    let catalogLookupTimer = null;
+    let catalogItemSearchTimer = null;
     const defaultPriorities = [
       { label: 'Low', color: '#5aa0ff', sortOrder: 1 },
       { label: 'Medium', color: '#fdd023', sortOrder: 2 },
@@ -1534,6 +1728,9 @@
 
     function openEdit(order) {
       editingOrderId = order._id;
+      resetCatalogLookup();
+      resetCatalogSavePanel();
+      syncCatalogSaveUI();
       orderForm.elements.vendor.value = order.vendor || order.supplier || '';
       orderForm.elements.vendorPartNumber.value = order.vendorPartNumber || '';
       orderForm.elements.partLink.value = order.partLink || '';
@@ -1541,6 +1738,11 @@
       orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
       orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
       orderForm.elements.priority.value = order.priority || 'Medium';
+      if (currentUser?.permissions?.canEditInventoryCatalog) {
+        if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = order.vendorPartNumber || order.partName || '';
+        if (catalogSaveVariationNotes) catalogSaveVariationNotes.value = order.notes || '';
+        if (catalogSaveCategory) catalogSaveCategory.value = order.category || '';
+      }
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
       if (orderTrackingList) orderTrackingList.style.display = 'none';
@@ -2070,13 +2272,16 @@
       orderForm.elements.quantityRequested.value = 1;
       renderTagOptions([]);
       renderPriorityOptions();
+      resetCatalogLookup();
+      resetCatalogSavePanel();
+      syncCatalogSaveUI();
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
       if (orderTrackingList) orderTrackingList.style.display = 'none';
       orderMessage.textContent = 'Tracking is managed on grouped orders only.';
       modal.style.display = 'flex';
     });
-    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; });
+    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); });
     const resetGroupModal = () => {
       groupModal.style.display = 'none';
       groupForm.reset();
@@ -2233,6 +2438,203 @@
       }
     });
 
+    function flattenCatalogMatches(items = []) {
+      const list = [];
+      items.forEach(item => {
+        const base = {
+          id: item._id || item.id,
+          label: item.name,
+          partName: item.name,
+          path: item.fullPath || (item.categoryPathLabels || []).join(' / '),
+          vendor: item.vendor,
+          vendorPartNumber: item.vendorPartNumber,
+          productCode: item.productCode,
+          supplierLink: item.supplierLink,
+          unitCost: item.unitCost,
+          defaultQuantity: item.defaultQuantity
+        };
+        if (Array.isArray(item.variations) && item.variations.length) {
+          item.variations.forEach(variation => {
+            list.push({
+              ...base,
+              variationId: variation.id,
+              label: `${item.name} — ${variation.label}`,
+              variationLabel: variation.label,
+              vendor: variation.vendor || base.vendor,
+              vendorPartNumber: variation.vendorPartNumber || base.vendorPartNumber,
+              productCode: variation.productCode || base.productCode,
+              supplierLink: variation.supplierLink || base.supplierLink,
+              unitCost: variation.unitCost ?? base.unitCost
+            });
+          });
+        } else {
+          list.push(base);
+        }
+      });
+      return list.slice(0, 40);
+    }
+
+    function renderCatalogLookupList() {
+      if (!catalogLookupResults) return;
+      if (!catalogLookupMatches.length) {
+        catalogLookupResults.innerHTML = '<div class="small" style="padding:6px 8px;">No matches yet.</div>';
+        catalogLookupResults.style.display = 'block';
+        return;
+      }
+      catalogLookupResults.innerHTML = catalogLookupMatches.map((m, idx) => `
+        <div class="tag-picker-option" data-idx="${idx}" style="padding:6px 8px; cursor:pointer; border:1px solid var(--border); border-radius:8px; margin-bottom:4px;">
+          <div style="font-weight:700;">${escapeHtml(m.label)}</div>
+          <div class="small">${escapeHtml(m.path || '')}${m.vendor ? ' · ' + escapeHtml(m.vendor) : ''}${m.vendorPartNumber ? ' · ' + escapeHtml(m.vendorPartNumber) : ''}</div>
+        </div>
+      `).join('');
+      catalogLookupResults.style.display = 'block';
+      catalogLookupResults.querySelectorAll('.tag-picker-option').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.dataset.idx);
+          const match = catalogLookupMatches[idx];
+          if (match) applyCatalogSelection(match);
+        });
+      });
+    }
+
+    async function performCatalogLookup(term) {
+      const q = (term || '').trim();
+      if (!q) {
+        if (catalogLookupResults) catalogLookupResults.style.display = 'none';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/catalog/items?search=${encodeURIComponent(q)}&includeDescendants=true`);
+        const data = await res.json();
+        catalogLookupMatches = flattenCatalogMatches(data.items || []);
+        renderCatalogLookupList();
+      } catch (err) {
+        console.warn('Catalog lookup failed', err);
+      }
+    }
+
+    function applyCatalogSelection(match) {
+      if (!match || !orderForm) return;
+      selectedCatalogMatch = match;
+      if (orderForm.elements.partName && !orderForm.elements.partName.value) orderForm.elements.partName.value = match.partName || match.label || '';
+      if (orderForm.elements.vendor && match.vendor) orderForm.elements.vendor.value = match.vendor;
+      if (orderForm.elements.vendorPartNumber && match.vendorPartNumber) orderForm.elements.vendorPartNumber.value = match.vendorPartNumber;
+      if (orderForm.elements.partLink && match.supplierLink) orderForm.elements.partLink.value = match.supplierLink;
+      if (orderForm.elements.unitCost && match.unitCost !== undefined) orderForm.elements.unitCost.value = match.unitCost;
+      if (orderForm.elements.quantityRequested && match.defaultQuantity) orderForm.elements.quantityRequested.value = match.defaultQuantity;
+      if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
+      if (catalogLookupResults) catalogLookupResults.style.display = 'none';
+      if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
+      if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = match.variationLabel || match.label || '';
+    }
+
+    function resetCatalogLookup() {
+      catalogLookupMatches = [];
+      selectedCatalogMatch = null;
+      if (catalogLookupResults) {
+        catalogLookupResults.style.display = 'none';
+        catalogLookupResults.innerHTML = '';
+      }
+      if (catalogLookupSelected) catalogLookupSelected.textContent = '';
+      if (catalogLookupInput) catalogLookupInput.value = '';
+    }
+
+    function toggleCatalogSaveFields(show) {
+      if (!catalogSaveFields) return;
+      const open = show !== undefined ? show : saveToCatalogToggle?.checked;
+      catalogSaveFields.style.display = open ? 'grid' : 'none';
+    }
+
+    function resetCatalogSavePanel() {
+      if (saveToCatalogToggle) saveToCatalogToggle.checked = false;
+      if (catalogSaveCategory) catalogSaveCategory.value = '';
+      if (catalogSaveSubteam) catalogSaveSubteam.value = '';
+      if (catalogSaveType) catalogSaveType.value = '';
+      if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = '';
+      if (catalogSaveVariationNotes) catalogSaveVariationNotes.value = '';
+      if (catalogSaveMessage) { catalogSaveMessage.textContent = ''; catalogSaveMessage.className = 'small'; }
+      toggleCatalogSaveFields(false);
+    }
+
+    function syncCatalogSaveUI() {
+      const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
+      if (catalogSaveContainer) catalogSaveContainer.style.display = canEdit ? 'block' : 'none';
+      if (!canEdit) resetCatalogSavePanel();
+    }
+
+    async function saveCurrentOrderToCatalog(force = false) {
+      if (!currentUser?.permissions?.canEditInventoryCatalog) return { skipped: true };
+      if (!force && !saveToCatalogToggle?.checked) return { skipped: true };
+      const name = orderForm?.elements?.partName?.value?.trim();
+      if (!name) {
+        if (catalogSaveMessage) {
+          catalogSaveMessage.textContent = 'Enter a part name before saving to catalog.';
+          catalogSaveMessage.className = 'error';
+        }
+        return { error: 'missing name' };
+      }
+      const path = (catalogSaveCategory?.value || selectedCatalogMatch?.path || '').split('/').map(p => p.trim()).filter(Boolean);
+      const variationLabel = catalogSaveVariationLabel?.value?.trim() || selectedCatalogMatch?.variationLabel || orderForm?.elements?.vendorPartNumber?.value || name;
+      const payload = {
+        name,
+        categoryPath: path,
+        subteam: catalogSaveSubteam?.value?.trim() || undefined,
+        type: catalogSaveType?.value?.trim() || undefined,
+        vendor: orderForm?.elements?.vendor?.value || undefined,
+        vendorPartNumber: orderForm?.elements?.vendorPartNumber?.value || undefined,
+        supplierLink: orderForm?.elements?.partLink?.value || undefined,
+        unitCost: orderForm?.elements?.unitCost?.value ? Number(orderForm.elements.unitCost.value) : undefined,
+        aliases: [],
+        variations: [{
+          label: variationLabel,
+          vendor: orderForm?.elements?.vendor?.value || undefined,
+          vendorPartNumber: orderForm?.elements?.vendorPartNumber?.value || undefined,
+          supplierLink: orderForm?.elements?.partLink?.value || undefined,
+          unitCost: orderForm?.elements?.unitCost?.value ? Number(orderForm.elements.unitCost.value) : undefined,
+          notes: catalogSaveVariationNotes?.value || undefined
+        }]
+      };
+      try {
+        const res = await fetch('/api/catalog/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save');
+        if (catalogSaveMessage) {
+          catalogSaveMessage.textContent = 'Saved to catalog.';
+          catalogSaveMessage.className = 'success';
+        }
+        if (currentUser?.permissions?.canEditInventoryCatalog) {
+          refreshCatalogView();
+        }
+        return { ok: true, id: data.id };
+      } catch (err) {
+        if (catalogSaveMessage) {
+          catalogSaveMessage.textContent = err.message || 'Failed to save to catalog.';
+          catalogSaveMessage.className = 'error';
+        }
+        return { error: err.message };
+      }
+    }
+
+    saveToCatalogToggle?.addEventListener('change', () => toggleCatalogSaveFields());
+    saveToCatalogNowBtn?.addEventListener('click', () => saveCurrentOrderToCatalog(true));
+    catalogLookupInput?.addEventListener('input', () => {
+      clearTimeout(catalogLookupTimer);
+      catalogLookupTimer = setTimeout(() => performCatalogLookup(catalogLookupInput.value), 200);
+    });
+    catalogLookupInput?.addEventListener('focus', () => {
+      if (catalogLookupInput.value) performCatalogLookup(catalogLookupInput.value);
+    });
+    document.addEventListener('click', (e) => {
+      if (!catalogLookupResults || !catalogLookupInput) return;
+      if (!catalogLookupResults.contains(e.target) && e.target !== catalogLookupInput) {
+        catalogLookupResults.style.display = 'none';
+      }
+    });
+
     orderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(orderForm);
@@ -2295,9 +2697,14 @@
           });
           orderMessage.textContent = 'Order created.';
         }
+        if (currentUser?.permissions?.canEditInventoryCatalog && saveToCatalogToggle?.checked) {
+          await saveCurrentOrderToCatalog(true);
+        }
         orderMessage.className = 'success';
         modal.style.display = 'none';
         orderForm.reset();
+        resetCatalogLookup();
+        resetCatalogSavePanel();
         editingOrderId = null;
         if (orderTrackingList) setTrackingRows(orderTrackingList, []);
         await fetchOrders();
@@ -2319,6 +2726,7 @@
       if (allowed.includes('roles')) loadRoles();
       if (allowed.includes('tracking')) loadTrackingSettings();
       if (allowed.includes('vendors')) loadVendors();
+      if (allowed.includes('catalog')) refreshCatalogView();
       if (allowed.includes('tags') || allowed.includes('priorities')) {
         loadTags();
         loadPriorityTags();
@@ -2429,6 +2837,366 @@
       } catch (e) {
         vendorList.textContent = 'Failed to load vendors';
       }
+    }
+
+    function categoryPathLabel(cat) {
+      if (!cat) return '';
+      const path = cat.path || [];
+      return path.length ? path.join(' / ') : cat.name || '';
+    }
+
+    function renderCategoryParentOptions(selectedId = '') {
+      if (!catalogCategoryForm) return;
+      if (!catalogCategoryForm.dataset.mode) catalogCategoryForm.dataset.mode = 'create';
+      const select = catalogCategoryForm.elements.parentId;
+      if (!select) return;
+      const options = ['<option value="">(Root)</option>'].concat(
+        catalogCategories.map(c => `<option value="${c._id}" ${String(selectedId) === String(c._id) ? 'selected' : ''}>${escapeHtml(categoryPathLabel(c))}</option>`)
+      );
+      select.innerHTML = options.join('');
+    }
+
+    function renderCatalogTree() {
+      if (!catalogCategoryTree) return;
+      if (!catalogTree || !catalogTree.length) {
+        catalogCategoryTree.className = 'empty';
+        catalogCategoryTree.textContent = 'No categories yet. Add one to begin organizing saved parts.';
+        return;
+      }
+      const renderNodes = (nodes = []) => {
+        return `<ul style="list-style:none; padding-left:12px; margin:0;">${nodes.map(node => `
+          <li data-id="${node._id}" class="catalog-node" style="margin:4px 0;">
+            <div class="tag-picker-option" data-id="${node._id}" style="cursor:pointer; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:${selectedCatalogCategoryId === String(node._id) ? 'rgba(253,208,35,0.08)' : 'var(--panel)'};">
+              <div style="font-weight:700;">${escapeHtml(node.name)}</div>
+              <div class="small">${escapeHtml((node.path || []).join(' / '))}</div>
+            </div>
+            ${node.children?.length ? renderNodes(node.children) : ''}
+          </li>
+        `).join('')}</ul>`;
+      };
+      catalogCategoryTree.innerHTML = renderNodes(catalogTree);
+      catalogCategoryTree.querySelectorAll('.tag-picker-option').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.dataset.id;
+          if (!id) return;
+          selectCatalogCategory(id);
+        });
+      });
+    }
+
+    function resetCatalogCategoryForm() {
+      if (!catalogCategoryForm) return;
+      catalogCategoryForm.reset();
+      catalogCategoryForm.dataset.mode = 'create';
+      if (catalogCategoryForm.elements.id) {
+        catalogCategoryForm.elements.id.value = '';
+        catalogCategoryForm.elements.id.defaultValue = '';
+      }
+      if (catalogCategoryForm.elements.parentId) {
+        catalogCategoryForm.elements.parentId.value = '';
+      }
+      if (catalogCategoryMessage) {
+        catalogCategoryMessage.textContent = '';
+        catalogCategoryMessage.className = 'small';
+      }
+      selectedCatalogCategoryId = null;
+      renderCategoryParentOptions();
+    }
+
+    async function refreshCatalogCategories() {
+      if (!currentUser?.permissions?.canEditInventoryCatalog) return;
+      if (catalogCategoryTree) catalogCategoryTree.textContent = 'Loading categories...';
+      try {
+        const res = await fetch('/api/catalog/categories');
+        const data = await res.json();
+        catalogCategories = data.categories || [];
+        catalogTree = data.tree || [];
+        renderCategoryParentOptions(catalogCategoryForm?.elements.parentId?.value || '');
+        renderCatalogTree();
+      } catch (err) {
+        if (catalogCategoryTree) {
+          catalogCategoryTree.textContent = 'Failed to load categories';
+        }
+      }
+    }
+
+    function selectCatalogCategory(id) {
+      selectedCatalogCategoryId = id;
+      const cat = catalogCategories.find(c => String(c._id) === String(id));
+      if (cat && catalogCategoryForm) {
+        catalogCategoryForm.dataset.mode = 'update';
+        catalogCategoryForm.elements.id.value = cat._id || '';
+        catalogCategoryForm.elements.name.value = cat.name || '';
+        catalogCategoryForm.elements.parentId.value = cat.parentId || '';
+        catalogCategoryForm.elements.sortOrder.value = cat.sortOrder ?? '';
+      }
+      renderCatalogTree();
+      refreshCatalogItems();
+      updateCatalogItemHint();
+    }
+
+    catalogCategoryForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(catalogCategoryForm);
+      const payload = Object.fromEntries(formData.entries());
+      const id = (payload.id || '').trim();
+      const idExists = catalogCategories.some(c => String(c._id) === id);
+      const explicitMode = catalogCategoryForm?.dataset?.mode || 'create';
+      const isUpdate = explicitMode === 'update' && Boolean(id && idExists);
+      const body = {
+        name: payload.name,
+        parentId: payload.parentId || undefined,
+        sortOrder: payload.sortOrder ? Number(payload.sortOrder) : undefined
+      };
+      catalogCategoryMessage.textContent = 'Saving...';
+      catalogCategoryMessage.className = 'small';
+      try {
+        if (isUpdate) {
+          await fetch(`/api/catalog/categories/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+        } else {
+          await fetch('/api/catalog/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...body })
+          });
+        }
+        catalogCategoryMessage.textContent = 'Saved';
+        catalogCategoryMessage.className = 'success';
+        if (!isUpdate) resetCatalogCategoryForm();
+        await refreshCatalogCategories();
+      } catch (err) {
+        catalogCategoryMessage.textContent = err.message || 'Failed to save category';
+        catalogCategoryMessage.className = 'error';
+      }
+    });
+
+    resetCategoryFormBtn?.addEventListener('click', () => resetCatalogCategoryForm());
+    deleteCategoryBtn?.addEventListener('click', async () => {
+      const id = catalogCategoryForm?.elements.id.value;
+      if (!id) return;
+      if (!confirm('Delete this category? Items can be reassigned manually if needed.')) return;
+      try {
+        await fetch(`/api/catalog/categories/${id}?cascade=true`, { method: 'DELETE' });
+        resetCatalogCategoryForm();
+        await refreshCatalogCategories();
+        await refreshCatalogItems();
+      } catch (err) {
+        catalogCategoryMessage.textContent = 'Failed to delete category';
+        catalogCategoryMessage.className = 'error';
+      }
+    });
+    refreshCatalogCategoriesBtn?.addEventListener('click', refreshCatalogCategories);
+
+    function updateCatalogItemHint() {
+      if (!catalogItemHint) return;
+      const cat = catalogCategories.find(c => String(c._id) === String(selectedCatalogCategoryId));
+      catalogItemHint.textContent = cat ? `Filtering by ${categoryPathLabel(cat)}` : 'Select a category to focus results.';
+    }
+
+    function variationRow(data = {}) {
+      const row = document.createElement('div');
+      row.className = 'card';
+      row.style.marginBottom = '6px';
+      row.innerHTML = `
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
+          <input class="input variation-label" placeholder="Variation label" value="${escapeHtml(data.label || '')}"/>
+          <input class="input variation-sku" placeholder="Vendor part #" value="${escapeHtml(data.vendorPartNumber || '')}"/>
+          <input class="input variation-link" placeholder="Supplier link" value="${escapeHtml(data.supplierLink || '')}"/>
+          <input class="input variation-cost" type="number" step="0.01" placeholder="Unit cost" value="${data.unitCost ?? ''}"/>
+          <input class="input variation-notes" placeholder="Notes" value="${escapeHtml(data.notes || '')}"/>
+        </div>
+        <div class="flex-between" style="margin-top:6px;">
+          <div class="small">${data.id ? `ID: ${data.id}` : ''}</div>
+          <button type="button" class="btn ghost remove-variation" style="color:var(--danger); padding:4px 8px;">Remove</button>
+        </div>
+      `;
+      row.dataset.id = data.id || '';
+      row.querySelector('.remove-variation')?.addEventListener('click', () => row.remove());
+      return row;
+    }
+
+    function resetCatalogItemForm(item = null) {
+      if (!catalogItemForm) return;
+      catalogItemForm.reset();
+      selectedCatalogItemId = null;
+      catalogItemForm.style.display = item ? 'grid' : 'none';
+      catalogItemMessage.textContent = '';
+      catalogItemMessage.className = 'small';
+      catalogVariations.innerHTML = '';
+      if (item) {
+        catalogItemForm.elements.id.value = item._id || item.id || '';
+        catalogItemForm.elements.name.value = item.name || '';
+        const pathLabel = Array.isArray(item.categoryPathLabels)
+          ? item.categoryPathLabels.join(' / ')
+          : (item.fullPath || item.categoryPathLabels || '');
+        catalogItemForm.elements.categoryPath.value = pathLabel || '';
+        catalogItemForm.elements.subteam.value = item.subteam || '';
+        catalogItemForm.elements.type.value = item.type || '';
+        catalogItemForm.elements.vendor.value = item.vendor || '';
+        catalogItemForm.elements.vendorPartNumber.value = item.vendorPartNumber || '';
+        catalogItemForm.elements.productCode.value = item.productCode || '';
+        catalogItemForm.elements.supplierLink.value = item.supplierLink || '';
+        catalogItemForm.elements.unitCost.value = item.unitCost ?? '';
+        catalogItemForm.elements.defaultQuantity.value = item.defaultQuantity ?? '';
+        catalogItemForm.elements.aliases.value = (item.aliases || []).join(', ');
+        catalogItemForm.elements.description.value = item.description || '';
+        (item.variations || []).forEach(v => catalogVariations.appendChild(variationRow(v)));
+        if (!item.variations || !item.variations.length) {
+          catalogVariations.appendChild(variationRow({ label: 'Default' }));
+        }
+        selectedCatalogItemId = item._id || item.id || null;
+        catalogItemForm.style.display = 'grid';
+      }
+    }
+
+    function collectCatalogVariations() {
+      if (!catalogVariations) return [];
+      return Array.from(catalogVariations.querySelectorAll('.card')).map(row => {
+        return {
+          id: row.dataset.id || undefined,
+          label: row.querySelector('.variation-label')?.value?.trim() || '',
+          vendorPartNumber: row.querySelector('.variation-sku')?.value?.trim() || undefined,
+          supplierLink: row.querySelector('.variation-link')?.value?.trim() || undefined,
+          unitCost: row.querySelector('.variation-cost')?.value ? Number(row.querySelector('.variation-cost')?.value) : undefined,
+          notes: row.querySelector('.variation-notes')?.value?.trim() || undefined
+        };
+      }).filter(v => v.label);
+    }
+
+    function renderCatalogItems() {
+      if (!catalogItemList) return;
+      if (!catalogItems.length) {
+        catalogItemList.className = 'empty';
+        catalogItemList.textContent = 'No catalog items yet.';
+        return;
+      }
+      catalogItemList.className = '';
+      catalogItemList.innerHTML = catalogItems.map(item => {
+        const path = escapeHtml((item.fullPath || (item.categoryPathLabels || []).join(' / ')) || '');
+        const vendor = escapeHtml(item.vendor || '');
+        const sku = escapeHtml(item.vendorPartNumber || '');
+        const variationCount = item.variations?.length || 0;
+        return `<div class="card" data-id="${item._id || item.id}" style="margin-bottom:8px;">
+          <div class="flex-between" style="gap:8px; align-items:flex-start;">
+            <div>
+              <h4 style="margin:0 0 4px;">${escapeHtml(item.name)}</h4>
+              <div class="small">${path || 'Uncategorized'}</div>
+              <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''} ${variationCount ? `· ${variationCount} variations` : ''}</div>
+            </div>
+            <div class="flex-between" style="gap:6px;">
+              <button class="btn ghost" data-action="edit">Edit</button>
+              <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.target.closest('.card')?.dataset.id;
+          if (!id) return;
+          const item = catalogItems.find(i => String(i._id || i.id) === String(id));
+          if (item) resetCatalogItemForm(item);
+        });
+      });
+      catalogItemList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.closest('.card')?.dataset.id;
+          if (!id) return;
+          if (!confirm('Delete this saved item?')) return;
+          await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
+          await refreshCatalogItems();
+          resetCatalogItemForm();
+        });
+      });
+    }
+
+    async function refreshCatalogItems() {
+      if (!currentUser) return;
+      catalogItemList.textContent = 'Loading...';
+      const params = new URLSearchParams();
+      if (selectedCatalogCategoryId) params.set('categoryId', selectedCatalogCategoryId);
+      if (catalogItemSearch?.value) params.set('search', catalogItemSearch.value.trim());
+      try {
+        const res = await fetch(`/api/catalog/items?${params.toString()}`);
+        const data = await res.json();
+        catalogItems = data.items || [];
+        renderCatalogItems();
+      } catch (err) {
+        catalogItemList.textContent = 'Failed to load catalog items';
+      }
+    }
+
+    catalogItemForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(catalogItemForm).entries());
+      const id = payload.id;
+      const aliases = (payload.aliases || '').split(',').map(a => a.trim()).filter(Boolean);
+      const variations = collectCatalogVariations();
+      const body = {
+        name: payload.name,
+        categoryPath: (payload.categoryPath || '').split('/').map(p => p.trim()).filter(Boolean),
+        subteam: payload.subteam || undefined,
+        type: payload.type || undefined,
+        vendor: payload.vendor || undefined,
+        vendorPartNumber: payload.vendorPartNumber || undefined,
+        productCode: payload.productCode || undefined,
+        supplierLink: payload.supplierLink || undefined,
+        unitCost: payload.unitCost ? Number(payload.unitCost) : undefined,
+        defaultQuantity: payload.defaultQuantity ? Number(payload.defaultQuantity) : undefined,
+        aliases,
+        description: payload.description || undefined,
+        variations
+      };
+      catalogItemMessage.textContent = 'Saving...';
+      catalogItemMessage.className = 'small';
+      try {
+        if (id) {
+          await fetch(`/api/catalog/items/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        } else {
+          await fetch('/api/catalog/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        }
+        catalogItemMessage.textContent = 'Saved';
+        catalogItemMessage.className = 'success';
+        await refreshCatalogItems();
+        if (!id) resetCatalogItemForm();
+      } catch (err) {
+        catalogItemMessage.textContent = err.message || 'Failed to save item';
+        catalogItemMessage.className = 'error';
+      }
+    });
+
+    addCatalogVariationBtn?.addEventListener('click', () => {
+      if (!catalogVariations) return;
+      catalogVariations.appendChild(variationRow({ label: 'Variation' }));
+      catalogItemForm.style.display = 'grid';
+    });
+    cancelCatalogItemBtn?.addEventListener('click', () => resetCatalogItemForm());
+    deleteCatalogItemBtn?.addEventListener('click', async () => {
+      const id = catalogItemForm?.elements.id.value;
+      if (!id) return;
+      if (!confirm('Delete this saved item?')) return;
+      await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
+      await refreshCatalogItems();
+      resetCatalogItemForm();
+    });
+    newCatalogItemBtn?.addEventListener('click', () => {
+      resetCatalogItemForm({ name: '', categoryPathLabels: selectedCatalogCategoryId ? [categoryPathLabel(catalogCategories.find(c => String(c._id) === String(selectedCatalogCategoryId)))] : [] });
+      catalogItemForm.style.display = 'grid';
+      catalogVariations.appendChild(variationRow({ label: 'Default' }));
+    });
+    refreshCatalogItemsBtn?.addEventListener('click', () => refreshCatalogItems());
+    catalogItemSearch?.addEventListener('input', () => {
+      clearTimeout(catalogItemSearchTimer);
+      catalogItemSearchTimer = setTimeout(refreshCatalogItems, 200);
+    });
+
+    function refreshCatalogView() {
+      refreshCatalogCategories();
+      refreshCatalogItems();
     }
 
     async function loadTags() {
@@ -2952,8 +3720,9 @@
       const perms = computePerms(currentUser);
       currentUser.permissions = perms;
       newOrderBtn.disabled = !perms.canPlaceOrders;
-      adminBtn.style.display = (perms.canManageUsers || perms.canManageTags || perms.canManageVendors) ? 'inline-flex' : 'none';
+      adminBtn.style.display = (perms.canManageUsers || perms.canManageTags || perms.canManageVendors || perms.canEditInventoryCatalog) ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
+      syncCatalogSaveUI();
     }
 
     async function loadUsers() {
@@ -3025,9 +3794,9 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true },
-          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true },
-          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false }
+          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true },
+          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true },
+          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false }
         };
         roles.forEach(r => { combined[r.role] = r.permissions; });
 
@@ -3051,6 +3820,7 @@
               ${renderToggle(role, 'canManageVendors', 'Can manage vendors')}
               ${renderToggle(role, 'canManageUsers', 'Can manage users')}
               ${renderToggle(role, 'canManageTags', 'Can manage tags')}
+              ${renderToggle(role, 'canEditInventoryCatalog', 'Can edit inventory catalog')}
             </div>
             ${role === 'admin'
               ? `<div class="small" style="margin-top:8px;">Admin permissions are fixed and cannot be changed.</div>`
@@ -3194,6 +3964,9 @@
       if (currentUser?.permissions?.canManageVendors) {
         tabs.push('vendors');
       }
+      if (currentUser?.permissions?.canEditInventoryCatalog) {
+        tabs.push('catalog');
+      }
       if (currentUser?.permissions?.canManageTags) {
         tabs.push('tags', 'priorities');
       }
@@ -3206,6 +3979,7 @@
       if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
+      if (adminTabCatalog) adminTabCatalog.style.display = currentUser?.permissions?.canEditInventoryCatalog ? 'inline-flex' : 'none';
       if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
       if (adminTabPriorities) adminTabPriorities.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
       if (!allowed.includes(activeAdminTab)) {
@@ -3215,6 +3989,7 @@
       if (adminRolesSection) adminRolesSection.style.display = 'none';
       if (adminTrackingSection) adminTrackingSection.style.display = 'none';
       if (adminVendorsSection) adminVendorsSection.style.display = 'none';
+      if (adminCatalogSection) adminCatalogSection.style.display = 'none';
       if (adminTagsSection) adminTagsSection.style.display = 'none';
       if (adminPrioritiesSection) adminPrioritiesSection.style.display = 'none';
     }
@@ -3228,13 +4003,15 @@
       if (adminRolesSection) adminRolesSection.style.display = which === 'roles' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
+      if (adminCatalogSection) adminCatalogSection.style.display = which === 'catalog' ? 'block' : 'none';
       if (adminTagsSection) adminTagsSection.style.display = which === 'tags' ? 'block' : 'none';
       if (adminPrioritiesSection) adminPrioritiesSection.style.display = which === 'priorities' ? 'block' : 'none';
-      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
+      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabCatalog, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'roles') adminTabRoles?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
+      if (which === 'catalog') adminTabCatalog?.classList.add('primary');
       if (which === 'tags') adminTabTags?.classList.add('primary');
       if (which === 'priorities') adminTabPriorities?.classList.add('primary');
     }
@@ -3242,6 +4019,7 @@
     adminTabRoles?.addEventListener('click', () => { showAdminSection('roles'); loadRoles(); });
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
+    adminTabCatalog?.addEventListener('click', () => { showAdminSection('catalog'); refreshCatalogView(); });
     adminTabTags?.addEventListener('click', () => { showAdminSection('tags'); loadTags(); });
     adminTabPriorities?.addEventListener('click', () => { showAdminSection('priorities'); loadPriorityTags(); });
 
@@ -3253,15 +4031,19 @@
         currentUser = data.user;
         currentUser.permissions = computePerms(currentUser);
         updateUserUI();
+        syncCatalogSaveUI();
         await syncTrackingAutoRefreshFromServer();
         await loadTags();
         await loadPriorityTags();
         fetchOrders();
         loadVendors();
         loadUsers();
+        if (currentUser?.permissions?.canEditInventoryCatalog) refreshCatalogView();
       } catch {
         currentUser = null;
         updateUserUI();
+        resetCatalogSavePanel();
+        resetCatalogLookup();
       }
     }
 
@@ -3272,6 +4054,8 @@
       await fetch('/api/auth/logout', { method: 'POST' });
       currentUser = null;
       updateUserUI();
+      resetCatalogSavePanel();
+      resetCatalogLookup();
       orders = [];
       renderBoard();
       renderTable();
@@ -3299,12 +4083,14 @@
       loginMessage.textContent = '';
       loginModal.style.display = 'none';
       updateUserUI();
+      syncCatalogSaveUI();
       syncTrackingAutoRefreshFromServer();
       await loadTags();
       await loadPriorityTags();
       fetchOrders();
       loadVendors();
       loadUsers();
+      if (currentUser?.permissions?.canEditInventoryCatalog) refreshCatalogView();
     });
 
     startTrackingAutoRefresh(DEFAULT_TRACKING_POLL_MINUTES);

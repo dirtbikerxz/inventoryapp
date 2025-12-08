@@ -14,6 +14,18 @@ const trackingEntry = v.object({
   parts: v.optional(v.array(v.string()))
 });
 
+const catalogVariation = v.object({
+  id: v.string(),
+  label: v.string(),
+  vendor: v.optional(v.string()),
+  vendorPartNumber: v.optional(v.string()),
+  productCode: v.optional(v.string()),
+  supplierLink: v.optional(v.string()),
+  unitCost: v.optional(v.number()),
+  notes: v.optional(v.string()),
+  attributes: v.optional(v.record(v.string(), v.string()))
+});
+
 export default defineSchema({
   orders: defineTable({
     orderNumber: v.string(),
@@ -144,4 +156,42 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number()
   })
+  ,
+  catalogCategories: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    parentId: v.optional(v.id("catalogCategories")),
+    path: v.array(v.string()),
+    depth: v.number(),
+    sortOrder: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.id("users"))
+  }).index("by_parent_slug", ["parentId", "slug"])
+    .index("by_parent", ["parentId"]),
+
+  catalogItems: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    categoryPathIds: v.optional(v.array(v.id("catalogCategories"))),
+    categoryPathLabels: v.optional(v.array(v.string())),
+    categoryId: v.optional(v.id("catalogCategories")),
+    fullPath: v.optional(v.string()),
+    subteam: v.optional(v.string()),
+    type: v.optional(v.string()),
+    vendor: v.optional(v.string()),
+    vendorPartNumber: v.optional(v.string()),
+    productCode: v.optional(v.string()),
+    supplierLink: v.optional(v.string()),
+    unitCost: v.optional(v.number()),
+    defaultQuantity: v.optional(v.number()),
+    aliases: v.optional(v.array(v.string())),
+    variations: v.optional(v.array(catalogVariation)),
+    createdBy: v.optional(v.id("users")),
+    updatedBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archived: v.optional(v.boolean())
+  }).index("by_category", ["categoryId"])
+    .index("by_name", ["name"])
 });

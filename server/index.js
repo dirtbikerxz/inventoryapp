@@ -53,7 +53,8 @@ function defaultPermissions(role) {
     canDeleteOrders: false,
     canManageVendors: false,
     canManageUsers: false,
-    canManageTags: false
+    canManageTags: false,
+    canEditInventoryCatalog: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -64,7 +65,8 @@ function defaultPermissions(role) {
         canDeleteOrders: true,
         canManageVendors: true,
         canManageUsers: true,
-        canManageTags: true
+        canManageTags: true,
+        canEditInventoryCatalog: true
       };
     case 'mentor':
       return {
@@ -74,7 +76,8 @@ function defaultPermissions(role) {
         canDeleteOrders: true,
         canManageVendors: true,
         canManageUsers: false,
-        canManageTags: true
+        canManageTags: true,
+        canEditInventoryCatalog: true
       };
     case 'student':
       return base;
@@ -379,6 +382,162 @@ app.get('/api/inventory', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to load inventory');
     res.status(500).json({ error: 'Unable to load inventory' });
+  }
+});
+
+// Catalog (saved parts) APIs
+app.get('/api/catalog/categories', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const data = await client.query('catalog:listCategories', {});
+    res.json(data);
+  } catch (error) {
+    logger.error(error, 'Failed to load catalog categories');
+    res.status(500).json({ error: 'Unable to load catalog categories' });
+  }
+});
+
+app.post('/api/catalog/categories', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  const { name, parentId, sortOrder } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const result = await client.mutation('catalog:createCategory', {
+      name,
+      parentId,
+      sortOrder: sortOrder === undefined ? undefined : Number(sortOrder),
+      userId: user._id?.toString()
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create catalog category');
+    res.status(500).json({ error: 'Unable to create catalog category', details: error.message });
+  }
+});
+
+app.patch('/api/catalog/categories/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  try {
+    const result = await client.mutation('catalog:updateCategory', {
+      id: req.params.id,
+      name: req.body?.name,
+      parentId: req.body?.parentId,
+      sortOrder: req.body?.sortOrder === undefined ? undefined : Number(req.body.sortOrder)
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to update catalog category');
+    res.status(500).json({ error: 'Unable to update catalog category', details: error.message });
+  }
+});
+
+app.delete('/api/catalog/categories/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  try {
+    const result = await client.mutation('catalog:deleteCategory', {
+      id: req.params.id,
+      cascade: req.body?.cascade ?? req.query.cascade === 'true',
+      reassignTo: req.body?.reassignTo || req.query.reassignTo
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete catalog category');
+    res.status(500).json({ error: 'Unable to delete catalog category', details: error.message });
+  }
+});
+
+app.get('/api/catalog/items', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const data = await client.query('catalog:listItems', {
+      search: req.query.search || undefined,
+      categoryId: req.query.categoryId || undefined,
+      includeDescendants: req.query.includeDescendants === undefined ? true : req.query.includeDescendants !== 'false',
+      subteam: req.query.subteam || undefined,
+      type: req.query.type || undefined,
+      includeArchived: req.query.includeArchived === 'true'
+    });
+    res.json(data);
+  } catch (error) {
+    logger.error(error, 'Failed to load catalog items');
+    res.status(500).json({ error: 'Unable to load catalog items' });
+  }
+});
+
+function normalizeCategoryPath(path) {
+  if (!path) return undefined;
+  if (Array.isArray(path)) return path.map(p => String(p || '').trim()).filter(Boolean);
+  if (typeof path === 'string') return path.split('/').map(p => p.trim()).filter(Boolean);
+  return undefined;
+}
+
+function normalizeVariationsInput(list) {
+  if (!Array.isArray(list)) return undefined;
+  return list.map(v => ({
+    ...v,
+    unitCost: v.unitCost !== undefined ? Number(v.unitCost) : v.unitCost
+  }));
+}
+
+app.post('/api/catalog/items', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  const payload = req.body || {};
+  if (!payload.name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const result = await client.mutation('catalog:createItem', {
+      ...payload,
+      unitCost: payload.unitCost !== undefined ? Number(payload.unitCost) : undefined,
+      defaultQuantity: payload.defaultQuantity !== undefined ? Number(payload.defaultQuantity) : undefined,
+      categoryPath: normalizeCategoryPath(payload.categoryPath),
+      variations: normalizeVariationsInput(payload.variations),
+      userId: user._id?.toString()
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create catalog item');
+    res.status(500).json({ error: 'Unable to create catalog item', details: error.message });
+  }
+});
+
+app.patch('/api/catalog/items/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  const payload = req.body || {};
+  try {
+    const result = await client.mutation('catalog:updateItem', {
+      ...payload,
+      id: req.params.id,
+      unitCost: payload.unitCost !== undefined ? Number(payload.unitCost) : payload.unitCost,
+      defaultQuantity: payload.defaultQuantity !== undefined ? Number(payload.defaultQuantity) : payload.defaultQuantity,
+      categoryPath: normalizeCategoryPath(payload.categoryPath),
+      variations: normalizeVariationsInput(payload.variations),
+      userId: user._id?.toString()
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to update catalog item');
+    res.status(500).json({ error: 'Unable to update catalog item', details: error.message });
+  }
+});
+
+app.delete('/api/catalog/items/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditInventoryCatalog');
+  if (!user) return;
+  try {
+    const result = await client.mutation('catalog:deleteItem', {
+      id: req.params.id,
+      hard: req.query.hard === 'true' || req.body?.hard === true
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete catalog item');
+    res.status(500).json({ error: 'Unable to delete catalog item', details: error.message });
   }
 });
 
