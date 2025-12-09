@@ -572,9 +572,7 @@
               <button class="btn ghost" id="refresh-catalog-categories" style="padding:6px 10px;">Refresh</button>
             </div>
           </div>
-          <div class="small" id="catalog-path-display"></div>
-          <div id="catalog-category-list" class="empty" style="min-height:140px;">Loading categories...</div>
-          <form id="catalog-category-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px; display:none;">
+          <form id="catalog-category-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px; display:none; margin-top:4px;">
             <input type="hidden" name="id" />
             <div>
               <label class="small">Name</label>
@@ -597,6 +595,8 @@
               </div>
             </div>
           </form>
+          <div class="small" id="catalog-path-display"></div>
+          <div id="catalog-category-list" class="empty" style="min-height:140px;">Loading categories...</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:10px;">
           <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
@@ -764,6 +764,55 @@
         </form>
         <div id="priorities-message" class="small" style="margin-top:6px;"></div>
         <div id="priorities-list" class="tag-manager-list" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="catalog-request-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:64; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:520px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:20px;">Request catalog item</div>
+          <div class="subtitle" id="catalog-request-subtitle" style="margin-bottom:12px;">Choose quantity and confirm.</div>
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+        <div>
+          <label class="small">Quantity to request</label>
+          <input id="catalog-request-qty" class="input" type="number" min="1" value="1" />
+        </div>
+        <div>
+          <label class="small">Priority</label>
+          <select id="catalog-request-priority" class="input">
+            <option>Low</option>
+            <option selected>Medium</option>
+            <option>High</option>
+            <option>Urgent</option>
+          </select>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Tags</label>
+          <select id="catalog-request-tags" class="input" multiple size="4" style="min-height:90px; display:none;"></select>
+          <div class="tag-picker" id="catalog-request-tag-picker">
+            <div id="catalog-request-tag-picker-display" class="tag-picker-display">Select tags</div>
+            <div id="catalog-request-tag-picker-panel" class="tag-picker-panel" style="display:none;">
+              <input id="catalog-request-tag-picker-search" class="input tag-picker-search" placeholder="Search tags..." />
+              <div id="catalog-request-tag-picker-options" class="tag-picker-options"></div>
+            </div>
+          </div>
+          <div class="small" style="margin-top:4px;">Same tags as new order.</div>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea id="catalog-request-notes" class="input" rows="3" placeholder="Add justification, sizing, links, etc."></textarea>
+        </div>
+      </div>
+      <div class="flex-between" style="margin-top:10px;">
+        <div id="catalog-request-message" class="small"></div>
+        <div class="flex-between" style="gap:8px;">
+          <button class="btn ghost" id="cancel-catalog-request">Cancel</button>
+          <button class="btn primary" id="confirm-catalog-request">Add to requests</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1134,6 +1183,20 @@
     const tagsTabPriorities = document.getElementById('tags-tab-priorities');
     const tagsSection = document.getElementById('tags-section');
     const prioritiesSection = document.getElementById('priorities-section');
+    const catalogRequestModal = document.getElementById('catalog-request-modal');
+    const cancelCatalogRequest = document.getElementById('cancel-catalog-request');
+    const confirmCatalogRequest = document.getElementById('confirm-catalog-request');
+    const catalogRequestQty = document.getElementById('catalog-request-qty');
+    const catalogRequestPriority = document.getElementById('catalog-request-priority');
+    const catalogRequestTags = document.getElementById('catalog-request-tags');
+    const catalogRequestTagPicker = document.getElementById('catalog-request-tag-picker');
+    const catalogRequestTagPickerDisplay = document.getElementById('catalog-request-tag-picker-display');
+    const catalogRequestTagPickerPanel = document.getElementById('catalog-request-tag-picker-panel');
+    const catalogRequestTagPickerOptions = document.getElementById('catalog-request-tag-picker-options');
+    const catalogRequestTagPickerSearch = document.getElementById('catalog-request-tag-picker-search');
+    const catalogRequestNotes = document.getElementById('catalog-request-notes');
+    const catalogRequestMessage = document.getElementById('catalog-request-message');
+    const catalogRequestSubtitle = document.getElementById('catalog-request-subtitle');
     const catalogBackBtn = document.getElementById('catalog-back');
     const catalogCategoryList = document.getElementById('catalog-category-list');
     const catalogPathDisplay = document.getElementById('catalog-path-display');
@@ -1295,6 +1358,11 @@
     let catalogLookupTimer = null;
     let catalogItemSearchTimer = null;
     let activeTagsTab = 'tags';
+    let pendingCatalogRequest = null;
+    const defaultPriorityLabel = () => {
+      const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
+      return list.length ? list[0].label : 'Medium';
+    };
     const defaultPriorities = [
       { label: 'Low', color: '#5aa0ff', sortOrder: 1 },
       { label: 'Medium', color: '#fdd023', sortOrder: 2 },
@@ -2355,6 +2423,7 @@
     attachBackdropClose(accountModal, () => { accountModal.style.display = 'none'; });
     attachBackdropClose(tagsModal, () => { tagsModal.style.display = 'none'; });
     attachBackdropClose(adminModal, () => { adminModal.style.display = 'none'; });
+    attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
 
     function findVendorConfig(name) {
       if (!name) return null;
@@ -2374,6 +2443,28 @@
       return null;
     }
 
+    function extractPartNumberFromUrl(config, link) {
+      if (!config || !link) return null;
+      const cleanLink = link.replace(/\/+$/, '');
+      if (config.productUrlTemplate && config.productUrlTemplate.includes('{partNumber}')) {
+        // Escape the template and swap the placeholder with a capture group.
+        const pattern = config.productUrlTemplate
+          .replace(/\{partNumber\}/g, '__PART__')
+          .replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
+          .replace(/__PART__/g, '([^/?#]+)');
+        const regex = new RegExp('^' + pattern.replace(/\\\/+$/, '') + '\\/?$', 'i');
+        const m = cleanLink.match(regex);
+        if (m && m[1]) return decodeURIComponent(m[1]);
+      }
+      if (config.partNumberPattern) {
+        const regex = new RegExp(config.partNumberPattern, 'i');
+        const m = cleanLink.match(regex);
+        if (m && m[1]) return m[1];
+      }
+      const parts = cleanLink.split('/').filter(Boolean);
+      return parts[parts.length - 1] || null;
+    }
+
     function parsePrice(text) {
       if (!text) return undefined;
       const num = parseFloat(text.replace(/[^0-9\\.]+/g, ''));
@@ -2382,10 +2473,23 @@
 
     async function fetchCatalogDetails() {
       if (!currentUser) return;
-      const vendor = catalogItemForm?.elements?.vendor?.value?.trim();
-      const partNumber = catalogItemForm?.elements?.vendorPartNumber?.value?.trim();
-      const link = catalogItemForm?.elements?.supplierLink?.value?.trim();
+      const vendorInput = catalogItemForm?.elements?.vendor;
+      const partInput = catalogItemForm?.elements?.vendorPartNumber;
+      const linkInput = catalogItemForm?.elements?.supplierLink;
+      const nameInput = catalogItemForm?.elements?.name;
+      const priceInput = catalogItemForm?.elements?.unitCost;
+      const vendor = vendorInput?.value?.trim();
+      let partNumber = partInput?.value?.trim();
+      const link = linkInput?.value?.trim();
       const config = detectVendor(partNumber, link) || findVendorConfig(vendor);
+      if (!partNumber && config && link) {
+        const extracted = extractPartNumberFromUrl(config, link);
+        if (extracted && partInput) {
+          partInput.value = extracted;
+          partNumber = extracted;
+        }
+      }
+      if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
       const url = deriveUrl(config, partNumber, link) || link;
       catalogItemMessage.textContent = 'Fetching...';
       catalogItemMessage.className = 'small';
@@ -2412,12 +2516,13 @@
         const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
         const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
 
-        if (pickName && !catalogItemForm.elements.name.value) catalogItemForm.elements.name.value = pickName;
+        if (pickName && nameInput && !nameInput.value) nameInput.value = pickName;
         const priceNum = parsePrice(pickPrice);
-        if (priceNum !== undefined) {
-          catalogItemForm.elements.unitCost.value = priceNum;
+        if (priceNum !== undefined && priceInput) {
+          priceInput.value = priceNum;
         }
-        if (!catalogItemForm.elements.supplierLink.value) catalogItemForm.elements.supplierLink.value = url;
+        if (linkInput && !linkInput.value) linkInput.value = url;
+        if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
 
         catalogItemMessage.textContent = 'Fetched. Verify fields before saving.';
         catalogItemMessage.className = 'success';
@@ -2491,14 +2596,22 @@
     function fetchOrderDetails(configHint) {
       return async () => {
         const formData = new FormData(orderForm);
-        const partNum = (formData.get('vendorPartNumber') || '').toString().trim();
+        const partInput = orderForm.elements.vendorPartNumber;
+        const linkInput = orderForm.elements.partLink;
+        const vendorInput = orderForm.elements.vendor;
+        let partNum = (formData.get('vendorPartNumber') || '').toString().trim();
         const link = (formData.get('partLink') || '').toString().trim();
         const vendorName = (formData.get('vendor') || '').toString().trim();
         let config = configHint || findVendorConfig(vendorName) || detectVendor(partNum, link);
         if (!config && vendorName) config = findVendorConfig(vendorName);
-        if (config?.vendor && orderForm.elements.vendor) {
-          orderForm.elements.vendor.value = config.vendor;
+        if (!partNum && config && link) {
+          const extracted = extractPartNumberFromUrl(config, link);
+          if (extracted && partInput) {
+            partInput.value = extracted;
+            partNum = extracted;
+          }
         }
+        if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
         const url = deriveUrl(config, partNum, link) || link;
         if (!url) {
           orderMessage.textContent = 'Provide a link or part number (for vendors with part number templates).';
@@ -2536,6 +2649,9 @@
             orderForm.elements.unitCost.value = priceNum;
           }
           if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
+          if (config?.vendor && orderForm.elements.vendor && !orderForm.elements.vendor.value) {
+            orderForm.elements.vendor.value = config.vendor;
+          }
 
           orderMessage.textContent = 'Fetched. Verify fields before submitting.';
           orderMessage.className = 'success';
@@ -2611,14 +2727,15 @@
       if (orderForm.elements.partLink && match.supplierLink) orderForm.elements.partLink.value = match.supplierLink;
       if (orderForm.elements.unitCost && match.unitCost !== undefined) orderForm.elements.unitCost.value = match.unitCost;
       if (orderForm.elements.quantityRequested && match.defaultQuantity) orderForm.elements.quantityRequested.value = match.defaultQuantity;
-      if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
-      if (catalogLookupResults) catalogLookupResults.style.display = 'none';
-      if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
-      setOrderSource('catalog');
-      catalogAlreadySaved = true;
-      catalogAlreadySavedItem = match;
-      syncCatalogSaveUI();
-      scheduleCatalogPresenceCheck();
+        if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
+        if (catalogLookupResults) catalogLookupResults.style.display = 'none';
+        if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
+        setOrderSource('catalog');
+        catalogAlreadySaved = true;
+        catalogAlreadySavedItem = match;
+        syncCatalogSaveUI();
+        scheduleCatalogPresenceCheck();
+      renderCatalogRequestTagOptions(getCatalogRequestTagIds());
     }
 
     function resetCatalogLookup() {
@@ -3255,13 +3372,22 @@
               <div class="small">${path || 'Uncategorized'}</div>
               <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''}</div>
             </div>
-            ${canEdit ? `<div class="flex-between" style="gap:6px;">
-              <button class="btn ghost" data-action="edit">Edit</button>
-              <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
-            </div>` : ''}
+            <div class="flex-between" style="gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="btn primary" data-action="request">Request</button>
+              ${canEdit ? `<button class="btn ghost" data-action="edit">Edit</button>` : ''}
+              ${canEdit ? `<button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>` : ''}
+            </div>
           </div>
         </div>`;
       }).join('');
+      catalogItemList.querySelectorAll('button[data-action="request"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.closest('.card')?.dataset.id;
+          if (!id) return;
+          const item = catalogItems.find(i => String(i._id || i.id) === String(id));
+          if (item) openCatalogRequestModal(item);
+        });
+      });
       if (canEdit) {
         catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
           btn.addEventListener('click', (e) => {
@@ -3384,6 +3510,7 @@
         const data = await res.json();
         tagList = data.tags || [];
         renderTagOptions(getSelectedTagIds());
+        renderCatalogRequestTagOptions(getCatalogRequestTagIds());
         renderTagsManager();
         renderBoard();
         renderTable();
@@ -3480,6 +3607,69 @@
       if (tagsSection) tagsSection.style.display = activeTagsTab === 'tags' ? 'block' : 'none';
       if (prioritiesSection) prioritiesSection.style.display = activeTagsTab === 'priorities' ? 'block' : 'none';
     }
+    function getCatalogRequestTagIds() {
+      if (!catalogRequestTags) return [];
+      return Array.from(catalogRequestTags.selectedOptions || []).map(o => o.value);
+    }
+    function renderCatalogRequestTagOptions(selected = []) {
+      if (!catalogRequestTags) return;
+      const selSet = new Set(selected.map(String));
+      catalogRequestTags.innerHTML = tagList.map(t => {
+        const id = t._id || t.id || t.label;
+        return `<option value="${id}" ${selSet.has(String(id)) ? 'selected' : ''}>${escapeHtml(t.label || '')}</option>`;
+      }).join('');
+      updateCatalogRequestTagSelection(selected);
+    }
+    function updateCatalogRequestTagSelection(ids = []) {
+      if (catalogRequestTags) {
+        const selSet = new Set(ids.map(String));
+        Array.from(catalogRequestTags.options || []).forEach(opt => { opt.selected = selSet.has(opt.value); });
+      }
+      if (catalogRequestTagPickerDisplay) {
+        const labels = ids.map(getTagLabel).filter(Boolean);
+        catalogRequestTagPickerDisplay.textContent = labels.length ? labels.join(', ') : 'Select tags';
+      }
+      renderCatalogRequestTagDropdownList(ids);
+    }
+    function renderCatalogRequestTagDropdownList(selected = getCatalogRequestTagIds()) {
+      if (!catalogRequestTagPickerOptions) return;
+      const term = (catalogRequestTagPickerSearch?.value || '').toLowerCase().trim();
+      const filtered = tagList.filter(t => !term || (t.label || '').toLowerCase().includes(term));
+      const selSet = new Set(selected.map(String));
+      catalogRequestTagPickerOptions.innerHTML = filtered.length ? filtered.map(t => {
+        const id = String(t._id || t.id || t.label);
+        const selectedCls = selSet.has(id) ? 'selected' : '';
+        const color = t.color || '#fdd023';
+        return `<div class="tag-option ${selectedCls}" data-id="${id}">
+          <span class="tag-dot" style="background:${color};"></span>
+          <span>${escapeHtml(t.label || id)}</span>
+        </div>`;
+      }).join('') : `<div class="small" style="padding:8px 10px;">No tags</div>`;
+    }
+    function toggleCatalogRequestTagPanel(open) {
+      if (!catalogRequestTagPickerPanel) return;
+      const shouldOpen = open !== undefined ? open : catalogRequestTagPickerPanel.style.display !== 'block';
+      catalogRequestTagPickerPanel.style.display = shouldOpen ? 'block' : 'none';
+    }
+
+    catalogRequestTagPickerDisplay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCatalogRequestTagPanel(true);
+    });
+    document.addEventListener('click', (e) => {
+      if (!catalogRequestTagPicker) return;
+      if (!catalogRequestTagPicker.contains(e.target)) toggleCatalogRequestTagPanel(false);
+    });
+    catalogRequestTagPickerSearch?.addEventListener('input', () => renderCatalogRequestTagDropdownList(getCatalogRequestTagIds()));
+    catalogRequestTagPickerOptions?.addEventListener('click', (e) => {
+      const row = e.target.closest('.tag-option');
+      if (!row) return;
+      const id = row.dataset.id;
+      if (!id) return;
+      const selected = new Set(getCatalogRequestTagIds().map(String));
+      if (selected.has(id)) selected.delete(id); else selected.add(id);
+      updateCatalogRequestTagSelection(Array.from(selected));
+    });
 
     function renderTagsManager() {
       if (!tagsList) return;
@@ -3557,7 +3747,24 @@
       const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
       const current = select.value || 'Medium';
       select.innerHTML = list.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
-      if (list.some(p => p.label === current)) select.value = current;
+      if (list.some(p => p.label === current)) {
+        select.value = current;
+      } else if (list.length) {
+        select.value = list[0].label;
+      }
+      renderCatalogRequestPriorityOptions();
+    }
+
+    function renderCatalogRequestPriorityOptions() {
+      if (!catalogRequestPriority) return;
+      const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
+      const current = catalogRequestPriority.value || defaultPriorityLabel();
+      catalogRequestPriority.innerHTML = list.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
+      if (list.some(p => p.label === current)) {
+        catalogRequestPriority.value = current;
+      } else if (list.length) {
+        catalogRequestPriority.value = list[0].label;
+      }
     }
 
     function renderPriorityManager() {
@@ -3618,6 +3825,90 @@
       }
     }
 
+    function openCatalogRequestModal(item) {
+      pendingCatalogRequest = item;
+      if (catalogRequestMessage) {
+        catalogRequestMessage.textContent = '';
+        catalogRequestMessage.className = 'small';
+      }
+      if (catalogRequestQty) {
+        catalogRequestQty.value = item?.defaultQuantity || 1;
+        setTimeout(() => catalogRequestQty.focus(), 50);
+      }
+      renderCatalogRequestPriorityOptions();
+      updateCatalogRequestTagSelection([]);
+      if (catalogRequestNotes) catalogRequestNotes.value = '';
+      if (catalogRequestSubtitle) {
+        const path = item?.fullPath || (item?.categoryPathLabels || []).join(' / ');
+        catalogRequestSubtitle.textContent = item ? `${item.name}${path ? ' · ' + path : ''}` : 'Choose quantity and confirm.';
+      }
+      if (catalogRequestModal) catalogRequestModal.style.display = 'flex';
+    }
+
+    async function submitCatalogRequest() {
+      const item = pendingCatalogRequest;
+      if (!item) return;
+      if (!currentUser) {
+        showBoardMessage('Login to create an order.', 'error');
+        return;
+      }
+      if (!currentUser.permissions?.canPlaceOrders) {
+        showBoardMessage('No permission to place orders.', 'error');
+        return;
+      }
+      const qty = Number(catalogRequestQty?.value || item.defaultQuantity || 1);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        if (catalogRequestMessage) {
+          catalogRequestMessage.textContent = 'Enter a valid quantity.';
+          catalogRequestMessage.className = 'error';
+        }
+        return;
+      }
+      const priority = catalogRequestPriority?.value || defaultPriorityLabel();
+      const tags = getCatalogRequestTagIds();
+      const notes = catalogRequestNotes?.value?.trim();
+      const payload = {
+        partName: item.name,
+        vendor: item.vendor,
+        supplier: item.vendor,
+        vendorPartNumber: item.vendorPartNumber,
+        partLink: item.supplierLink,
+        unitCost: item.unitCost ?? undefined,
+        fetchedPrice: item.unitCost ?? undefined,
+        quantityRequested: qty,
+        status: 'Requested',
+        priority,
+        tags,
+        notes: notes || (item.fullPath ? `From catalog: ${item.fullPath}` : undefined)
+      };
+      if (catalogRequestMessage) {
+        catalogRequestMessage.textContent = 'Creating request...';
+        catalogRequestMessage.className = 'small';
+      }
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create order');
+        if (catalogRequestMessage) {
+          catalogRequestMessage.textContent = 'Added to requests.';
+          catalogRequestMessage.className = 'success';
+        }
+        if (catalogRequestModal) catalogRequestModal.style.display = 'none';
+        pendingCatalogRequest = null;
+        await fetchOrders();
+        showBoardMessage('Requested from catalog.', 'info');
+      } catch (err) {
+        if (catalogRequestMessage) {
+          catalogRequestMessage.textContent = err.message || 'Failed to create order';
+          catalogRequestMessage.className = 'error';
+        }
+      }
+    }
+
     refreshPrioritiesBtn?.addEventListener('click', () => loadPriorityTags());
     createPriorityForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3646,6 +3937,8 @@
         prioritiesMessage.className = 'error';
       }
     });
+    confirmCatalogRequest?.addEventListener('click', submitCatalogRequest);
+    cancelCatalogRequest?.addEventListener('click', () => { pendingCatalogRequest = null; catalogRequestModal.style.display = 'none'; });
     vendorForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(vendorForm).entries());
