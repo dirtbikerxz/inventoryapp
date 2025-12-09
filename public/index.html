@@ -423,16 +423,14 @@
           </div>
         </div>
         <div class="order-manual-fields" style="grid-column: span 2;">
-          <label class="small">Product link</label>
-          <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
+          <label class="small">Product Number</label>
+            <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
         </div>
         <div class="order-manual-fields" style="grid-column: span 2;">
-          <label class="small">Product number</label>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; align-items:end;">
-            <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
+          <label class="small">Supplier Link</label>
+          <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
             <button type="button" class="btn primary" id="fetch-product" style="padding:10px 14px;">Fetch details</button>
-          </div>
-          <div class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</div>
+          <span class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</span>
         </div>
         <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
           <label class="small">Saved catalog</label>
@@ -447,11 +445,11 @@
           <input name="vendor" class="input" placeholder="Vendor" />
         </div>
         <div>
-          <label class="small">Part name</label>
+          <label class="small">Part Name</label>
           <input name="partName" class="input" required />
         </div>
         <div>
-          <label class="small">Unit price</label>
+          <label class="small">Unit Cost</label>
           <input name="unitCost" class="input" type="number" min="0" step="0.01" />
         </div>
         <div>
@@ -589,63 +587,74 @@
             </div>
           </div>
           <div id="catalog-item-list" class="empty">No catalog items yet.</div>
-          <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px; display:none;">
-            <input type="hidden" name="id" />
-            <div>
-              <label class="small">Name</label>
-              <input name="name" class="input" required />
-            </div>
-            <div>
-              <label class="small">Category path</label>
-              <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
-            </div>
-            <div>
-              <label class="small">Subteam</label>
-              <input name="subteam" class="input" placeholder="Electrical" />
-            </div>
-            <div>
-              <label class="small">Type</label>
-              <input name="type" class="input" placeholder="Connector" />
-            </div>
-            <div>
-              <label class="small">Vendor</label>
-              <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
-            </div>
-            <div>
-              <label class="small">Vendor part #</label>
-              <input name="vendorPartNumber" class="input" placeholder="SKU" />
-            </div>
-            <div>
-              <label class="small">Supplier link</label>
-              <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
-            </div>
-            <div style="grid-column: span 2;">
-              <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch details</button>
-              <span class="small">Use vendor link or part number to auto-fill (same as order form).</span>
-            </div>
-            <div>
-              <label class="small">Unit cost</label>
-              <input name="unitCost" class="input" type="number" step="0.01" />
-            </div>
-            <div>
-              <label class="small">Default qty</label>
-              <input name="defaultQuantity" class="input" type="number" min="1" />
-            </div>
-            <div style="grid-column: span 2;">
-              <label class="small">Aliases (comma separated)</label>
-              <input name="aliases" class="input" placeholder="crimp, molex, male" />
-            </div>
-            <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
-              <div id="catalog-item-message" class="small"></div>
-              <div class="flex-between" style="gap:6px;">
-                <button type="button" class="btn ghost" id="cancel-catalog-item">Cancel</button>
-                <button type="button" class="btn ghost" id="delete-catalog-item" style="color:var(--danger);">Delete</button>
-                <button type="submit" class="btn primary">Save item</button>
-              </div>
-            </div>
-          </form>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="catalog-item-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:66; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div class="page-title" style="font-size:20px;">Catalog item</div>
+          <div class="subtitle" id="catalog-item-modal-hint" style="margin-bottom:10px;">Create or edit a saved part.</div>
+        </div>
+      </div>
+      <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px;">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="small">Product Number</label>
+          <input name="vendorPartNumber" class="input" placeholder="SKU" />
+        </div>
+        <div>
+          <label class="small">Supplier Link</label>
+          <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
+        </div>
+        <div style="grid-column: span 2;">
+          <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch details</button>
+          <span class="small">Use vendor link or part number to auto-fill (same as order form).</span>
+        </div>
+        <div>
+          <label class="small">Vendor</label>
+          <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
+        </div>
+        <div>
+          <label class="small">Part Name</label>
+          <input name="name" class="input" required />
+        </div>
+        <div>
+          <label class="small">Category Path</label>
+          <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
+        </div>
+        <div>
+          <label class="small">Unit Cost</label>
+          <input name="unitCost" class="input" type="number" step="0.01" />
+        </div>
+        <div>
+          <label class="small">Default Quantity</label>
+          <input name="defaultQuantity" class="input" type="number" min="1" placeholder="1" />
+        </div>
+        <div>
+          <label class="small">Subteam</label>
+          <input name="subteam" class="input" placeholder="Electrical" />
+        </div>
+        <div>
+          <label class="small">Type</label>
+          <input name="type" class="input" placeholder="Connector" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Aliases (comma separated)</label>
+          <input name="aliases" class="input" placeholder="crimp, molex, male" />
+        </div>
+        <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap; margin-top:6px;">
+          <div id="catalog-item-message" class="small"></div>
+          <div class="flex-between" style="gap:6px;">
+            <button type="button" class="btn ghost" id="cancel-catalog-item">Cancel</button>
+            <button type="button" class="btn ghost" id="delete-catalog-item" style="color:var(--danger);">Delete</button>
+            <button type="submit" class="btn primary">Save item</button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1267,6 +1276,8 @@
     const deleteCatalogItemBtn = document.getElementById('delete-catalog-item');
     const cancelCatalogItemBtn = document.getElementById('cancel-catalog-item');
     const catalogItemHint = document.getElementById('catalog-item-hint');
+    const catalogItemModal = document.getElementById('catalog-item-modal');
+    const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
       admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true },
@@ -1299,7 +1310,7 @@
     function renderVendorOptions() {
       const supported = vendorConfigs.map(v => v.vendor).filter(Boolean);
       const msg = supported.length
-        ? `Supported vendors (auto-detect): ${supported.join(', ')}`
+        ? `Supported vendors: ${supported.join(', ')}, Shopify-Based Sites`
         : 'Supported vendors: none configured yet; use manual entry';
       const fetchSupportedEl = document.getElementById('fetch-supported');
       if (fetchSupportedEl) fetchSupportedEl.textContent = msg;
@@ -2095,12 +2106,16 @@
             <div class="group-items-container" style="margin-top:6px; display:${expandedGroups.has(gid) ? 'block' : 'none'};">
               ${items.map(o => `
                 <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
-                  <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ''}</span>
-                  <span style="font-weight:700;">${o.partName || ''}</span>
-                  ${renderTagChips(o.tags || [])}
-                  ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ''}
-                  ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
-                  ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
+                    <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ''}</span>
+                    <span style="font-weight:700;">${o.partName || ''}</span>
+                    ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ''}
+                    ${renderTagChips(o.tags || [])}
+                  </div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
+                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
+                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
+                  </div>
                 </div>
               `).join('')}
             </div>
@@ -2455,6 +2470,7 @@
     attachBackdropClose(adminModal, () => { adminModal.style.display = 'none'; });
     attachBackdropClose(catalogCategoryNewModal, () => { catalogCategoryNewModal.style.display = 'none'; });
     attachBackdropClose(catalogCategoryEditModal, () => { catalogCategoryEditModal.style.display = 'none'; });
+    attachBackdropClose(catalogItemModal, () => { catalogItemModal.style.display = 'none'; resetCatalogItemForm(); });
     attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
 
     function findVendorConfig(name) {
@@ -3077,7 +3093,7 @@
     }
 
     catalogBtn.addEventListener('click', openCatalogModal);
-    closeCatalog?.addEventListener('click', () => { catalogModal.style.display = 'none'; resetCatalogItemForm(); });
+    closeCatalog?.addEventListener('click', () => { catalogModal.style.display = 'none'; if (catalogItemModal) catalogItemModal.style.display = 'none'; });
     accountBtn.addEventListener('click', () => {
       accountModal.style.display = 'flex';
     });
@@ -3415,11 +3431,10 @@
       catalogItemHint.textContent = cat ? `Browsing ${categoryPathLabel(cat)}` : 'Browsing top level';
     }
 
-    function resetCatalogItemForm(item = null) {
+    function resetCatalogItemForm(item = null, showModal = false) {
       if (!catalogItemForm) return;
       catalogItemForm.reset();
       selectedCatalogItemId = null;
-      catalogItemForm.style.display = item ? 'grid' : 'none';
       catalogItemMessage.textContent = '';
       catalogItemMessage.className = 'small';
       if (item) {
@@ -3438,8 +3453,11 @@
         catalogItemForm.elements.defaultQuantity.value = item.defaultQuantity ?? '';
         catalogItemForm.elements.aliases.value = (item.aliases || []).join(', ');
         selectedCatalogItemId = item._id || item.id || null;
-        catalogItemForm.style.display = 'grid';
+        if (catalogItemModalHint) catalogItemModalHint.textContent = 'Edit saved part';
+      } else {
+        if (catalogItemModalHint) catalogItemModalHint.textContent = 'Create a saved part';
       }
+      if (catalogItemModal) catalogItemModal.style.display = showModal ? 'flex' : catalogItemModal.style.display;
     }
 
     function renderCatalogItems() {
@@ -3463,30 +3481,30 @@
               <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''}</div>
             </div>
             <div class="flex-between" style="gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-              <button class="btn primary" data-action="request">Request</button>
               ${canEdit ? `<button class="btn ghost" data-action="edit">Edit</button>` : ''}
               ${canEdit ? `<button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>` : ''}
+              <button class="btn primary" data-action="request">Request</button>
             </div>
           </div>
         </div>`;
       }).join('');
-      catalogItemList.querySelectorAll('button[data-action="request"]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+    catalogItemList.querySelectorAll('button[data-action="request"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.closest('.card')?.dataset.id;
+        if (!id) return;
+        const item = catalogItems.find(i => String(i._id || i.id) === String(id));
+        if (item) openCatalogRequestModal(item);
+      });
+    });
+    if (canEdit) {
+      catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
           const id = e.target.closest('.card')?.dataset.id;
           if (!id) return;
           const item = catalogItems.find(i => String(i._id || i.id) === String(id));
-          if (item) openCatalogRequestModal(item);
+          if (item) resetCatalogItemForm(item, true);
         });
       });
-      if (canEdit) {
-        catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            const id = e.target.closest('.card')?.dataset.id;
-            if (!id) return;
-            const item = catalogItems.find(i => String(i._id || i.id) === String(id));
-            if (item) resetCatalogItemForm(item);
-          });
-        });
         catalogItemList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             const id = e.target.closest('.card')?.dataset.id;
@@ -3545,6 +3563,7 @@
         catalogItemMessage.textContent = 'Saved';
         catalogItemMessage.className = 'success';
         await refreshCatalogItems();
+        if (catalogItemModal) catalogItemModal.style.display = 'none';
         if (!id) resetCatalogItemForm();
       } catch (err) {
         catalogItemMessage.textContent = err.message || 'Failed to save item';
@@ -3552,7 +3571,7 @@
       }
     });
 
-    cancelCatalogItemBtn?.addEventListener('click', () => resetCatalogItemForm());
+    cancelCatalogItemBtn?.addEventListener('click', () => { catalogItemModal.style.display = 'none'; resetCatalogItemForm(); });
     deleteCatalogItemBtn?.addEventListener('click', async () => {
       const id = catalogItemForm?.elements.id.value;
       if (!id) return;
@@ -3560,10 +3579,10 @@
       await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
       await refreshCatalogItems();
       resetCatalogItemForm();
+      if (catalogItemModal) catalogItemModal.style.display = 'none';
     });
     newCatalogItemBtn?.addEventListener('click', () => {
-      resetCatalogItemForm({ name: '', categoryPathLabels: currentCategory() ? [categoryPathLabel(currentCategory())] : [] });
-      catalogItemForm.style.display = 'grid';
+      resetCatalogItemForm({ name: '', categoryPathLabels: currentCategory() ? [categoryPathLabel(currentCategory())] : [] }, true);
     });
     refreshCatalogItemsBtn?.addEventListener('click', () => refreshCatalogItems());
     fetchCatalogProductBtn?.addEventListener('click', fetchCatalogDetails);
