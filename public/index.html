@@ -342,6 +342,10 @@
     .stock-grid .card { cursor: default; }
     .stock-card.stock-low { border-color: var(--warning); box-shadow: 0 0 0 1px rgba(253,208,35,0.35); }
     .stock-card.stock-empty { border-color: var(--danger); box-shadow: 0 0 0 1px rgba(255,85,101,0.45); }
+    .stock-grid {
+      align-items: start;
+      grid-auto-rows: auto;
+    }
     .stock-level {
       display: flex;
       align-items: center;
@@ -710,6 +714,55 @@
     </div>
   </div>
 
+  <div id="user-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:560px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div class="page-title" style="font-size:20px;">User management</div>
+          <div class="subtitle" style="margin-bottom:10px;">Create or edit a user account.</div>
+        </div>
+        <button class="btn ghost" id="close-user-modal">Close</button>
+      </div>
+      <form id="user-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="small">Username</label>
+          <input name="username" class="input" required />
+        </div>
+        <div>
+          <label class="small">Name</label>
+          <input name="name" class="input" required />
+        </div>
+        <div>
+          <label class="small">Role</label>
+          <select name="role" class="input">
+            <option>admin</option>
+            <option>mentor</option>
+            <option>student</option>
+          </select>
+        </div>
+        <div>
+          <label class="small">Password (set/reset)</label>
+          <input name="password" class="input" type="password" placeholder="Leave blank to keep existing" />
+        </div>
+        <div>
+          <label class="small">Active</label>
+          <select name="active" class="input">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="user-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="cancel-user">Cancel</button>
+            <button type="submit" class="btn primary" id="save-user-btn">Create user</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
       <div class="page-title" style="font-size:22px;">Sign In</div>
@@ -1002,46 +1055,12 @@
 
       <div id="admin-users-section" style="display:none;">
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
-        <div class="page-title" style="font-size:18px;">User Management</div>
-        <div id="user-list" class="small" style="margin-top:8px;">Loading users...</div>
-        <form id="user-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
-          <input type="hidden" name="id" />
-          <div>
-            <label class="small">Username</label>
-            <input name="username" class="input" required />
+          <div class="flex-between" style="align-items:center; gap:8px;">
+            <div class="page-title" style="font-size:18px;">Users</div>
+            <button class="btn primary" id="new-user-btn" style="padding:6px 10px;">New user</button>
           </div>
-          <div>
-            <label class="small">Name</label>
-            <input name="name" class="input" required />
-          </div>
-          <div>
-            <label class="small">Role</label>
-            <select name="role" class="input">
-              <option>admin</option>
-              <option>mentor</option>
-              <option>student</option>
-            </select>
-          </div>
-          <div>
-            <label class="small">Password (set/reset)</label>
-            <input name="password" class="input" type="password" placeholder="Leave blank to keep existing" />
-          </div>
-          <div>
-            <label class="small">Active</label>
-            <select name="active" class="input">
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </select>
-          </div>
-          <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
-            <div id="user-message" class="small"></div>
-            <div class="flex-between" style="gap:8px;">
-              <button type="button" class="btn ghost" id="clear-user">New user</button>
-              <button type="submit" class="btn primary" id="save-user-btn">Create user</button>
-            </div>
-          </div>
-        </form>
-      </div>
+          <div id="user-list" class="small" style="margin-top:8px;">Loading users...</div>
+        </div>
       </div>
 
       <div id="admin-roles-section" style="display:none;">
@@ -1343,8 +1362,11 @@
     const userList = document.getElementById('user-list');
     const userForm = document.getElementById('user-form');
     const userMessage = document.getElementById('user-message');
-    const clearUser = document.getElementById('clear-user');
     const saveUserBtn = document.getElementById('save-user-btn');
+    const newUserBtn = document.getElementById('new-user-btn');
+    const userModal = document.getElementById('user-modal');
+    const closeUserModalBtn = document.getElementById('close-user-modal');
+    const cancelUserBtn = document.getElementById('cancel-user');
     const passwordForm = document.getElementById('password-form');
     const passwordMessage = document.getElementById('password-message');
     const roleList = document.getElementById('role-list');
@@ -2467,7 +2489,6 @@
         if (isEmpty) card.classList.add('stock-empty');
         card.dataset.id = item._id;
         const subteamLabel = item.subteam || 'Common stock';
-        const lowText = low !== undefined ? `Low at ${low}` : 'No alert set';
         const statusText = isEmpty ? '<span class="stock-empty-text">Out of stock</span>' : (isLow ? '<span class="stock-low-text">Low</span>' : '');
         card.innerHTML = `
           <div class="flex-between" style="gap:8px; align-items:flex-start;">
@@ -2490,14 +2511,7 @@
           <div class="stock-meta-row" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <span class="stock-chip">${escapeHtml(subteamLabel)}</span>
             ${item.location ? `<span class="stock-chip">📍 ${escapeHtml(item.location)}</span>` : ''}
-            ${item.lowStockThreshold !== undefined ? `<span class="stock-chip">Min: ${item.lowStockThreshold}</span>` : ''}
           </div>
-          ${currentUser?.permissions?.canManageStock ? `
-            <div class="small" style="margin-top:6px;">
-              Low stock alert at
-              <input type="number" class="input stock-low-input" data-id="${item._id}" value="${item.lowStockThreshold ?? ''}" min="0" style="width:90px; display:inline-block; margin-left:6px;" />
-            </div>
-          ` : `<div class="small" style="margin-top:6px;">${lowText}</div>`}
           <div class="stock-actions">
             <button class="btn primary" data-action="request-stock" data-id="${item._id}" style="padding:6px 10px;">Request order</button>
             ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="edit-stock" data-id="${item._id}" style="padding:6px 10px;">Edit</button>` : ''}
@@ -2513,14 +2527,6 @@
           const delta = Number(e.target.dataset.delta);
           if (!id || !Number.isFinite(delta)) return;
           await adjustStockQuantity(id, delta);
-        });
-      });
-      stockGrid.querySelectorAll('.stock-low-input').forEach(inp => {
-        inp.addEventListener('change', async (e) => {
-          const id = e.target.dataset.id;
-          const val = Number(e.target.value);
-          if (!id || !Number.isFinite(val) || val < 0) return;
-          await saveStockThreshold(id, val);
         });
       });
       stockGrid.querySelectorAll('button[data-action="request-stock"]').forEach(btn => {
@@ -3170,6 +3176,38 @@
     closeGroup.addEventListener('click', resetGroupModal);
     cancelGroup.addEventListener('click', resetGroupModal);
 
+    function resetUserForm() {
+      userForm?.reset();
+      if (userForm?.elements?.id) userForm.elements.id.value = '';
+      if (userMessage) {
+        userMessage.textContent = '';
+        userMessage.className = 'small';
+      }
+      if (saveUserBtn) saveUserBtn.textContent = 'Create user';
+    }
+
+    function closeUserModal() {
+      if (userModal) userModal.style.display = 'none';
+      resetUserForm();
+    }
+
+    function openUserModal(user) {
+      resetUserForm();
+      if (user) {
+        if (userForm?.elements?.id) userForm.elements.id.value = user._id || '';
+        if (userForm?.elements?.username) userForm.elements.username.value = user.username || '';
+        if (userForm?.elements?.name) userForm.elements.name.value = user.name || '';
+        if (userForm?.elements?.role) userForm.elements.role.value = user.role || 'student';
+        if (userForm?.elements?.active) userForm.elements.active.value = user.active ? 'true' : 'false';
+        if (saveUserBtn) saveUserBtn.textContent = 'Update user';
+      }
+      if (userModal) userModal.style.display = 'flex';
+    }
+
+    newUserBtn?.addEventListener('click', () => openUserModal());
+    closeUserModalBtn?.addEventListener('click', closeUserModal);
+    cancelUserBtn?.addEventListener('click', closeUserModal);
+
     attachBackdropClose(modal, () => { modal.style.display = 'none'; });
     attachBackdropClose(groupModal, resetGroupModal);
     attachBackdropClose(loginModal, () => { loginModal.style.display = 'none'; });
@@ -3182,6 +3220,7 @@
     attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
     attachBackdropClose(stockModal, () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
     attachBackdropClose(stockSubteamsModal, () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
+    attachBackdropClose(userModal, closeUserModal);
 
     function findVendorConfig(name) {
       if (!name) return null;
@@ -4833,18 +4872,12 @@
         });
         userMessage.textContent = 'Saved user.';
         userMessage.className = 'success';
-        userForm.reset();
         loadUsers();
+        closeUserModal();
       } catch (err) {
         userMessage.textContent = 'Failed to save user';
         userMessage.className = 'error';
       }
-    });
-
-    clearUser.addEventListener('click', () => {
-      userForm.reset();
-      userForm.elements.id.value = '';
-      saveUserBtn.textContent = 'Create user';
     });
 
     passwordForm.addEventListener('submit', async (e) => {
@@ -5077,12 +5110,7 @@
             const id = card.dataset.id;
             const u = users.find(x => x._id === id);
             if (!u) return;
-            userForm.elements.id.value = u._id;
-            userForm.elements.username.value = u.username;
-            userForm.elements.name.value = u.name || '';
-            userForm.elements.role.value = u.role || 'student';
-            userForm.elements.active.value = u.active ? 'true' : 'false';
-            saveUserBtn.textContent = 'Update user';
+            openUserModal(u);
           });
         });
         userList.querySelectorAll('button[data-action="delete-user"]').forEach(btn => {
