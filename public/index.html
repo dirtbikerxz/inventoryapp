@@ -631,12 +631,12 @@
               <input name="vendorPartNumber" class="input" placeholder="SKU" />
             </div>
             <div>
-              <label class="small">Product code</label>
-              <input name="productCode" class="input" placeholder="Internal code" />
-            </div>
-            <div>
               <label class="small">Supplier link</label>
               <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
+            </div>
+            <div style="grid-column: span 2;">
+              <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch details</button>
+              <span class="small">Use vendor link or part number to auto-fill (same as order form).</span>
             </div>
             <div>
               <label class="small">Unit cost</label>
@@ -1145,6 +1145,7 @@
     const catalogItemList = document.getElementById('catalog-item-list');
     const catalogItemForm = document.getElementById('catalog-item-form');
     const catalogItemMessage = document.getElementById('catalog-item-message');
+    const fetchCatalogProductBtn = document.getElementById('fetch-catalog-product');
     const deleteCatalogItemBtn = document.getElementById('delete-catalog-item');
     const cancelCatalogItemBtn = document.getElementById('cancel-catalog-item');
     const catalogItemHint = document.getElementById('catalog-item-hint');
@@ -2318,6 +2319,53 @@
       return Number.isFinite(num) ? num : undefined;
     }
 
+    async function fetchCatalogDetails() {
+      if (!currentUser) return;
+      const vendor = catalogItemForm?.elements?.vendor?.value?.trim();
+      const partNumber = catalogItemForm?.elements?.vendorPartNumber?.value?.trim();
+      const link = catalogItemForm?.elements?.supplierLink?.value?.trim();
+      const config = detectVendor(partNumber, link) || findVendorConfig(vendor);
+      const url = deriveUrl(config, partNumber, link) || link;
+      catalogItemMessage.textContent = 'Fetching...';
+      catalogItemMessage.className = 'small';
+      if (!url) {
+        catalogItemMessage.textContent = 'Provide a vendor link or part number first.';
+        catalogItemMessage.className = 'error';
+        return;
+      }
+      try {
+        const res = await fetch('/api/vendors/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            selectors: {
+              nameSelector: config?.nameSelector,
+              priceSelector: config?.priceSelector,
+            }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fetch failed');
+
+        const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
+        const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
+
+        if (pickName && !catalogItemForm.elements.name.value) catalogItemForm.elements.name.value = pickName;
+        const priceNum = parsePrice(pickPrice);
+        if (priceNum !== undefined) {
+          catalogItemForm.elements.unitCost.value = priceNum;
+        }
+        if (!catalogItemForm.elements.supplierLink.value) catalogItemForm.elements.supplierLink.value = url;
+
+        catalogItemMessage.textContent = 'Fetched. Verify fields before saving.';
+        catalogItemMessage.className = 'success';
+      } catch (err) {
+        catalogItemMessage.textContent = 'Fetch failed. Fill manually.';
+        catalogItemMessage.className = 'error';
+      }
+    }
+
     async function assignGroup(orderId, groupId) {
       return fetch(`/api/orders/${orderId}/group`, {
         method: 'PATCH',
@@ -2442,7 +2490,6 @@
         path: item.fullPath || (item.categoryPathLabels || []).join(' / '),
         vendor: item.vendor,
         vendorPartNumber: item.vendorPartNumber,
-        productCode: item.productCode,
         supplierLink: item.supplierLink,
         unitCost: item.unitCost,
         defaultQuantity: item.defaultQuantity
@@ -2689,7 +2736,6 @@
       if (allowed.includes('roles')) loadRoles();
       if (allowed.includes('tracking')) loadTrackingSettings();
       if (allowed.includes('vendors')) loadVendors();
-      if (allowed.includes('catalog')) refreshCatalogView();
       if (allowed.includes('tags') || allowed.includes('priorities')) {
         loadTags();
         loadPriorityTags();
@@ -2705,6 +2751,7 @@
       if (deleteCategoryBtn) deleteCategoryBtn.style.display = canEdit ? 'inline-flex' : 'none';
       if (resetCategoryFormBtn) resetCategoryFormBtn.style.display = canEdit ? 'inline-flex' : 'none';
       if (deleteCatalogItemBtn) deleteCatalogItemBtn.style.display = canEdit ? 'inline-flex' : 'none';
+      if (fetchCatalogProductBtn) fetchCatalogProductBtn.style.display = canEdit ? 'inline-flex' : 'none';
     }
 
     function openCatalogModal() {
@@ -3017,7 +3064,6 @@
         catalogItemForm.elements.type.value = item.type || '';
         catalogItemForm.elements.vendor.value = item.vendor || '';
         catalogItemForm.elements.vendorPartNumber.value = item.vendorPartNumber || '';
-        catalogItemForm.elements.productCode.value = item.productCode || '';
         catalogItemForm.elements.supplierLink.value = item.supplierLink || '';
         catalogItemForm.elements.unitCost.value = item.unitCost ?? '';
         catalogItemForm.elements.defaultQuantity.value = item.defaultQuantity ?? '';
@@ -3034,6 +3080,7 @@
         catalogItemList.textContent = 'No catalog items yet.';
         return;
       }
+      const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
       catalogItemList.className = '';
       catalogItemList.innerHTML = catalogItems.map(item => {
         const path = escapeHtml((item.fullPath || (item.categoryPathLabels || []).join(' / ')) || '');
@@ -3046,31 +3093,33 @@
               <div class="small">${path || 'Uncategorized'}</div>
               <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''}</div>
             </div>
-            <div class="flex-between" style="gap:6px;">
+            ${canEdit ? `<div class="flex-between" style="gap:6px;">
               <button class="btn ghost" data-action="edit">Edit</button>
               <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
-            </div>
+            </div>` : ''}
           </div>
         </div>`;
       }).join('');
-      catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const id = e.target.closest('.card')?.dataset.id;
-          if (!id) return;
-          const item = catalogItems.find(i => String(i._id || i.id) === String(id));
-          if (item) resetCatalogItemForm(item);
+      if (canEdit) {
+        catalogItemList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const id = e.target.closest('.card')?.dataset.id;
+            if (!id) return;
+            const item = catalogItems.find(i => String(i._id || i.id) === String(id));
+            if (item) resetCatalogItemForm(item);
+          });
         });
-      });
-      catalogItemList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const id = e.target.closest('.card')?.dataset.id;
-          if (!id) return;
-          if (!confirm('Delete this saved item?')) return;
-          await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
-          await refreshCatalogItems();
-          resetCatalogItemForm();
+        catalogItemList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.target.closest('.card')?.dataset.id;
+            if (!id) return;
+            if (!confirm('Delete this saved item?')) return;
+            await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
+            await refreshCatalogItems();
+            resetCatalogItemForm();
+          });
         });
-      });
+      }
     }
 
     async function refreshCatalogItems() {
@@ -3102,7 +3151,6 @@
         type: payload.type || undefined,
         vendor: payload.vendor || undefined,
         vendorPartNumber: payload.vendorPartNumber || undefined,
-        productCode: payload.productCode || undefined,
         supplierLink: payload.supplierLink || undefined,
         unitCost: payload.unitCost ? Number(payload.unitCost) : undefined,
         defaultQuantity: payload.defaultQuantity ? Number(payload.defaultQuantity) : undefined,
@@ -3140,6 +3188,7 @@
       catalogItemForm.style.display = 'grid';
     });
     refreshCatalogItemsBtn?.addEventListener('click', () => refreshCatalogItems());
+    fetchCatalogProductBtn?.addEventListener('click', fetchCatalogDetails);
     catalogItemSearch?.addEventListener('input', () => {
       clearTimeout(catalogItemSearchTimer);
       catalogItemSearchTimer = setTimeout(refreshCatalogItems, 200);
@@ -4001,7 +4050,7 @@
         fetchOrders();
         loadVendors();
         loadUsers();
-        if (currentUser?.permissions?.canEditInventoryCatalog) refreshCatalogView();
+        refreshCatalogView();
       } catch {
         currentUser = null;
         updateUserUI();
@@ -4053,7 +4102,7 @@
       fetchOrders();
       loadVendors();
       loadUsers();
-      if (currentUser?.permissions?.canEditInventoryCatalog) refreshCatalogView();
+      refreshCatalogView();
     });
 
     startTrackingAutoRefresh(DEFAULT_TRACKING_POLL_MINUTES);

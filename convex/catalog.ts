@@ -300,7 +300,6 @@ const variationInput = v.object({
   label: v.string(),
   vendor: v.optional(v.string()),
   vendorPartNumber: v.optional(v.string()),
-  productCode: v.optional(v.string()),
   supplierLink: v.optional(v.string()),
   unitCost: v.optional(v.number()),
   notes: v.optional(v.string()),
@@ -314,7 +313,6 @@ function normalizeVariations(list: any[] | undefined | null) {
     label: v.label,
     vendor: v.vendor,
     vendorPartNumber: v.vendorPartNumber,
-    productCode: v.productCode,
     supplierLink: v.supplierLink,
     unitCost: v.unitCost,
     notes: v.notes,
@@ -389,7 +387,6 @@ export const listItems = query({
           item.subteam,
           item.vendor,
           item.vendorPartNumber,
-          item.productCode,
           item.supplierLink,
           item.fullPath,
           ...(item.aliases || []),
@@ -433,7 +430,6 @@ export const createItem = mutation({
     type: v.optional(v.string()),
     vendor: v.optional(v.string()),
     vendorPartNumber: v.optional(v.string()),
-    productCode: v.optional(v.string()),
     supplierLink: v.optional(v.string()),
     unitCost: v.optional(v.number()),
     defaultQuantity: v.optional(v.number()),
@@ -484,7 +480,6 @@ export const createItem = mutation({
       type: args.type,
       vendor: args.vendor,
       vendorPartNumber: args.vendorPartNumber,
-      productCode: args.productCode,
       supplierLink: args.supplierLink,
       unitCost: args.unitCost,
       defaultQuantity: args.defaultQuantity,
@@ -511,7 +506,6 @@ export const updateItem = mutation({
     type: v.optional(v.string()),
     vendor: v.optional(v.string()),
     vendorPartNumber: v.optional(v.string()),
-    productCode: v.optional(v.string()),
     supplierLink: v.optional(v.string()),
     unitCost: v.optional(v.number()),
     defaultQuantity: v.optional(v.number()),
@@ -556,7 +550,7 @@ export const updateItem = mutation({
       updatedBy: args.userId ? ctx.db.normalizeId("users", args.userId) ?? undefined : item.updatedBy
     };
     [
-      "name","description","subteam","type","vendor","vendorPartNumber","productCode","supplierLink","unitCost",
+      "name","description","subteam","type","vendor","vendorPartNumber","supplierLink","unitCost",
       "defaultQuantity","aliases"
     ].forEach(key => {
       const val = (args as any)[key];
