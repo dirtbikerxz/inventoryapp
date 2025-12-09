@@ -411,33 +411,39 @@
       <div class="flex-between" style="align-items:flex-start;">
         <div>
           <div class="page-title" style="font-size:22px;">New Order</div>
-          <div class="subtitle" style="margin-bottom:12px;">Provide a vendor link or part number. We’ll fetch details when supported; otherwise enter manually.</div>
+          <div class="subtitle" style="margin-bottom:12px;">Provide a link or PN to fetch details from supported vendors; otherwise enter manually.</div>
         </div>
       </div>
       <form id="order-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
-        <div>
-          <label class="small">Vendor</label>
-          <input name="vendor" class="input" placeholder="WCP, AM, McMaster, DigiKey..." />
-        </div>
-        <div>
-          <label class="small">Product number</label>
-          <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
-        </div>
         <div style="grid-column: span 2;">
+          <div id="order-source-toggle" style="display:inline-flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn ghost" data-source="manual" id="order-source-manual">Enter new part</button>
+            <button type="button" class="btn ghost" data-source="catalog" id="order-source-catalog">Pick from catalog</button>
+          </div>
+        </div>
+        <div class="order-manual-fields" style="grid-column: span 2;">
           <label class="small">Product link</label>
           <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
         </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Saved catalog (optional)</label>
+        <div class="order-manual-fields" style="grid-column: span 2;">
+          <label class="small">Product number</label>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; align-items:end;">
+            <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
+            <button type="button" class="btn primary" id="fetch-product" style="padding:10px 14px;">Fetch details</button>
+          </div>
+          <div class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</div>
+        </div>
+        <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
+          <label class="small">Saved catalog</label>
           <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
             <input id="catalog-lookup" class="input" placeholder="Search saved parts..." />
             <div id="catalog-lookup-selected" class="small"></div>
           </div>
           <div id="catalog-lookup-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:180px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:6px;"></div>
         </div>
-        <div style="grid-column: span 2;">
-          <button type="button" class="btn primary" id="fetch-product">Fetch details</button>
-          <span class="small">Supported vendors: WCP (beta). Others: fill manually.</span>
+        <div>
+          <label class="small">Vendor</label>
+          <input name="vendor" class="input" placeholder="Vendor" />
         </div>
         <div>
           <label class="small">Part name</label>
@@ -472,13 +478,17 @@
           </div>
           <div class="small" style="margin-top:8px;">Tags categorize requests. Mentors/Admins can manage tags in Admin &rarr; Tags.</div>
         </div>
+        <!-- Tracking managed at group level; no tracking fields for individual parts -->
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
+        </div>
         <div id="catalog-save-container" style="grid-column: span 2; display:none;">
           <div class="flex-between" style="align-items:center; gap:6px; flex-wrap:wrap;">
             <label class="small" style="display:flex; align-items:center; gap:6px;">
               <input type="checkbox" id="save-to-catalog-toggle" class="checkbox" />
               Save this part to the inventory catalog
             </label>
-            <button type="button" class="btn ghost" id="save-to-catalog-now" style="padding:6px 10px;">Save now</button>
           </div>
           <div id="catalog-save-fields" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px; display:none;">
             <div>
@@ -496,11 +506,7 @@
           </div>
           <div id="catalog-save-message" class="small" style="margin-top:6px;"></div>
         </div>
-        <!-- Tracking managed at group level; no tracking fields for individual parts -->
-        <div style="grid-column: span 2;">
-          <label class="small">Notes</label>
-          <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
-        </div>
+        <div id="catalog-save-status" class="small" style="grid-column: span 2;"></div>
         <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
           <div id="order-message" class="small"></div>
           <div class="flex-between" style="gap:8px;">
@@ -1123,6 +1129,10 @@
     const priorityColorInput = document.getElementById('priority-color-input');
     const prioritySortInput = document.getElementById('priority-sort-input');
     const createPriorityForm = document.getElementById('create-priority-form');
+    const orderSourceManual = document.getElementById('order-source-manual');
+    const orderSourceCatalog = document.getElementById('order-source-catalog');
+    const orderManualFields = document.querySelectorAll('.order-manual-fields');
+    const orderCatalogFields = document.querySelectorAll('.order-catalog-fields');
     const catalogLookupInput = document.getElementById('catalog-lookup');
     const catalogLookupResults = document.getElementById('catalog-lookup-results');
     const catalogLookupSelected = document.getElementById('catalog-lookup-selected');
@@ -1132,8 +1142,8 @@
     const catalogSaveCategory = document.getElementById('catalog-save-category');
     const catalogSaveSubteam = document.getElementById('catalog-save-subteam');
     const catalogSaveType = document.getElementById('catalog-save-type');
-    const saveToCatalogNowBtn = document.getElementById('save-to-catalog-now');
     const catalogSaveMessage = document.getElementById('catalog-save-message');
+    const catalogSaveStatus = document.getElementById('catalog-save-status');
     const refreshCatalogCategoriesBtn = document.getElementById('refresh-catalog-categories');
     const catalogCategoryForm = document.getElementById('catalog-category-form');
     const catalogCategoryMessage = document.getElementById('catalog-category-message');
@@ -1169,7 +1179,7 @@
     function detectVendor(partNum, link) {
       if (!vendorConfigs?.length) return null;
       const candidates = vendorConfigs.filter(v => {
-        const regex = v.partNumberPattern ? new RegExp(v.partNumberPattern) : null;
+        const regex = v.partNumberPattern ? new RegExp(v.partNumberPattern, 'i') : null;
         const baseMatch = v.baseUrl && link && link.toLowerCase().includes(v.baseUrl.toLowerCase());
         const patternMatch = regex && partNum && regex.test(partNum);
         return baseMatch || patternMatch;
@@ -1177,6 +1187,32 @@
       if (candidates.length === 1) return candidates[0];
       return null;
     }
+
+    function renderVendorOptions() {
+      const supported = vendorConfigs.map(v => v.vendor).filter(Boolean);
+      const msg = supported.length
+        ? `Supported vendors (auto-detect): ${supported.join(', ')}`
+        : 'Supported vendors: none configured yet; use manual entry';
+      const fetchSupportedEl = document.getElementById('fetch-supported');
+      if (fetchSupportedEl) fetchSupportedEl.textContent = msg;
+    }
+
+    function setOrderSource(source) {
+      orderSource = source === 'catalog' ? 'catalog' : 'manual';
+      if (orderSourceManual) orderSourceManual.classList.toggle('primary', orderSource === 'manual');
+      if (orderSourceCatalog) orderSourceCatalog.classList.toggle('primary', orderSource === 'catalog');
+      orderManualFields?.forEach(el => { if (el) el.style.display = orderSource === 'manual' ? '' : 'none'; });
+      orderCatalogFields?.forEach(el => { if (el) el.style.display = orderSource === 'catalog' ? '' : 'none'; });
+      if (orderSource === 'manual') {
+        resetCatalogLookup();
+        scheduleCatalogPresenceCheck();
+      } else {
+        if (catalogLookupInput) catalogLookupInput.focus();
+      }
+    }
+
+    orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
+    orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
 
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
@@ -1237,6 +1273,10 @@
     let selectedCatalogMatch = null;
     let selectedCatalogCategoryId = null;
     let selectedCatalogItemId = null;
+    let orderSource = 'manual';
+    let catalogAlreadySaved = false;
+    let catalogAlreadySavedItem = null;
+    let catalogPresenceTimer = null;
     let catalogLookupTimer = null;
     let catalogItemSearchTimer = null;
     const defaultPriorities = [
@@ -1247,6 +1287,9 @@
     ];
     let catalogNavStack = [];
     let currentCatalogCategoryId = 'root';
+    orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
+    orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
+    setOrderSource('manual');
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -1737,13 +1780,14 @@
       orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
       orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
       orderForm.elements.priority.value = order.priority || 'Medium';
+      setOrderSource('manual');
+      scheduleCatalogPresenceCheck();
       if (currentUser?.permissions?.canEditInventoryCatalog && catalogSaveCategory) {
         catalogSaveCategory.value = order.category || '';
       }
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
       if (orderTrackingList) orderTrackingList.style.display = 'none';
-      orderMessage.textContent = 'Tracking is managed on grouped orders only.';
       renderTagOptions(order.tags || []);
       renderPriorityOptions();
       orderForm.elements.notes.value = order.notes || '';
@@ -2272,13 +2316,13 @@
       resetCatalogLookup();
       resetCatalogSavePanel();
       syncCatalogSaveUI();
+      setOrderSource('manual');
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
       if (orderTrackingList) orderTrackingList.style.display = 'none';
-      orderMessage.textContent = 'Tracking is managed on grouped orders only.';
       modal.style.display = 'flex';
     });
-    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); });
+    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); setOrderSource('manual'); });
     const resetGroupModal = () => {
       groupModal.style.display = 'none';
       groupForm.reset();
@@ -2427,60 +2471,66 @@
       await fetchOrders();
     }
 
-    fetchProduct.addEventListener('click', async () => {
-      const formData = new FormData(orderForm);
-      const vendor = (formData.get('vendor') || '').toString().trim();
-      const vendorLower = vendor.toLowerCase();
-      const partNum = (formData.get('vendorPartNumber') || '').toString().trim();
-      const link = (formData.get('partLink') || '').toString().trim();
-      let config = findVendorConfig(vendorLower);
-      if (!config) {
-        const auto = detectVendor(partNum, link);
-        if (auto) {
-          config = auto;
-          orderForm.elements.vendor.value = auto.vendor || orderForm.elements.vendor.value;
+    function fetchOrderDetails(configHint) {
+      return async () => {
+        const formData = new FormData(orderForm);
+        const partNum = (formData.get('vendorPartNumber') || '').toString().trim();
+        const link = (formData.get('partLink') || '').toString().trim();
+        const vendorName = (formData.get('vendor') || '').toString().trim();
+        let config = configHint || findVendorConfig(vendorName) || detectVendor(partNum, link);
+        if (!config && vendorName) config = findVendorConfig(vendorName);
+        if (config?.vendor && orderForm.elements.vendor) {
+          orderForm.elements.vendor.value = config.vendor;
         }
-      }
-      const url = deriveUrl(config, partNum, link);
-      if (!url) {
-        orderMessage.textContent = 'Provide a link or vendor part number.';
-        orderMessage.className = 'error';
-        return;
-      }
-      orderMessage.textContent = 'Fetching...';
-      orderMessage.className = 'small';
-      try {
-        const res = await fetch('/api/vendors/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            selectors: {
-              nameSelector: config?.nameSelector,
-              priceSelector: config?.priceSelector,
-            }
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Fetch failed');
-
-        const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
-        const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
-
-        if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
-        const priceNum = parsePrice(pickPrice);
-        if (priceNum !== undefined) {
-          orderForm.elements.unitCost.value = priceNum;
+        const url = deriveUrl(config, partNum, link) || link;
+        if (!url) {
+          orderMessage.textContent = 'Provide a link or part number (for vendors with part number templates).';
+          orderMessage.className = 'error';
+          return;
         }
-        if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
+        if (config && !config.productUrlTemplate && !link) {
+          orderMessage.textContent = 'This vendor needs a link to fetch details.';
+          orderMessage.className = 'error';
+          return;
+        }
+        orderMessage.textContent = 'Fetching...';
+        orderMessage.className = 'small';
+        try {
+          const res = await fetch('/api/vendors/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url,
+              selectors: {
+                nameSelector: config?.nameSelector,
+                priceSelector: config?.priceSelector,
+              }
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Fetch failed');
 
-        orderMessage.textContent = 'Fetched. Verify fields before submitting.';
-        orderMessage.className = 'success';
-      } catch (err) {
-        orderMessage.textContent = 'Fetch failed. Fill manually.';
-        orderMessage.className = 'error';
-      }
-    });
+          const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
+          const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
+
+          if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
+          const priceNum = parsePrice(pickPrice);
+          if (priceNum !== undefined) {
+            orderForm.elements.unitCost.value = priceNum;
+          }
+          if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
+
+          orderMessage.textContent = 'Fetched. Verify fields before submitting.';
+          orderMessage.className = 'success';
+          await checkCatalogPresence();
+        } catch (err) {
+          orderMessage.textContent = 'Fetch failed. Fill manually.';
+          orderMessage.className = 'error';
+        }
+      };
+    }
+
+    fetchProduct.addEventListener('click', fetchOrderDetails());
 
     function flattenCatalogMatches(items = []) {
       return items.map(item => ({
@@ -2547,17 +2597,25 @@
       if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
       if (catalogLookupResults) catalogLookupResults.style.display = 'none';
       if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
+      setOrderSource('catalog');
+      catalogAlreadySaved = true;
+      catalogAlreadySavedItem = match;
+      syncCatalogSaveUI();
+      scheduleCatalogPresenceCheck();
     }
 
     function resetCatalogLookup() {
       catalogLookupMatches = [];
       selectedCatalogMatch = null;
+      catalogAlreadySaved = false;
+      catalogAlreadySavedItem = null;
       if (catalogLookupResults) {
         catalogLookupResults.style.display = 'none';
         catalogLookupResults.innerHTML = '';
       }
       if (catalogLookupSelected) catalogLookupSelected.textContent = '';
       if (catalogLookupInput) catalogLookupInput.value = '';
+      syncCatalogSaveUI();
     }
 
     function toggleCatalogSaveFields(show) {
@@ -2566,19 +2624,96 @@
       catalogSaveFields.style.display = open ? 'grid' : 'none';
     }
 
-    function resetCatalogSavePanel() {
+    function resetCatalogSavePanel(clearStatus = true) {
       if (saveToCatalogToggle) saveToCatalogToggle.checked = false;
       if (catalogSaveCategory) catalogSaveCategory.value = '';
       if (catalogSaveSubteam) catalogSaveSubteam.value = '';
       if (catalogSaveType) catalogSaveType.value = '';
       if (catalogSaveMessage) { catalogSaveMessage.textContent = ''; catalogSaveMessage.className = 'small'; }
+      if (clearStatus) {
+        catalogAlreadySaved = false;
+        catalogAlreadySavedItem = null;
+        if (catalogSaveStatus) { catalogSaveStatus.textContent = ''; catalogSaveStatus.className = 'small'; }
+      }
       toggleCatalogSaveFields(false);
     }
 
     function syncCatalogSaveUI() {
       const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
-      if (catalogSaveContainer) catalogSaveContainer.style.display = canEdit ? 'block' : 'none';
-      if (!canEdit) resetCatalogSavePanel();
+      const showToggle = canEdit && !catalogAlreadySaved;
+      if (catalogSaveContainer) catalogSaveContainer.style.display = showToggle ? 'block' : 'none';
+      if (catalogSaveStatus) {
+        if (catalogAlreadySaved) {
+          const name = catalogAlreadySavedItem?.name || 'catalog item';
+          const path = catalogAlreadySavedItem?.fullPath || (catalogAlreadySavedItem?.categoryPathLabels || []).join(' / ');
+          const detail = path ? ` (${path})` : '';
+          catalogSaveStatus.textContent = `Already in catalog: ${name}${detail}`;
+          catalogSaveStatus.className = 'success small';
+        } else {
+          catalogSaveStatus.textContent = '';
+          catalogSaveStatus.className = 'small';
+        }
+      }
+      if (!showToggle) {
+        if (saveToCatalogToggle) saveToCatalogToggle.checked = false;
+        toggleCatalogSaveFields(false);
+      }
+    }
+
+    function normalizeLink(link) {
+      return (link || '').trim().replace(/\/+$/, '');
+    }
+
+    async function checkCatalogPresence() {
+      if (!orderForm || !currentUser) {
+        catalogAlreadySaved = false;
+        catalogAlreadySavedItem = null;
+        syncCatalogSaveUI();
+        return;
+      }
+      const partNum = (orderForm.elements.vendorPartNumber?.value || '').trim();
+      const link = (orderForm.elements.partLink?.value || '').trim();
+      if (selectedCatalogMatch) {
+        catalogAlreadySaved = true;
+        catalogAlreadySavedItem = selectedCatalogMatch;
+        syncCatalogSaveUI();
+        return;
+      }
+      if (!partNum && !link) {
+        catalogAlreadySaved = false;
+        catalogAlreadySavedItem = null;
+        syncCatalogSaveUI();
+        return;
+      }
+      const terms = [partNum, link].filter(Boolean);
+      let found = null;
+      for (const term of terms) {
+        try {
+          const res = await fetch(`/api/catalog/items?search=${encodeURIComponent(term)}&includeDescendants=true`);
+          const data = await res.json();
+          const items = data.items || [];
+          const linkNorm = normalizeLink(link);
+          const match = items.find(i => {
+            const skuMatch = partNum && (i.vendorPartNumber || '').toLowerCase() === partNum.toLowerCase();
+            const linkMatch = linkNorm && normalizeLink(i.supplierLink || '') === linkNorm;
+            return skuMatch || linkMatch;
+          });
+          if (match) {
+            found = match;
+            break;
+          }
+        } catch (err) {
+          console.warn('catalog presence check failed', err);
+        }
+      }
+      catalogAlreadySaved = Boolean(found);
+      catalogAlreadySavedItem = found;
+      syncCatalogSaveUI();
+    }
+
+    function scheduleCatalogPresenceCheck() {
+      clearTimeout(catalogPresenceTimer);
+      catalogPresenceTimer = setTimeout(checkCatalogPresence, 250);
     }
 
     async function saveCurrentOrderToCatalog(force = false) {
@@ -2619,6 +2754,7 @@
         if (currentUser?.permissions?.canEditInventoryCatalog) {
           refreshCatalogView();
         }
+        await checkCatalogPresence();
         return { ok: true, id: data.id };
       } catch (err) {
         if (catalogSaveMessage) {
@@ -2630,7 +2766,6 @@
     }
 
     saveToCatalogToggle?.addEventListener('change', () => toggleCatalogSaveFields());
-    saveToCatalogNowBtn?.addEventListener('click', () => saveCurrentOrderToCatalog(true));
     catalogLookupInput?.addEventListener('input', () => {
       clearTimeout(catalogLookupTimer);
       catalogLookupTimer = setTimeout(() => performCatalogLookup(catalogLookupInput.value), 200);
@@ -2644,6 +2779,8 @@
         catalogLookupResults.style.display = 'none';
       }
     });
+    orderForm?.elements?.vendorPartNumber?.addEventListener('input', scheduleCatalogPresenceCheck);
+    orderForm?.elements?.partLink?.addEventListener('input', scheduleCatalogPresenceCheck);
 
     orderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2659,7 +2796,7 @@
         const auto = detectVendor(payload.vendorPartNumber, payload.partLink);
         if (auto?.vendor) {
           payload.vendor = auto.vendor;
-          payload.supplier = auto.vendor;
+          if (orderForm?.elements?.vendor) orderForm.elements.vendor.value = auto.vendor;
         }
       }
       payload.supplier = payload.vendor || payload.supplier;
@@ -2822,6 +2959,7 @@
         const res = await fetch('/api/vendors/configs');
         const data = await res.json();
         vendorConfigs = data.vendors || [];
+        renderVendorOptions();
         if (!vendorConfigs.length) {
           vendorList.innerHTML = '<div class="empty">No vendor configs yet. Create one above.</div>';
           return;
