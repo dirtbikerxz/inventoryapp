@@ -351,7 +351,7 @@
       </div>
     </div>
     <div class="search">
-      <input id="global-search" placeholder="Search parts, students, suppliers..." />
+      <input id="global-search" placeholder="Search parts, suppliers, users..." />
     </div>
     <div class="toolbar">
       <div class="toolbar-buttons">
@@ -429,8 +429,10 @@
         <div class="order-manual-fields" style="grid-column: span 2;">
           <label class="small">Supplier Link</label>
           <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
-            <button type="button" class="btn primary" id="fetch-product" style="padding:10px 14px;">Fetch details</button>
-          <span class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</span>
+          <div style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn primary" id="fetch-product" style="padding:6px 10px;">Fetch Details</button>
+            <span class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</span>
+          </div>
         </div>
         <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
           <label class="small">Saved catalog</label>
@@ -611,8 +613,10 @@
           <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
         </div>
         <div style="grid-column: span 2;">
-          <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch details</button>
-          <span class="small">Use vendor link or part number to auto-fill (same as order form).</span>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
+            <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch Details</button>
+            <span class="small" id="fetch-supported-catalog">Supported vendors will auto-detect from link or part number.</span>
+          </div>
         </div>
         <div>
           <label class="small">Vendor</label>
@@ -1313,7 +1317,9 @@
         ? `Supported vendors: ${supported.join(', ')}, Shopify-Based Sites`
         : 'Supported vendors: none configured yet; use manual entry';
       const fetchSupportedEl = document.getElementById('fetch-supported');
+      const fetchSupportedCatalogEl = document.getElementById('fetch-supported-catalog');
       if (fetchSupportedEl) fetchSupportedEl.textContent = msg;
+      if (fetchSupportedCatalogEl) fetchSupportedCatalogEl.textContent = msg;
     }
 
     function setOrderSource(source) {
