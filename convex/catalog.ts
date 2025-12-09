@@ -342,31 +342,43 @@ export const listItems = query({
       items = items.filter(i => !i.archived);
     }
 
+    const includeDesc = args.includeDescendants === undefined ? false : Boolean(args.includeDescendants);
+    let filterRoot = false;
     let filterCatIds: Set<string> | null = null;
     if (args.categoryId) {
-      const target = ctx.db.normalizeId("catalogCategories", args.categoryId);
-      if (target) {
-        filterCatIds = new Set<string>([target.toString()]);
-        if (args.includeDescendants !== false) {
-          const addChildren = (parentId: any) => {
-            categories
-              .filter(c => compareIds(c.parentId, parentId))
-              .forEach(child => {
-                filterCatIds!.add(child._id.toString());
-                addChildren(child._id);
-              });
-          };
-          addChildren(target);
+      if (args.categoryId === "root") {
+        filterRoot = true;
+      } else {
+        const target = ctx.db.normalizeId("catalogCategories", args.categoryId);
+        if (target) {
+          filterCatIds = new Set<string>([target.toString()]);
+          if (includeDesc) {
+            const addChildren = (parentId: any) => {
+              categories
+                .filter(c => compareIds(c.parentId, parentId))
+                .forEach(child => {
+                  filterCatIds!.add(child._id.toString());
+                  addChildren(child._id);
+                });
+            };
+            addChildren(target);
+          }
         }
       }
     }
 
     const filtered = items.filter(item => {
-      if (filterCatIds) {
-        const ids = (item.categoryPathIds || []).map((id: any) => id?.toString());
+      if (filterRoot) {
+        if (item.categoryId || (item.categoryPathIds && item.categoryPathIds.length)) return false;
+      } else if (filterCatIds) {
         const direct = item.categoryId?.toString();
-        const match = ids.some(id => filterCatIds!.has(id || "")) || (direct && filterCatIds.has(direct));
-        if (!match) return false;
+        if (!includeDesc) {
+          if (!direct || !filterCatIds.has(direct)) return false;
+        } else {
+          const ids = (item.categoryPathIds || []).map((id: any) => id?.toString());
+          const match = ids.some(id => filterCatIds!.has(id || "")) || (direct && filterCatIds.has(direct));
+          if (!match) return false;
+        }
       }
       if (args.subteam && (item.subteam || "").toLowerCase() !== args.subteam.toLowerCase()) return false;
       if (args.type && (item.type || "").toLowerCase() !== args.type.toLowerCase()) return false;

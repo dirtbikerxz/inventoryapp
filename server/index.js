@@ -457,7 +457,7 @@ app.get('/api/catalog/items', async (req, res) => {
     const data = await client.query('catalog:listItems', {
       search: req.query.search || undefined,
       categoryId: req.query.categoryId || undefined,
-      includeDescendants: req.query.includeDescendants === undefined ? true : req.query.includeDescendants !== 'false',
+      includeDescendants: req.query.includeDescendants === undefined ? false : req.query.includeDescendants !== 'false',
       subteam: req.query.subteam || undefined,
       type: req.query.type || undefined,
       includeArchived: req.query.includeArchived === 'true'

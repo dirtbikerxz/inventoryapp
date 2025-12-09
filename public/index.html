@@ -359,6 +359,7 @@
         <button class="btn ghost" id="login-btn">Login</button>
         <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
         <button class="btn ghost" id="account-btn">Account</button>
+        <button class="btn ghost" id="catalog-btn" style="display:none;">Catalog</button>
         <button class="btn ghost" id="admin-btn" style="display:none;">Admin</button>
         <button class="btn ghost" id="refresh-btn">Refresh</button>
         <button class="btn primary" id="new-order-btn">New order</button>
@@ -546,6 +547,123 @@
     </div>
   </div>
 
+  <div id="catalog-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:58; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:1100px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div class="page-title" style="font-size:22px;">Inventory Catalog</div>
+          <div class="subtitle" style="margin-bottom:12px;">Browse saved parts by category.</div>
+        </div>
+        <button class="btn ghost" id="close-catalog">Close</button>
+      </div>
+      <div class="grid" style="grid-template-columns: minmax(280px, 1fr) 2fr; gap:12px; align-items:start;">
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="flex-between" style="align-items:center; gap:8px;">
+            <div class="page-title" style="font-size:15px;">Categories</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+              <button class="btn ghost" id="catalog-back" style="padding:6px 10px; display:none;">Back</button>
+              <button class="btn ghost" id="refresh-catalog-categories" style="padding:6px 10px;">Refresh</button>
+            </div>
+          </div>
+          <div class="small" id="catalog-path-display"></div>
+          <div id="catalog-category-list" class="empty" style="min-height:140px;">Loading categories...</div>
+          <form id="catalog-category-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px; display:none;">
+            <input type="hidden" name="id" />
+            <div>
+              <label class="small">Name</label>
+              <input name="name" class="input" placeholder="Electrical" required />
+            </div>
+            <div>
+              <label class="small">Parent</label>
+              <select name="parentId" class="input"></select>
+            </div>
+            <div>
+              <label class="small">Sort order</label>
+              <input name="sortOrder" class="input" type="number" placeholder="0" />
+            </div>
+            <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
+              <div id="catalog-category-message" class="small"></div>
+              <div class="flex-between" style="gap:6px;">
+                <button type="button" class="btn ghost" id="reset-category-form">New</button>
+                <button type="button" class="btn ghost" id="delete-category" style="color:var(--danger);">Delete</button>
+                <button type="submit" class="btn primary">Save</button>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
+            <div>
+              <div class="page-title" style="font-size:15px;">Catalog items</div>
+              <div class="small" id="catalog-item-hint">Select a category to focus results.</div>
+            </div>
+            <div class="flex-between" style="gap:6px; flex-wrap:wrap;">
+              <input id="catalog-item-search" class="input" placeholder="Search saved parts..." style="min-width:180px;" />
+              <button class="btn ghost" id="refresh-catalog-items" style="padding:6px 10px;">Refresh</button>
+              <button class="btn primary" id="new-catalog-item" style="padding:6px 10px;">New item</button>
+            </div>
+          </div>
+          <div id="catalog-item-list" class="empty">No catalog items yet.</div>
+          <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px; display:none;">
+            <input type="hidden" name="id" />
+            <div>
+              <label class="small">Name</label>
+              <input name="name" class="input" required />
+            </div>
+            <div>
+              <label class="small">Category path</label>
+              <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
+            </div>
+            <div>
+              <label class="small">Subteam</label>
+              <input name="subteam" class="input" placeholder="Electrical" />
+            </div>
+            <div>
+              <label class="small">Type</label>
+              <input name="type" class="input" placeholder="Connector" />
+            </div>
+            <div>
+              <label class="small">Vendor</label>
+              <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
+            </div>
+            <div>
+              <label class="small">Vendor part #</label>
+              <input name="vendorPartNumber" class="input" placeholder="SKU" />
+            </div>
+            <div>
+              <label class="small">Product code</label>
+              <input name="productCode" class="input" placeholder="Internal code" />
+            </div>
+            <div>
+              <label class="small">Supplier link</label>
+              <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
+            </div>
+            <div>
+              <label class="small">Unit cost</label>
+              <input name="unitCost" class="input" type="number" step="0.01" />
+            </div>
+            <div>
+              <label class="small">Default qty</label>
+              <input name="defaultQuantity" class="input" type="number" min="1" />
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="small">Aliases (comma separated)</label>
+              <input name="aliases" class="input" placeholder="crimp, molex, male" />
+            </div>
+            <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
+              <div id="catalog-item-message" class="small"></div>
+              <div class="flex-between" style="gap:6px;">
+                <button type="button" class="btn ghost" id="cancel-catalog-item">Cancel</button>
+                <button type="button" class="btn ghost" id="delete-catalog-item" style="color:var(--danger);">Delete</button>
+                <button type="submit" class="btn primary">Save item</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
       <div class="page-title" style="font-size:22px;">Sign In</div>
@@ -588,7 +706,7 @@
     </div>
   </div>
 
-  <div id="admin-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
+      <div id="admin-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
       <div class="flex-between" style="align-items:flex-start;">
         <div>
@@ -604,7 +722,6 @@
           <button class="btn ghost" id="admin-tab-roles" style="padding:6px 12px;">Roles</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
-          <button class="btn ghost" id="admin-tab-catalog" style="padding:6px 12px;">Catalog</button>
           <button class="btn ghost" id="admin-tab-tags" style="padding:6px 12px;">Tags</button>
           <button class="btn ghost" id="admin-tab-priorities" style="padding:6px 12px;">Priorities</button>
         </div>
@@ -786,126 +903,6 @@
               </div>
             </div>
           </form>
-        </div>
-      </div>
-
-      <div id="admin-catalog-section" style="display:none;">
-        <div class="card" style="background:var(--panel-2); margin-top:12px;">
-          <div class="page-title" style="font-size:18px;">Saved Inventory Catalog</div>
-          <div class="subtitle" style="margin-bottom:12px;">Manage reusable parts, categories, and variations.</div>
-          <div class="grid" style="grid-template-columns: minmax(280px, 1fr) 2fr; gap:12px; align-items:start;">
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <div class="flex-between" style="align-items:center;">
-                <div class="page-title" style="font-size:15px;">Categories</div>
-                <button class="btn ghost" id="refresh-catalog-categories" style="padding:6px 10px;">Refresh</button>
-              </div>
-              <form id="catalog-category-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px;">
-                <input type="hidden" name="id" />
-                <div>
-                  <label class="small">Name</label>
-                  <input name="name" class="input" placeholder="Electrical" required />
-                </div>
-                <div>
-                  <label class="small">Parent</label>
-                  <select name="parentId" class="input"></select>
-                </div>
-                <div>
-                  <label class="small">Sort order</label>
-                  <input name="sortOrder" class="input" type="number" placeholder="0" />
-                </div>
-                <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
-                  <div id="catalog-category-message" class="small"></div>
-                  <div class="flex-between" style="gap:6px;">
-                    <button type="button" class="btn ghost" id="reset-category-form">New</button>
-                    <button type="button" class="btn ghost" id="delete-category" style="color:var(--danger);">Delete</button>
-                    <button type="submit" class="btn primary">Save</button>
-                  </div>
-                </div>
-              </form>
-              <div class="small">Click a category to select it. Nested paths are supported (e.g., Electrical → Connectors → Molex).</div>
-              <div id="catalog-category-tree" class="empty" style="min-height:140px;">Loading categories...</div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
-                <div>
-                  <div class="page-title" style="font-size:15px;">Catalog items</div>
-                  <div class="small" id="catalog-item-hint">Select a category to focus results.</div>
-                </div>
-                <div class="flex-between" style="gap:6px; flex-wrap:wrap;">
-                  <input id="catalog-item-search" class="input" placeholder="Search saved parts..." style="min-width:180px;" />
-                  <button class="btn ghost" id="refresh-catalog-items" style="padding:6px 10px;">Refresh</button>
-                  <button class="btn primary" id="new-catalog-item" style="padding:6px 10px;">New item</button>
-                </div>
-              </div>
-              <div id="catalog-item-list" class="empty">No catalog items yet.</div>
-              <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px; display:none;">
-                <input type="hidden" name="id" />
-                <div>
-                  <label class="small">Name</label>
-                  <input name="name" class="input" required />
-                </div>
-                <div>
-                  <label class="small">Category path</label>
-                  <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
-                </div>
-                <div>
-                  <label class="small">Subteam</label>
-                  <input name="subteam" class="input" placeholder="Electrical" />
-                </div>
-                <div>
-                  <label class="small">Type</label>
-                  <input name="type" class="input" placeholder="Connector" />
-                </div>
-                <div>
-                  <label class="small">Vendor</label>
-                  <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
-                </div>
-                <div>
-                  <label class="small">Vendor part #</label>
-                  <input name="vendorPartNumber" class="input" placeholder="SKU" />
-                </div>
-                <div>
-                  <label class="small">Product code</label>
-                  <input name="productCode" class="input" placeholder="Internal code" />
-                </div>
-                <div>
-                  <label class="small">Supplier link</label>
-                  <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
-                </div>
-                <div>
-                  <label class="small">Unit cost</label>
-                  <input name="unitCost" class="input" type="number" step="0.01" />
-                </div>
-                <div>
-                  <label class="small">Default qty</label>
-                  <input name="defaultQuantity" class="input" type="number" min="1" />
-                </div>
-                <div style="grid-column: span 2;">
-                  <label class="small">Aliases (comma separated)</label>
-                  <input name="aliases" class="input" placeholder="crimp, molex, male" />
-                </div>
-                <div style="grid-column: span 2;">
-                  <label class="small">Description</label>
-                  <textarea name="description" class="input" rows="2" placeholder="Notes for this saved part"></textarea>
-                </div>
-                <div style="grid-column: span 2;">
-                  <div class="flex-between" style="align-items:center; gap:8px;">
-                    <div class="small">Variations (e.g., Male/Female, size)</div>
-                    <button type="button" class="btn ghost" id="add-catalog-variation" style="padding:6px 10px;">Add variation</button>
-                  </div>
-                  <div id="catalog-variations"></div>
-                </div>
-                <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap;">
-                  <div id="catalog-item-message" class="small"></div>
-                  <div class="flex-between" style="gap:6px;">
-                    <button type="button" class="btn ghost" id="cancel-catalog-item">Cancel</button>
-                    <button type="button" class="btn ghost" id="delete-catalog-item" style="color:var(--danger);">Delete</button>
-                    <button type="submit" class="btn primary">Save item</button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1105,16 +1102,20 @@
     const adminTabRoles = document.getElementById('admin-tab-roles');
     const adminTabTracking = document.getElementById('admin-tab-tracking');
     const adminTabVendors = document.getElementById('admin-tab-vendors');
-    const adminTabCatalog = document.getElementById('admin-tab-catalog');
     const adminTabTags = document.getElementById('admin-tab-tags');
     const adminTabPriorities = document.getElementById('admin-tab-priorities');
     const adminUsersSection = document.getElementById('admin-users-section');
     const adminRolesSection = document.getElementById('admin-roles-section');
     const adminTrackingSection = document.getElementById('admin-tracking-section');
     const adminVendorsSection = document.getElementById('admin-vendors-section');
-    const adminCatalogSection = document.getElementById('admin-catalog-section');
     const adminTagsSection = document.getElementById('admin-tags-section');
     const adminPrioritiesSection = document.getElementById('admin-priorities-section');
+    const catalogModal = document.getElementById('catalog-modal');
+    const closeCatalog = document.getElementById('close-catalog');
+    const catalogBtn = document.getElementById('catalog-btn');
+    const catalogBackBtn = document.getElementById('catalog-back');
+    const catalogCategoryList = document.getElementById('catalog-category-list');
+    const catalogPathDisplay = document.getElementById('catalog-path-display');
     const refreshPrioritiesBtn = document.getElementById('refresh-priorities');
     const prioritiesList = document.getElementById('priorities-list');
     const prioritiesMessage = document.getElementById('priorities-message');
@@ -1131,8 +1132,6 @@
     const catalogSaveCategory = document.getElementById('catalog-save-category');
     const catalogSaveSubteam = document.getElementById('catalog-save-subteam');
     const catalogSaveType = document.getElementById('catalog-save-type');
-    const catalogSaveVariationLabel = document.getElementById('catalog-save-variation-label');
-    const catalogSaveVariationNotes = document.getElementById('catalog-save-variation-notes');
     const saveToCatalogNowBtn = document.getElementById('save-to-catalog-now');
     const catalogSaveMessage = document.getElementById('catalog-save-message');
     const refreshCatalogCategoriesBtn = document.getElementById('refresh-catalog-categories');
@@ -1140,15 +1139,12 @@
     const catalogCategoryMessage = document.getElementById('catalog-category-message');
     const resetCategoryFormBtn = document.getElementById('reset-category-form');
     const deleteCategoryBtn = document.getElementById('delete-category');
-    const catalogCategoryTree = document.getElementById('catalog-category-tree');
     const catalogItemSearch = document.getElementById('catalog-item-search');
     const refreshCatalogItemsBtn = document.getElementById('refresh-catalog-items');
     const newCatalogItemBtn = document.getElementById('new-catalog-item');
     const catalogItemList = document.getElementById('catalog-item-list');
     const catalogItemForm = document.getElementById('catalog-item-form');
     const catalogItemMessage = document.getElementById('catalog-item-message');
-    const catalogVariations = document.getElementById('catalog-variations');
-    const addCatalogVariationBtn = document.getElementById('add-catalog-variation');
     const deleteCatalogItemBtn = document.getElementById('delete-catalog-item');
     const cancelCatalogItemBtn = document.getElementById('cancel-catalog-item');
     const catalogItemHint = document.getElementById('catalog-item-hint');
@@ -1248,6 +1244,8 @@
       { label: 'High', color: '#ff8b55', sortOrder: 3 },
       { label: 'Urgent', color: '#ff5565', sortOrder: 4 }
     ];
+    let catalogNavStack = [];
+    let currentCatalogCategoryId = 'root';
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -1738,10 +1736,8 @@
       orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
       orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
       orderForm.elements.priority.value = order.priority || 'Medium';
-      if (currentUser?.permissions?.canEditInventoryCatalog) {
-        if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = order.vendorPartNumber || order.partName || '';
-        if (catalogSaveVariationNotes) catalogSaveVariationNotes.value = order.notes || '';
-        if (catalogSaveCategory) catalogSaveCategory.value = order.category || '';
+      if (currentUser?.permissions?.canEditInventoryCatalog && catalogSaveCategory) {
+        catalogSaveCategory.value = order.category || '';
       }
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
@@ -2439,39 +2435,18 @@
     });
 
     function flattenCatalogMatches(items = []) {
-      const list = [];
-      items.forEach(item => {
-        const base = {
-          id: item._id || item.id,
-          label: item.name,
-          partName: item.name,
-          path: item.fullPath || (item.categoryPathLabels || []).join(' / '),
-          vendor: item.vendor,
-          vendorPartNumber: item.vendorPartNumber,
-          productCode: item.productCode,
-          supplierLink: item.supplierLink,
-          unitCost: item.unitCost,
-          defaultQuantity: item.defaultQuantity
-        };
-        if (Array.isArray(item.variations) && item.variations.length) {
-          item.variations.forEach(variation => {
-            list.push({
-              ...base,
-              variationId: variation.id,
-              label: `${item.name} — ${variation.label}`,
-              variationLabel: variation.label,
-              vendor: variation.vendor || base.vendor,
-              vendorPartNumber: variation.vendorPartNumber || base.vendorPartNumber,
-              productCode: variation.productCode || base.productCode,
-              supplierLink: variation.supplierLink || base.supplierLink,
-              unitCost: variation.unitCost ?? base.unitCost
-            });
-          });
-        } else {
-          list.push(base);
-        }
-      });
-      return list.slice(0, 40);
+      return items.map(item => ({
+        id: item._id || item.id,
+        label: item.name,
+        partName: item.name,
+        path: item.fullPath || (item.categoryPathLabels || []).join(' / '),
+        vendor: item.vendor,
+        vendorPartNumber: item.vendorPartNumber,
+        productCode: item.productCode,
+        supplierLink: item.supplierLink,
+        unitCost: item.unitCost,
+        defaultQuantity: item.defaultQuantity
+      })).slice(0, 40);
     }
 
     function renderCatalogLookupList() {
@@ -2525,7 +2500,6 @@
       if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
       if (catalogLookupResults) catalogLookupResults.style.display = 'none';
       if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
-      if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = match.variationLabel || match.label || '';
     }
 
     function resetCatalogLookup() {
@@ -2550,8 +2524,6 @@
       if (catalogSaveCategory) catalogSaveCategory.value = '';
       if (catalogSaveSubteam) catalogSaveSubteam.value = '';
       if (catalogSaveType) catalogSaveType.value = '';
-      if (catalogSaveVariationLabel) catalogSaveVariationLabel.value = '';
-      if (catalogSaveVariationNotes) catalogSaveVariationNotes.value = '';
       if (catalogSaveMessage) { catalogSaveMessage.textContent = ''; catalogSaveMessage.className = 'small'; }
       toggleCatalogSaveFields(false);
     }
@@ -2574,7 +2546,6 @@
         return { error: 'missing name' };
       }
       const path = (catalogSaveCategory?.value || selectedCatalogMatch?.path || '').split('/').map(p => p.trim()).filter(Boolean);
-      const variationLabel = catalogSaveVariationLabel?.value?.trim() || selectedCatalogMatch?.variationLabel || orderForm?.elements?.vendorPartNumber?.value || name;
       const payload = {
         name,
         categoryPath: path,
@@ -2584,15 +2555,7 @@
         vendorPartNumber: orderForm?.elements?.vendorPartNumber?.value || undefined,
         supplierLink: orderForm?.elements?.partLink?.value || undefined,
         unitCost: orderForm?.elements?.unitCost?.value ? Number(orderForm.elements.unitCost.value) : undefined,
-        aliases: [],
-        variations: [{
-          label: variationLabel,
-          vendor: orderForm?.elements?.vendor?.value || undefined,
-          vendorPartNumber: orderForm?.elements?.vendorPartNumber?.value || undefined,
-          supplierLink: orderForm?.elements?.partLink?.value || undefined,
-          unitCost: orderForm?.elements?.unitCost?.value ? Number(orderForm.elements.unitCost.value) : undefined,
-          notes: catalogSaveVariationNotes?.value || undefined
-        }]
+        aliases: []
       };
       try {
         const res = await fetch('/api/catalog/items', {
@@ -2733,7 +2696,33 @@
       }
       showAdminSection(target);
     });
-    closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; });
+    closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; resetCatalogItemForm(); });
+    function updateCatalogEditVisibility() {
+      const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
+      if (catalogCategoryForm) catalogCategoryForm.style.display = canEdit ? 'grid' : 'none';
+      if (catalogItemForm) catalogItemForm.style.display = canEdit ? catalogItemForm.style.display : 'none';
+      if (newCatalogItemBtn) newCatalogItemBtn.style.display = canEdit ? 'inline-flex' : 'none';
+      if (deleteCategoryBtn) deleteCategoryBtn.style.display = canEdit ? 'inline-flex' : 'none';
+      if (resetCategoryFormBtn) resetCategoryFormBtn.style.display = canEdit ? 'inline-flex' : 'none';
+      if (deleteCatalogItemBtn) deleteCatalogItemBtn.style.display = canEdit ? 'inline-flex' : 'none';
+    }
+
+    function openCatalogModal() {
+      if (!currentUser) return;
+      resetCatalogCategoryForm();
+      resetCatalogItemForm();
+      currentCatalogCategoryId = 'root';
+      selectedCatalogCategoryId = null;
+      catalogNavStack = [];
+      updateCatalogEditVisibility();
+      updateCatalogItemHint();
+      catalogModal.style.display = 'flex';
+      refreshCatalogCategories();
+      refreshCatalogItems();
+    }
+
+    catalogBtn.addEventListener('click', openCatalogModal);
+    closeCatalog?.addEventListener('click', () => { catalogModal.style.display = 'none'; resetCatalogItemForm(); });
     accountBtn.addEventListener('click', () => {
       accountModal.style.display = 'flex';
     });
@@ -2856,26 +2845,35 @@
       select.innerHTML = options.join('');
     }
 
-    function renderCatalogTree() {
-      if (!catalogCategoryTree) return;
-      if (!catalogTree || !catalogTree.length) {
-        catalogCategoryTree.className = 'empty';
-        catalogCategoryTree.textContent = 'No categories yet. Add one to begin organizing saved parts.';
+    function currentCategory() {
+      if (!currentCatalogCategoryId || currentCatalogCategoryId === 'root') return null;
+      return catalogCategories.find(c => String(c._id) === String(currentCatalogCategoryId)) || null;
+    }
+
+    function renderCatalogCategoriesList() {
+      if (!catalogCategoryList) return;
+      const cat = currentCategory();
+      const parentId = cat?.parentId ? cat.parentId.toString() : null;
+      const children = catalogCategories.filter(c => {
+        const pid = c.parentId ? c.parentId.toString() : null;
+        return pid === (currentCatalogCategoryId === 'root' ? null : currentCatalogCategoryId.toString());
+      });
+      const pathLabels = cat?.path || [];
+      catalogPathDisplay.textContent = pathLabels.length ? pathLabels.join(' / ') : 'Top level';
+      catalogBackBtn.style.display = cat ? 'inline-flex' : 'none';
+      if (!children.length) {
+        catalogCategoryList.className = 'empty';
+        catalogCategoryList.textContent = 'No subcategories here.';
         return;
       }
-      const renderNodes = (nodes = []) => {
-        return `<ul style="list-style:none; padding-left:12px; margin:0;">${nodes.map(node => `
-          <li data-id="${node._id}" class="catalog-node" style="margin:4px 0;">
-            <div class="tag-picker-option" data-id="${node._id}" style="cursor:pointer; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:${selectedCatalogCategoryId === String(node._id) ? 'rgba(253,208,35,0.08)' : 'var(--panel)'};">
-              <div style="font-weight:700;">${escapeHtml(node.name)}</div>
-              <div class="small">${escapeHtml((node.path || []).join(' / '))}</div>
-            </div>
-            ${node.children?.length ? renderNodes(node.children) : ''}
-          </li>
-        `).join('')}</ul>`;
-      };
-      catalogCategoryTree.innerHTML = renderNodes(catalogTree);
-      catalogCategoryTree.querySelectorAll('.tag-picker-option').forEach(el => {
+      catalogCategoryList.className = '';
+      catalogCategoryList.innerHTML = children.map(c => `
+        <div class="card" data-id="${c._id}" style="margin-bottom:6px; cursor:pointer;">
+          <div style="font-weight:700;">${escapeHtml(c.name)}</div>
+          <div class="small">${escapeHtml((c.path || []).join(' / '))}</div>
+        </div>
+      `).join('');
+      catalogCategoryList.querySelectorAll('.card').forEach(el => {
         el.addEventListener('click', () => {
           const id = el.dataset.id;
           if (!id) return;
@@ -2899,29 +2897,33 @@
         catalogCategoryMessage.textContent = '';
         catalogCategoryMessage.className = 'small';
       }
-      selectedCatalogCategoryId = null;
       renderCategoryParentOptions();
     }
 
     async function refreshCatalogCategories() {
-      if (!currentUser?.permissions?.canEditInventoryCatalog) return;
-      if (catalogCategoryTree) catalogCategoryTree.textContent = 'Loading categories...';
+      if (catalogCategoryList) catalogCategoryList.textContent = 'Loading categories...';
       try {
         const res = await fetch('/api/catalog/categories');
         const data = await res.json();
         catalogCategories = data.categories || [];
         catalogTree = data.tree || [];
+        const exists = currentCatalogCategoryId === 'root' || catalogCategories.some(c => String(c._id) === String(currentCatalogCategoryId));
+        if (!exists) {
+          currentCatalogCategoryId = 'root';
+          selectedCatalogCategoryId = null;
+        }
         renderCategoryParentOptions(catalogCategoryForm?.elements.parentId?.value || '');
-        renderCatalogTree();
+        renderCatalogCategoriesList();
       } catch (err) {
-        if (catalogCategoryTree) {
-          catalogCategoryTree.textContent = 'Failed to load categories';
+        if (catalogCategoryList) {
+          catalogCategoryList.textContent = 'Failed to load categories';
         }
       }
     }
 
     function selectCatalogCategory(id) {
-      selectedCatalogCategoryId = id;
+      currentCatalogCategoryId = id || 'root';
+      selectedCatalogCategoryId = id || null;
       const cat = catalogCategories.find(c => String(c._id) === String(id));
       if (cat && catalogCategoryForm) {
         catalogCategoryForm.dataset.mode = 'update';
@@ -2930,7 +2932,7 @@
         catalogCategoryForm.elements.parentId.value = cat.parentId || '';
         catalogCategoryForm.elements.sortOrder.value = cat.sortOrder ?? '';
       }
-      renderCatalogTree();
+      renderCatalogCategoriesList();
       refreshCatalogItems();
       updateCatalogItemHint();
     }
@@ -2993,30 +2995,8 @@
 
     function updateCatalogItemHint() {
       if (!catalogItemHint) return;
-      const cat = catalogCategories.find(c => String(c._id) === String(selectedCatalogCategoryId));
-      catalogItemHint.textContent = cat ? `Filtering by ${categoryPathLabel(cat)}` : 'Select a category to focus results.';
-    }
-
-    function variationRow(data = {}) {
-      const row = document.createElement('div');
-      row.className = 'card';
-      row.style.marginBottom = '6px';
-      row.innerHTML = `
-        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
-          <input class="input variation-label" placeholder="Variation label" value="${escapeHtml(data.label || '')}"/>
-          <input class="input variation-sku" placeholder="Vendor part #" value="${escapeHtml(data.vendorPartNumber || '')}"/>
-          <input class="input variation-link" placeholder="Supplier link" value="${escapeHtml(data.supplierLink || '')}"/>
-          <input class="input variation-cost" type="number" step="0.01" placeholder="Unit cost" value="${data.unitCost ?? ''}"/>
-          <input class="input variation-notes" placeholder="Notes" value="${escapeHtml(data.notes || '')}"/>
-        </div>
-        <div class="flex-between" style="margin-top:6px;">
-          <div class="small">${data.id ? `ID: ${data.id}` : ''}</div>
-          <button type="button" class="btn ghost remove-variation" style="color:var(--danger); padding:4px 8px;">Remove</button>
-        </div>
-      `;
-      row.dataset.id = data.id || '';
-      row.querySelector('.remove-variation')?.addEventListener('click', () => row.remove());
-      return row;
+      const cat = currentCategory();
+      catalogItemHint.textContent = cat ? `Browsing ${categoryPathLabel(cat)}` : 'Browsing top level';
     }
 
     function resetCatalogItemForm(item = null) {
@@ -3026,7 +3006,6 @@
       catalogItemForm.style.display = item ? 'grid' : 'none';
       catalogItemMessage.textContent = '';
       catalogItemMessage.className = 'small';
-      catalogVariations.innerHTML = '';
       if (item) {
         catalogItemForm.elements.id.value = item._id || item.id || '';
         catalogItemForm.elements.name.value = item.name || '';
@@ -3043,28 +3022,9 @@
         catalogItemForm.elements.unitCost.value = item.unitCost ?? '';
         catalogItemForm.elements.defaultQuantity.value = item.defaultQuantity ?? '';
         catalogItemForm.elements.aliases.value = (item.aliases || []).join(', ');
-        catalogItemForm.elements.description.value = item.description || '';
-        (item.variations || []).forEach(v => catalogVariations.appendChild(variationRow(v)));
-        if (!item.variations || !item.variations.length) {
-          catalogVariations.appendChild(variationRow({ label: 'Default' }));
-        }
         selectedCatalogItemId = item._id || item.id || null;
         catalogItemForm.style.display = 'grid';
       }
-    }
-
-    function collectCatalogVariations() {
-      if (!catalogVariations) return [];
-      return Array.from(catalogVariations.querySelectorAll('.card')).map(row => {
-        return {
-          id: row.dataset.id || undefined,
-          label: row.querySelector('.variation-label')?.value?.trim() || '',
-          vendorPartNumber: row.querySelector('.variation-sku')?.value?.trim() || undefined,
-          supplierLink: row.querySelector('.variation-link')?.value?.trim() || undefined,
-          unitCost: row.querySelector('.variation-cost')?.value ? Number(row.querySelector('.variation-cost')?.value) : undefined,
-          notes: row.querySelector('.variation-notes')?.value?.trim() || undefined
-        };
-      }).filter(v => v.label);
     }
 
     function renderCatalogItems() {
@@ -3079,13 +3039,12 @@
         const path = escapeHtml((item.fullPath || (item.categoryPathLabels || []).join(' / ')) || '');
         const vendor = escapeHtml(item.vendor || '');
         const sku = escapeHtml(item.vendorPartNumber || '');
-        const variationCount = item.variations?.length || 0;
         return `<div class="card" data-id="${item._id || item.id}" style="margin-bottom:8px;">
           <div class="flex-between" style="gap:8px; align-items:flex-start;">
             <div>
               <h4 style="margin:0 0 4px;">${escapeHtml(item.name)}</h4>
               <div class="small">${path || 'Uncategorized'}</div>
-              <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''} ${variationCount ? `· ${variationCount} variations` : ''}</div>
+              <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''}</div>
             </div>
             <div class="flex-between" style="gap:6px;">
               <button class="btn ghost" data-action="edit">Edit</button>
@@ -3118,7 +3077,8 @@
       if (!currentUser) return;
       catalogItemList.textContent = 'Loading...';
       const params = new URLSearchParams();
-      if (selectedCatalogCategoryId) params.set('categoryId', selectedCatalogCategoryId);
+      if (currentCatalogCategoryId) params.set('categoryId', currentCatalogCategoryId);
+      params.set('includeDescendants', 'false');
       if (catalogItemSearch?.value) params.set('search', catalogItemSearch.value.trim());
       try {
         const res = await fetch(`/api/catalog/items?${params.toString()}`);
@@ -3135,7 +3095,6 @@
       const payload = Object.fromEntries(new FormData(catalogItemForm).entries());
       const id = payload.id;
       const aliases = (payload.aliases || '').split(',').map(a => a.trim()).filter(Boolean);
-      const variations = collectCatalogVariations();
       const body = {
         name: payload.name,
         categoryPath: (payload.categoryPath || '').split('/').map(p => p.trim()).filter(Boolean),
@@ -3147,9 +3106,7 @@
         supplierLink: payload.supplierLink || undefined,
         unitCost: payload.unitCost ? Number(payload.unitCost) : undefined,
         defaultQuantity: payload.defaultQuantity ? Number(payload.defaultQuantity) : undefined,
-        aliases,
-        description: payload.description || undefined,
-        variations
+        aliases
       };
       catalogItemMessage.textContent = 'Saving...';
       catalogItemMessage.className = 'small';
@@ -3169,11 +3126,6 @@
       }
     });
 
-    addCatalogVariationBtn?.addEventListener('click', () => {
-      if (!catalogVariations) return;
-      catalogVariations.appendChild(variationRow({ label: 'Variation' }));
-      catalogItemForm.style.display = 'grid';
-    });
     cancelCatalogItemBtn?.addEventListener('click', () => resetCatalogItemForm());
     deleteCatalogItemBtn?.addEventListener('click', async () => {
       const id = catalogItemForm?.elements.id.value;
@@ -3184,19 +3136,35 @@
       resetCatalogItemForm();
     });
     newCatalogItemBtn?.addEventListener('click', () => {
-      resetCatalogItemForm({ name: '', categoryPathLabels: selectedCatalogCategoryId ? [categoryPathLabel(catalogCategories.find(c => String(c._id) === String(selectedCatalogCategoryId)))] : [] });
+      resetCatalogItemForm({ name: '', categoryPathLabels: currentCategory() ? [categoryPathLabel(currentCategory())] : [] });
       catalogItemForm.style.display = 'grid';
-      catalogVariations.appendChild(variationRow({ label: 'Default' }));
     });
     refreshCatalogItemsBtn?.addEventListener('click', () => refreshCatalogItems());
     catalogItemSearch?.addEventListener('input', () => {
       clearTimeout(catalogItemSearchTimer);
       catalogItemSearchTimer = setTimeout(refreshCatalogItems, 200);
     });
+    catalogBackBtn?.addEventListener('click', () => {
+      const cat = currentCategory();
+      if (cat?.parentId) {
+        selectCatalogCategory(cat.parentId.toString());
+      } else {
+        currentCatalogCategoryId = 'root';
+        selectedCatalogCategoryId = null;
+        renderCatalogCategoriesList();
+        refreshCatalogItems();
+        updateCatalogItemHint();
+      }
+    });
 
     function refreshCatalogView() {
+      currentCatalogCategoryId = 'root';
+      selectedCatalogCategoryId = null;
+      renderCatalogCategoriesList();
       refreshCatalogCategories();
       refreshCatalogItems();
+      updateCatalogItemHint();
+      updateCatalogEditVisibility();
     }
 
     async function loadTags() {
@@ -3709,12 +3677,14 @@
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-flex';
         accountBtn.style.display = 'inline-flex';
+        catalogBtn.style.display = 'inline-flex';
       } else {
         userChip.textContent = '';
         userChip.style.display = 'none';
         loginBtn.style.display = 'inline-flex';
         logoutBtn.style.display = 'none';
         accountBtn.style.display = 'none';
+        catalogBtn.style.display = 'none';
         adminBtn.style.display = 'none';
       }
       const perms = computePerms(currentUser);
@@ -3723,6 +3693,7 @@
       adminBtn.style.display = (perms.canManageUsers || perms.canManageTags || perms.canManageVendors || perms.canEditInventoryCatalog) ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
       syncCatalogSaveUI();
+      updateCatalogEditVisibility();
     }
 
     async function loadUsers() {
@@ -3964,9 +3935,6 @@
       if (currentUser?.permissions?.canManageVendors) {
         tabs.push('vendors');
       }
-      if (currentUser?.permissions?.canEditInventoryCatalog) {
-        tabs.push('catalog');
-      }
       if (currentUser?.permissions?.canManageTags) {
         tabs.push('tags', 'priorities');
       }
@@ -3979,7 +3947,6 @@
       if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
-      if (adminTabCatalog) adminTabCatalog.style.display = currentUser?.permissions?.canEditInventoryCatalog ? 'inline-flex' : 'none';
       if (adminTabTags) adminTabTags.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
       if (adminTabPriorities) adminTabPriorities.style.display = currentUser?.permissions?.canManageTags ? 'inline-flex' : 'none';
       if (!allowed.includes(activeAdminTab)) {
@@ -3989,7 +3956,6 @@
       if (adminRolesSection) adminRolesSection.style.display = 'none';
       if (adminTrackingSection) adminTrackingSection.style.display = 'none';
       if (adminVendorsSection) adminVendorsSection.style.display = 'none';
-      if (adminCatalogSection) adminCatalogSection.style.display = 'none';
       if (adminTagsSection) adminTagsSection.style.display = 'none';
       if (adminPrioritiesSection) adminPrioritiesSection.style.display = 'none';
     }
@@ -4003,15 +3969,13 @@
       if (adminRolesSection) adminRolesSection.style.display = which === 'roles' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
-      if (adminCatalogSection) adminCatalogSection.style.display = which === 'catalog' ? 'block' : 'none';
       if (adminTagsSection) adminTagsSection.style.display = which === 'tags' ? 'block' : 'none';
       if (adminPrioritiesSection) adminPrioritiesSection.style.display = which === 'priorities' ? 'block' : 'none';
-      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabCatalog, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
+      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabTags, adminTabPriorities].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'roles') adminTabRoles?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
-      if (which === 'catalog') adminTabCatalog?.classList.add('primary');
       if (which === 'tags') adminTabTags?.classList.add('primary');
       if (which === 'priorities') adminTabPriorities?.classList.add('primary');
     }
@@ -4019,7 +3983,6 @@
     adminTabRoles?.addEventListener('click', () => { showAdminSection('roles'); loadRoles(); });
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
-    adminTabCatalog?.addEventListener('click', () => { showAdminSection('catalog'); refreshCatalogView(); });
     adminTabTags?.addEventListener('click', () => { showAdminSection('tags'); loadTags(); });
     adminTabPriorities?.addEventListener('click', () => { showAdminSection('priorities'); loadPriorityTags(); });
 
