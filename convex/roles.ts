@@ -10,7 +10,9 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageVendors: true,
     canManageUsers: true,
     canManageTags: true,
-    canEditInventoryCatalog: true
+    canEditInventoryCatalog: true,
+    canManageStock: true,
+    canEditStock: true
   },
   mentor: {
     canPlaceOrders: true,
@@ -20,7 +22,9 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageVendors: true,
     canManageUsers: false,
     canManageTags: true,
-    canEditInventoryCatalog: true
+    canEditInventoryCatalog: true,
+    canManageStock: true,
+    canEditStock: true
   },
   student: {
     canPlaceOrders: true,
@@ -30,7 +34,9 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageVendors: false,
     canManageUsers: false,
     canManageTags: false,
-    canEditInventoryCatalog: false
+    canEditInventoryCatalog: false,
+    canManageStock: false,
+    canEditStock: false
   }
 };
 

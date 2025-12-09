@@ -339,6 +339,33 @@
       color: var(--muted);
       background: var(--panel-2);
     }
+    .stock-grid .card { cursor: default; }
+    .stock-card.stock-low { border-color: var(--warning); box-shadow: 0 0 0 1px rgba(253,208,35,0.35); }
+    .stock-card.stock-empty { border-color: var(--danger); box-shadow: 0 0 0 1px rgba(255,85,101,0.45); }
+    .stock-level {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .stock-adjust { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .stock-chip {
+      background: #1b2440;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .stock-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .stock-low-text { color: var(--warning); font-weight: 700; }
+    .stock-empty-text { color: var(--danger); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -370,12 +397,19 @@
   </header>
 
   <main>
-    <div class="flex-between">
+    <div class="flex-between" style="align-items:flex-start; gap:12px; flex-wrap:wrap;">
       <div>
-        <div class="page-title">Orders</div>
-        <div class="subtitle">Track parts from request to delivery.</div>
+        <div class="page-title" id="primary-title">Orders</div>
+        <div class="subtitle" id="primary-subtitle">Track parts from request to delivery.</div>
       </div>
-      <div class="view-toggle">
+      <div class="view-toggle" id="primary-view-toggle">
+        <button id="orders-view-btn" class="active">Orders</button>
+        <button id="stock-view-btn">Stock</button>
+      </div>
+    </div>
+
+    <div id="orders-layout-row" style="display:flex; justify-content:flex-end; margin-top:4px;">
+      <div class="view-toggle" id="orders-layout-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
       </div>
@@ -404,6 +438,20 @@
         <div><label class="small">Vendor</label><select id="vendor-filter" class="input"></select></div>
       </div>
       <div id="table-container" style="overflow:auto; flex:1; min-height:0; padding-bottom: 12px;"></div>
+    </section>
+
+    <section id="stock-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
+      <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
+        <div class="flex-between" style="gap:8px; flex-wrap:wrap; align-items:center;">
+          <select id="stock-subteam-filter" class="input" style="min-width:180px;"></select>
+          <input id="stock-search" class="input" placeholder="Search stock..." style="min-width:200px;" />
+        </div>
+        <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
+          <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage subteams</button>
+          <button class="btn primary" id="add-stock-btn" style="display:none;">Add stock item</button>
+        </div>
+      </div>
+      <div id="stock-grid" class="board stock-grid" style="flex:1; min-height:0; overflow:auto; padding-bottom:12px;"></div>
     </section>
   </main>
 
@@ -853,6 +901,86 @@
     </div>
   </div>
 
+  <div id="stock-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:63; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" id="stock-modal-title" style="font-size:20px;">Add stock item</div>
+          <div class="subtitle" id="stock-modal-subtitle" style="margin-bottom:10px;">Pick a catalog part to track and set the starting quantity.</div>
+        </div>
+        <button class="btn ghost" id="close-stock-modal">Close</button>
+      </div>
+      <form id="stock-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:8px;">
+        <input type="hidden" name="id" />
+        <div style="grid-column: span 2;">
+          <label class="small">Catalog item</label>
+          <input id="stock-catalog-search" class="input" placeholder="Search catalog by name, vendor, or part number" />
+          <div id="stock-catalog-selected" class="small" style="margin-top:6px;"></div>
+          <div id="stock-catalog-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:200px; overflow:auto;"></div>
+        </div>
+        <div>
+          <label class="small">Subteam</label>
+          <select id="stock-subteam-select" class="input"></select>
+        </div>
+        <div>
+          <label class="small">Quantity on hand</label>
+          <input id="stock-quantity" class="input" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label class="small">Low stock alert at</label>
+          <input id="stock-low" class="input" type="number" min="0" placeholder="e.g., 5" />
+        </div>
+        <div>
+          <label class="small">Location</label>
+          <input id="stock-location" class="input" placeholder="Bay, drawer, bin" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea id="stock-notes" class="input" rows="2" placeholder="Label, kit info, etc."></textarea>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="stock-modal-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="delete-stock-btn" style="display:none; color: var(--danger);">Untrack</button>
+            <button type="button" class="btn ghost" id="cancel-stock">Cancel</button>
+            <button type="submit" class="btn primary">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="stock-subteams-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:63; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card">
+      <div class="flex-between" style="align-items:flex-start;">
+        <div>
+          <div class="page-title" style="font-size:20px;">Stock subteams</div>
+          <div class="subtitle" style="margin-bottom:10px;">Control the subteam/area options used for stock filtering.</div>
+        </div>
+        <button class="btn ghost" id="close-subteams-modal">Close</button>
+      </div>
+      <form id="stock-subteam-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:6px;">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="small">Name</label>
+          <input name="name" class="input" placeholder="e.g., Electrical, Drivetrain" required />
+        </div>
+        <div>
+          <label class="small">Description</label>
+          <input name="description" class="input" placeholder="Optional context" />
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="stock-subteam-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="clear-subteam-form">New</button>
+            <button type="submit" class="btn primary">Save</button>
+          </div>
+        </div>
+      </form>
+      <div id="stock-subteam-list" class="tag-manager-list" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
       <div id="admin-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:60; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
       <div class="flex-between" style="align-items:flex-start;">
@@ -1060,6 +1188,18 @@
     const tableBtn = document.getElementById('table-view-btn');
     const boardSection = document.getElementById('board-section');
     const tableSection = document.getElementById('table-section');
+    const stockSection = document.getElementById('stock-section');
+    const stockGrid = document.getElementById('stock-grid');
+    const stockSubteamFilter = document.getElementById('stock-subteam-filter');
+    const stockSearch = document.getElementById('stock-search');
+    const primaryTitle = document.getElementById('primary-title');
+    const primarySubtitle = document.getElementById('primary-subtitle');
+    const ordersViewBtn = document.getElementById('orders-view-btn');
+    const stockViewBtn = document.getElementById('stock-view-btn');
+    const ordersLayoutRow = document.getElementById('orders-layout-row');
+    const ordersLayoutToggle = document.getElementById('orders-layout-toggle');
+    const addStockBtn = document.getElementById('add-stock-btn');
+    const manageSubteamsBtn = document.getElementById('manage-subteams-btn');
     const refreshBtn = document.getElementById('refresh-btn');
     const globalSearch = document.getElementById('global-search');
     const statusFilter = document.getElementById('status-filter');
@@ -1166,6 +1306,17 @@
             }
           }
         }
+        if (stockSection) {
+          const top = stockSection.getBoundingClientRect().top - mainRect.top;
+          const available = Math.max(0, baseAvailable - top);
+          if (available > 240) {
+            stockSection.style.height = `${available}px`;
+            stockSection.style.maxHeight = `${available}px`;
+            if (stockGrid) {
+              stockGrid.style.maxHeight = `${available - 40}px`;
+            }
+          }
+        }
       });
     }
     window.addEventListener('resize', resizeColumns);
@@ -1244,6 +1395,28 @@
     const catalogRequestNotes = document.getElementById('catalog-request-notes');
     const catalogRequestMessage = document.getElementById('catalog-request-message');
     const catalogRequestSubtitle = document.getElementById('catalog-request-subtitle');
+    const stockModal = document.getElementById('stock-modal');
+    const stockForm = document.getElementById('stock-form');
+    const stockCatalogSearch = document.getElementById('stock-catalog-search');
+    const stockCatalogResults = document.getElementById('stock-catalog-results');
+    const stockCatalogSelected = document.getElementById('stock-catalog-selected');
+    const stockModalMessage = document.getElementById('stock-modal-message');
+    const stockModalTitle = document.getElementById('stock-modal-title');
+    const stockModalSubtitle = document.getElementById('stock-modal-subtitle');
+    const deleteStockBtn = document.getElementById('delete-stock-btn');
+    const cancelStockBtn = document.getElementById('cancel-stock');
+    const closeStockModalBtn = document.getElementById('close-stock-modal');
+    const stockSubteamSelect = document.getElementById('stock-subteam-select');
+    const stockQuantityInput = document.getElementById('stock-quantity');
+    const stockLowInput = document.getElementById('stock-low');
+    const stockLocationInput = document.getElementById('stock-location');
+    const stockNotesInput = document.getElementById('stock-notes');
+    const stockSubteamsModal = document.getElementById('stock-subteams-modal');
+    const stockSubteamForm = document.getElementById('stock-subteam-form');
+    const stockSubteamList = document.getElementById('stock-subteam-list');
+    const stockSubteamMessage = document.getElementById('stock-subteam-message');
+    const clearSubteamFormBtn = document.getElementById('clear-subteam-form');
+    const closeSubteamsModal = document.getElementById('close-subteams-modal');
     const catalogBackBtn = document.getElementById('catalog-back');
     const catalogCategoryList = document.getElementById('catalog-category-list');
     const catalogPathDisplay = document.getElementById('catalog-path-display');
@@ -1284,9 +1457,9 @@
     const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true },
-      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true },
-      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false }
+      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
+      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
+      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canManageStock: false, canEditStock: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -1418,6 +1591,13 @@
     ];
     let catalogNavStack = [];
     let currentCatalogCategoryId = 'root';
+    let stockItems = [];
+    let stockSubteams = [];
+    let selectedStockSubteam = 'all';
+    let activePrimaryView = 'orders';
+    let selectedStockCatalogItem = null;
+    let stockCatalogSearchTimer = null;
+    let stockSearchTimer = null;
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
     setOrderSource('manual');
@@ -2243,6 +2423,467 @@
       resizeColumns();
     }
 
+    function renderStockFilters() {
+      if (!stockSubteamFilter) return;
+      const options = [`<option value="all">All subteams</option>`, `<option value="none">Common stock</option>`];
+      (stockSubteams || []).forEach(st => {
+        options.push(`<option value="${st._id}">${escapeHtml(st.name)}</option>`);
+      });
+      stockSubteamFilter.innerHTML = options.join('');
+      const desired = selectedStockSubteam || 'all';
+      const hasOption = Array.from(stockSubteamFilter.options || []).some(opt => opt.value === desired);
+      stockSubteamFilter.value = hasOption ? desired : 'all';
+    }
+
+    function setSelectedStockCatalogItem(item) {
+      selectedStockCatalogItem = item;
+      if (stockCatalogSelected) {
+        stockCatalogSelected.textContent = item
+          ? `${item.name || ''}${item.vendor ? ' · ' + item.vendor : ''}${item.vendorPartNumber ? ' · ' + item.vendorPartNumber : ''}`
+          : 'Search for a catalog item to track.';
+      }
+    }
+
+    function renderStockGrid() {
+      if (!stockGrid) return;
+      if (!currentUser) {
+        stockGrid.innerHTML = '<div class="empty">Login to view stock.</div>';
+        return;
+      }
+      if (!stockItems.length) {
+        stockGrid.innerHTML = '<div class="empty">No stock tracked yet. Add items to start tracking.</div>';
+        return;
+      }
+      stockGrid.innerHTML = '';
+      const canAdjustStock = currentUser?.permissions?.canEditStock || currentUser?.permissions?.canManageStock;
+      stockItems.forEach(item => {
+        const qty = item.quantityOnHand ?? 0;
+        const low = item.lowStockThreshold;
+        const isEmpty = qty <= 0;
+        const isLow = !isEmpty && low !== undefined && qty <= low;
+        const card = document.createElement('div');
+        card.className = 'card stock-card';
+        if (isLow) card.classList.add('stock-low');
+        if (isEmpty) card.classList.add('stock-empty');
+        card.dataset.id = item._id;
+        const subteamLabel = item.subteam || 'Common stock';
+        const lowText = low !== undefined ? `Low at ${low}` : 'No alert set';
+        const statusText = isEmpty ? '<span class="stock-empty-text">Out of stock</span>' : (isLow ? '<span class="stock-low-text">Low</span>' : '');
+        card.innerHTML = `
+          <div class="flex-between" style="gap:8px; align-items:flex-start;">
+            <div>
+              <h4 style="margin:0 0 6px;">${escapeHtml(item.name)}</h4>
+              <div class="meta">
+                ${item.vendor ? `<span class="tag supplier">${escapeHtml(item.vendor)}</span>` : ''}
+                ${item.vendorPartNumber ? `<span class="tag">${escapeHtml(item.vendorPartNumber)}</span>` : ''}
+                ${item.catalogFullPath ? `<span class="tag group">${escapeHtml(item.catalogFullPath)}</span>` : ''}
+              </div>
+            </div>
+            ${statusText ? `<div>${statusText}</div>` : ''}
+          </div>
+          <div class="stock-adjust">
+            ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ''}
+            <div class="stock-level">${qty}</div>
+            ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ''}
+            ${!canAdjustStock ? `<div class="small">View only</div>` : ''}
+          </div>
+          <div class="stock-meta-row" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <span class="stock-chip">${escapeHtml(subteamLabel)}</span>
+            ${item.location ? `<span class="stock-chip">📍 ${escapeHtml(item.location)}</span>` : ''}
+            ${item.lowStockThreshold !== undefined ? `<span class="stock-chip">Min: ${item.lowStockThreshold}</span>` : ''}
+          </div>
+          ${currentUser?.permissions?.canManageStock ? `
+            <div class="small" style="margin-top:6px;">
+              Low stock alert at
+              <input type="number" class="input stock-low-input" data-id="${item._id}" value="${item.lowStockThreshold ?? ''}" min="0" style="width:90px; display:inline-block; margin-left:6px;" />
+            </div>
+          ` : `<div class="small" style="margin-top:6px;">${lowText}</div>`}
+          <div class="stock-actions">
+            <button class="btn primary" data-action="request-stock" data-id="${item._id}" style="padding:6px 10px;">Request order</button>
+            ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="edit-stock" data-id="${item._id}" style="padding:6px 10px;">Edit</button>` : ''}
+            ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="delete-stock" data-id="${item._id}" style="padding:6px 10px; color: var(--danger);">Untrack</button>` : ''}
+            ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:6px 10px;">Link</a>` : ''}
+          </div>
+        `;
+        stockGrid.appendChild(card);
+      });
+      stockGrid.querySelectorAll('button[data-action="adjust-stock"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.dataset.id;
+          const delta = Number(e.target.dataset.delta);
+          if (!id || !Number.isFinite(delta)) return;
+          await adjustStockQuantity(id, delta);
+        });
+      });
+      stockGrid.querySelectorAll('.stock-low-input').forEach(inp => {
+        inp.addEventListener('change', async (e) => {
+          const id = e.target.dataset.id;
+          const val = Number(e.target.value);
+          if (!id || !Number.isFinite(val) || val < 0) return;
+          await saveStockThreshold(id, val);
+        });
+      });
+      stockGrid.querySelectorAll('button[data-action="request-stock"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.target.dataset.id;
+          const item = stockItems.find(s => s._id === id);
+          if (!item) return;
+          if (!currentUser?.permissions?.canPlaceOrders) {
+            showBoardMessage('No permission to place orders.', 'error');
+            return;
+          }
+          const requestItem = item.catalogItem || {
+            name: item.name,
+            vendor: item.vendor,
+            vendorPartNumber: item.vendorPartNumber,
+            supplierLink: item.supplierLink,
+            unitCost: item.unitCost,
+            defaultQuantity: 1,
+            fullPath: item.catalogFullPath
+          };
+          openCatalogRequestModal(requestItem);
+        });
+      });
+      stockGrid.querySelectorAll('button[data-action="edit-stock"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.target.dataset.id;
+          const item = stockItems.find(s => s._id === id);
+          if (item) openStockModal(item);
+        });
+      });
+      stockGrid.querySelectorAll('button[data-action="delete-stock"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.dataset.id;
+          if (!id) return;
+          await deleteStockItem(id);
+        });
+      });
+    }
+
+    async function loadStock() {
+      if (!stockGrid) return;
+      if (!currentUser) {
+        stockGrid.innerHTML = '<div class="empty">Login to view stock.</div>';
+        return;
+      }
+      const params = new URLSearchParams();
+      const searchTerm = stockSearch?.value?.trim();
+      if (searchTerm) params.set('search', searchTerm);
+      if (selectedStockSubteam && selectedStockSubteam !== 'all' && selectedStockSubteam !== 'none') {
+        params.set('subteamId', selectedStockSubteam);
+      }
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      stockGrid.innerHTML = '<div class="empty">Loading stock...</div>';
+      try {
+        const res = await fetch(`/api/stock${qs}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load stock');
+        const incoming = data.items || [];
+        stockSubteams = data.subteams || stockSubteams;
+        renderStockFilters();
+        stockItems = selectedStockSubteam === 'none'
+          ? incoming.filter(i => !i.subteamId)
+          : incoming;
+        renderStockGrid();
+      } catch (err) {
+        stockGrid.innerHTML = `<div class="empty">${escapeHtml(err.message || 'Failed to load stock')}</div>`;
+      }
+    }
+
+    function resetStockModal() {
+      if (!stockForm) return;
+      stockForm.reset();
+      setSelectedStockCatalogItem(null);
+      if (stockCatalogSearch) { stockCatalogSearch.value = ''; stockCatalogSearch.disabled = false; }
+      if (stockCatalogResults) { stockCatalogResults.innerHTML = ''; stockCatalogResults.style.display = 'none'; }
+      if (stockModalMessage) { stockModalMessage.textContent = ''; stockModalMessage.className = 'small'; }
+      if (deleteStockBtn) deleteStockBtn.style.display = 'none';
+      if (stockModalTitle) stockModalTitle.textContent = 'Add stock item';
+      if (stockModalSubtitle) stockModalSubtitle.textContent = 'Pick a catalog part to track and set the starting quantity.';
+    }
+
+    function openStockModal(item = null) {
+      if (!currentUser?.permissions?.canManageStock) {
+        showBoardMessage('No permission to configure stock.', 'error');
+        return;
+      }
+      if (!stockForm) return;
+      resetStockModal();
+      renderStockFilters();
+      if (stockSubteamSelect) {
+        const opts = [`<option value="">Common stock</option>`].concat(
+          (stockSubteams || []).map(st => `<option value="${st._id}">${escapeHtml(st.name)}</option>`)
+        );
+        stockSubteamSelect.innerHTML = opts.join('');
+      }
+      if (item) {
+        stockForm.elements.id.value = item._id || '';
+        if (stockQuantityInput) stockQuantityInput.value = item.quantityOnHand ?? 0;
+        if (stockLowInput) stockLowInput.value = item.lowStockThreshold ?? '';
+        if (stockLocationInput) stockLocationInput.value = item.location || '';
+        if (stockNotesInput) stockNotesInput.value = item.notes || '';
+        if (stockSubteamSelect) stockSubteamSelect.value = item.subteamId ? item.subteamId.toString() : '';
+        setSelectedStockCatalogItem(item.catalogItem || item);
+        if (stockCatalogSearch) stockCatalogSearch.disabled = true;
+        if (stockModalTitle) stockModalTitle.textContent = 'Edit stock item';
+        if (stockModalSubtitle) stockModalSubtitle.textContent = 'Update subteam, location, thresholds, or counts.';
+        if (deleteStockBtn) deleteStockBtn.style.display = 'inline-flex';
+      } else {
+        if (stockSubteamSelect) stockSubteamSelect.value = selectedStockSubteam && selectedStockSubteam !== 'all' ? selectedStockSubteam : '';
+        setSelectedStockCatalogItem(null);
+      }
+      if (stockModal) stockModal.style.display = 'flex';
+    }
+
+    async function saveStockForm(e) {
+      e.preventDefault();
+      if (!stockForm) return;
+      const id = stockForm.elements.id.value || null;
+      const quantity = Number(stockQuantityInput?.value || 0);
+      const low = stockLowInput?.value === '' ? undefined : Number(stockLowInput?.value);
+      const subteamId = stockSubteamSelect ? stockSubteamSelect.value : '';
+      const location = stockLocationInput?.value?.trim() || undefined;
+      const notes = stockNotesInput?.value?.trim() || undefined;
+      if (!id && !selectedStockCatalogItem) {
+        stockModalMessage.textContent = 'Select a catalog item first.';
+        stockModalMessage.className = 'error';
+        return;
+      }
+      if (stockModalMessage) { stockModalMessage.textContent = 'Saving...'; stockModalMessage.className = 'small'; }
+      try {
+        if (id) {
+          await fetch(`/api/stock/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subteamId: subteamId === '' ? null : subteamId,
+              quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
+              lowStockThreshold: Number.isFinite(low) ? low : undefined,
+              location,
+              notes
+            })
+          });
+        } else {
+          const payload = {
+            catalogItemId: selectedStockCatalogItem?._id || selectedStockCatalogItem?.id,
+            subteamId: subteamId === '' ? undefined : subteamId,
+            quantityOnHand: Number.isFinite(quantity) ? quantity : 0,
+            lowStockThreshold: Number.isFinite(low) ? low : undefined,
+            location,
+            notes
+          };
+          const res = await fetch('/api/stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to create stock');
+        }
+        if (stockModal) stockModal.style.display = 'none';
+        await loadStock();
+        showBoardMessage('Stock saved.', 'info');
+      } catch (err) {
+        if (stockModalMessage) {
+          stockModalMessage.textContent = err.message || 'Failed to save stock';
+          stockModalMessage.className = 'error';
+        }
+      }
+    }
+
+    async function adjustStockQuantity(id, delta, absolute) {
+      if (!currentUser?.permissions?.canEditStock && !currentUser?.permissions?.canManageStock) {
+        showBoardMessage('No permission to edit stock.', 'error');
+        return;
+      }
+      try {
+        await fetch(`/api/stock/${id}/adjust`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delta: absolute === undefined ? delta : undefined,
+            quantityOnHand: absolute
+          })
+        });
+        await loadStock();
+      } catch (err) {
+        showBoardMessage(err.message || 'Failed to update stock', 'error');
+      }
+    }
+
+    async function saveStockThreshold(id, value) {
+      if (!currentUser?.permissions?.canManageStock) {
+        showBoardMessage('No permission to configure stock.', 'error');
+        return;
+      }
+      try {
+        await fetch(`/api/stock/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lowStockThreshold: value })
+        });
+        await loadStock();
+      } catch (err) {
+        showBoardMessage(err.message || 'Failed to save threshold', 'error');
+      }
+    }
+
+    async function deleteStockItem(id) {
+      if (!currentUser?.permissions?.canManageStock) {
+        showBoardMessage('No permission to untrack stock.', 'error');
+        return;
+      }
+      if (!confirm('Stop tracking this stock item?')) return;
+      try {
+        await fetch(`/api/stock/${id}`, { method: 'DELETE' });
+        await loadStock();
+        showBoardMessage('Stock entry removed.', 'info');
+      } catch (err) {
+        showBoardMessage(err.message || 'Failed to remove stock', 'error');
+      }
+    }
+
+    function renderSubteamList() {
+      if (!stockSubteamList) return;
+      if (!stockSubteams.length) {
+        stockSubteamList.innerHTML = '<div class="empty">No subteams yet.</div>';
+        return;
+      }
+      stockSubteamList.innerHTML = stockSubteams.map(st => `
+        <div class="tag-manager-item" data-id="${st._id}">
+          <div class="tag-manager-meta" style="flex-wrap:wrap; gap:6px;">
+            <div style="font-weight:700;">${escapeHtml(st.name)}</div>
+            ${st.description ? `<div class="small">${escapeHtml(st.description)}</div>` : ''}
+          </div>
+          <div class="flex-between" style="gap:6px;">
+            <button class="btn ghost" data-action="edit-subteam" style="padding:6px 10px;">Edit</button>
+            <button class="btn ghost" data-action="delete-subteam" style="padding:6px 10px; color: var(--danger);">Delete</button>
+          </div>
+        </div>
+      `).join('');
+      stockSubteamList.querySelectorAll('button[data-action="edit-subteam"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.target.closest('.tag-manager-item')?.dataset.id;
+          const st = stockSubteams.find(s => s._id === id);
+          if (!st || !stockSubteamForm) return;
+          stockSubteamForm.elements.id.value = st._id;
+          stockSubteamForm.elements.name.value = st.name || '';
+          stockSubteamForm.elements.description.value = st.description || '';
+        });
+      });
+      stockSubteamList.querySelectorAll('button[data-action="delete-subteam"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.closest('.tag-manager-item')?.dataset.id;
+          if (!id) return;
+          await removeSubteam(id);
+        });
+      });
+    }
+
+    async function loadSubteams() {
+      if (!currentUser) return;
+      try {
+        const res = await fetch('/api/stock/subteams');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load subteams');
+        stockSubteams = data.subteams || [];
+        renderSubteamList();
+        renderStockFilters();
+      } catch (err) {
+        if (stockSubteamMessage) {
+          stockSubteamMessage.textContent = err.message || 'Failed to load subteams';
+          stockSubteamMessage.className = 'error';
+        }
+      }
+    }
+
+    function openSubteamsModal() {
+      if (!currentUser?.permissions?.canManageStock) return;
+      if (stockSubteamMessage) { stockSubteamMessage.textContent = ''; stockSubteamMessage.className = 'small'; }
+      stockSubteamForm?.reset();
+      renderSubteamList();
+      if (stockSubteamsModal) stockSubteamsModal.style.display = 'flex';
+    }
+
+    async function saveSubteam(e) {
+      e.preventDefault();
+      if (!stockSubteamForm) return;
+      const id = stockSubteamForm.elements.id.value || null;
+      const name = stockSubteamForm.elements.name.value?.trim();
+      const description = stockSubteamForm.elements.description.value?.trim();
+      if (!name) return;
+      if (stockSubteamMessage) { stockSubteamMessage.textContent = 'Saving...'; stockSubteamMessage.className = 'small'; }
+      try {
+        const url = id ? `/api/stock/subteams/${id}` : '/api/stock/subteams';
+        const method = id ? 'PATCH' : 'POST';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save subteam');
+        stockSubteamForm.reset();
+        await loadSubteams();
+        await loadStock();
+        if (stockSubteamMessage) { stockSubteamMessage.textContent = 'Saved.'; stockSubteamMessage.className = 'success'; }
+      } catch (err) {
+        if (stockSubteamMessage) { stockSubteamMessage.textContent = err.message || 'Failed to save subteam'; stockSubteamMessage.className = 'error'; }
+      }
+    }
+
+    async function removeSubteam(id) {
+      if (!currentUser?.permissions?.canManageStock) return;
+      if (!confirm('Delete this subteam? Items will become unassigned.')) return;
+      try {
+        await fetch(`/api/stock/subteams/${id}`, { method: 'DELETE' });
+        await loadSubteams();
+        await loadStock();
+      } catch (err) {
+        if (stockSubteamMessage) { stockSubteamMessage.textContent = err.message || 'Failed to delete subteam'; stockSubteamMessage.className = 'error'; }
+      }
+    }
+
+    async function searchStockCatalog(term) {
+      if (!stockCatalogResults) return;
+      const q = (term || '').trim();
+      if (q.length < 2) {
+        stockCatalogResults.style.display = 'none';
+        stockCatalogResults.innerHTML = '';
+        return;
+      }
+      stockCatalogResults.style.display = 'block';
+      stockCatalogResults.innerHTML = '<div class="small" style="padding:8px 10px;">Searching...</div>';
+      try {
+        const res = await fetch(`/api/catalog/items?search=${encodeURIComponent(q)}&includeDescendants=true`);
+        const data = await res.json();
+        const items = data.items || [];
+        if (!items.length) {
+          stockCatalogResults.innerHTML = '<div class="small" style="padding:8px 10px;">No matches</div>';
+          return;
+        }
+        stockCatalogResults.innerHTML = items.slice(0, 30).map(item => `
+          <div class="tag-option" data-id="${item._id}">
+            <div style="font-weight:700;">${escapeHtml(item.name)}</div>
+            <div class="small">${escapeHtml(item.fullPath || (item.categoryPathLabels || []).join(' / ') || '')}${item.vendor ? ' · ' + escapeHtml(item.vendor) : ''}${item.vendorPartNumber ? ' · ' + escapeHtml(item.vendorPartNumber) : ''}</div>
+          </div>
+        `).join('');
+        stockCatalogResults.querySelectorAll('.tag-option').forEach(row => {
+          row.addEventListener('click', () => {
+            const id = row.dataset.id;
+            const found = items.find(i => i._id === id);
+            if (found) {
+              setSelectedStockCatalogItem(found);
+              stockCatalogResults.style.display = 'none';
+              stockCatalogSearch.value = found.name || '';
+            }
+          });
+        });
+      } catch (err) {
+        stockCatalogResults.innerHTML = '<div class="small" style="padding:8px 10px;">Failed to search catalog</div>';
+      }
+    }
+
     function renderTable() {
       const rows = filteredOrders();
       if (!rows.length) {
@@ -2399,21 +3040,60 @@
     }
 
     // Event wiring
+    function showOrdersView() {
+      activePrimaryView = 'orders';
+      ordersViewBtn?.classList.add('active');
+      stockViewBtn?.classList.remove('active');
+      if (ordersLayoutRow) ordersLayoutRow.style.display = 'flex';
+      if (ordersLayoutToggle) ordersLayoutToggle.style.display = 'inline-flex';
+      if (selectionBar) selectionBar.style.display = '';
+      if (stockSection) stockSection.style.display = 'none';
+      boardSection.style.display = boardBtn.classList.contains('active') ? 'flex' : 'none';
+      tableSection.style.display = tableBtn.classList.contains('active') ? 'flex' : 'none';
+      if (primaryTitle) primaryTitle.textContent = 'Orders';
+      if (primarySubtitle) primarySubtitle.textContent = 'Track parts from request to delivery.';
+      resizeColumns();
+      setTimeout(resizeColumns, 30);
+    }
+
+    function showStockView() {
+      activePrimaryView = 'stock';
+      stockViewBtn?.classList.add('active');
+      ordersViewBtn?.classList.remove('active');
+      if (ordersLayoutRow) ordersLayoutRow.style.display = 'none';
+      if (ordersLayoutToggle) ordersLayoutToggle.style.display = 'none';
+      if (selectionBar) selectionBar.style.display = 'none';
+      boardSection.style.display = 'none';
+      tableSection.style.display = 'none';
+      if (stockSection) stockSection.style.display = 'flex';
+      if (primaryTitle) primaryTitle.textContent = 'Stock';
+      if (primarySubtitle) primarySubtitle.textContent = 'Live view of parts on-hand by subteam.';
+      loadStock();
+      resizeColumns();
+      setTimeout(resizeColumns, 30);
+    }
+
     const switchToBoard = () => {
+      if (activePrimaryView !== 'orders') showOrdersView();
       boardBtn.classList.add('active'); tableBtn.classList.remove('active');
       boardSection.style.display = 'flex'; tableSection.style.display = 'none';
       resizeColumns();
       setTimeout(resizeColumns, 30);
     };
     const switchToTable = () => {
+      if (activePrimaryView !== 'orders') showOrdersView();
       tableBtn.classList.add('active'); boardBtn.classList.remove('active');
       boardSection.style.display = 'none'; tableSection.style.display = 'flex';
       resizeColumns();
       setTimeout(resizeColumns, 30);
     };
+    ordersViewBtn?.addEventListener('click', showOrdersView);
+    stockViewBtn?.addEventListener('click', showStockView);
     boardBtn.addEventListener('click', switchToBoard);
     tableBtn.addEventListener('click', switchToTable);
-    refreshBtn.addEventListener('click', fetchOrders);
+    refreshBtn.addEventListener('click', () => {
+      if (activePrimaryView === 'stock') loadStock(); else fetchOrders();
+    });
     undoBtn.addEventListener('click', doUndo);
     redoBtn.addEventListener('click', doRedo);
     globalSearch.addEventListener('input', () => { renderBoard(); renderTable(); });
@@ -2421,6 +3101,28 @@
     vendorFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
     startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
+    stockSubteamFilter?.addEventListener('change', () => { selectedStockSubteam = stockSubteamFilter.value; loadStock(); });
+    stockSearch?.addEventListener('input', () => {
+      clearTimeout(stockSearchTimer);
+      stockSearchTimer = setTimeout(() => loadStock(), 250);
+    });
+    addStockBtn?.addEventListener('click', () => openStockModal());
+    manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
+    stockForm?.addEventListener('submit', saveStockForm);
+    deleteStockBtn?.addEventListener('click', async () => {
+      const id = stockForm?.elements?.id?.value;
+      if (id) await deleteStockItem(id);
+      if (stockModal) stockModal.style.display = 'none';
+    });
+    cancelStockBtn?.addEventListener('click', () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
+    closeStockModalBtn?.addEventListener('click', () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
+    stockCatalogSearch?.addEventListener('input', () => {
+      clearTimeout(stockCatalogSearchTimer);
+      stockCatalogSearchTimer = setTimeout(() => searchStockCatalog(stockCatalogSearch.value || ''), 220);
+    });
+    stockSubteamForm?.addEventListener('submit', saveSubteam);
+    clearSubteamFormBtn?.addEventListener('click', () => { stockSubteamForm?.reset(); });
+    closeSubteamsModal?.addEventListener('click', () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
     groupBtn.addEventListener('click', createGroup);
     deleteSelectedBtn?.addEventListener('click', async () => {
       if (!currentUser?.permissions?.canDeleteOrders) {
@@ -2478,6 +3180,8 @@
     attachBackdropClose(catalogCategoryEditModal, () => { catalogCategoryEditModal.style.display = 'none'; });
     attachBackdropClose(catalogItemModal, () => { catalogItemModal.style.display = 'none'; resetCatalogItemForm(); });
     attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
+    attachBackdropClose(stockModal, () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
+    attachBackdropClose(stockSubteamsModal, () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
 
     function findVendorConfig(name) {
       if (!name) return null;
@@ -4329,6 +5033,8 @@
       if (currentUser) currentUser.permissions = perms;
       newOrderBtn.disabled = !perms.canPlaceOrders;
       adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditInventoryCatalog) ? 'inline-flex' : 'none';
+      if (addStockBtn) addStockBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
+      if (manageSubteamsBtn) manageSubteamsBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
       syncCatalogSaveUI();
       updateCatalogEditVisibility();
@@ -4404,11 +5110,11 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true },
-          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true },
-          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false }
+          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
+          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
+          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canManageStock: false, canEditStock: false }
         };
-        roles.forEach(r => { combined[r.role] = r.permissions; });
+        roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
         const renderToggle = (role, key, label) => {
           const disabled = role === 'admin' ? 'disabled' : '';
@@ -4431,6 +5137,8 @@
               ${renderToggle(role, 'canManageUsers', 'Can manage users')}
               ${renderToggle(role, 'canManageTags', 'Can manage tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Can edit inventory catalog')}
+              ${renderToggle(role, 'canManageStock', 'Can configure tracked stock & subteams')}
+              ${renderToggle(role, 'canEditStock', 'Can edit stock levels')}
             </div>
             ${role === 'admin'
               ? `<div class="small" style="margin-top:8px;">Admin permissions are fixed and cannot be changed.</div>`
@@ -4625,6 +5333,8 @@
         await loadTags();
         await loadPriorityTags();
         fetchOrders();
+        await loadStock();
+        await loadSubteams();
         loadVendors();
         loadUsers();
         refreshCatalogView();
@@ -4633,6 +5343,9 @@
         updateUserUI();
         resetCatalogSavePanel();
         resetCatalogLookup();
+        stockItems = [];
+        renderStockGrid();
+        renderStockFilters();
       }
     }
 
@@ -4648,6 +5361,11 @@
       orders = [];
       renderBoard();
       renderTable();
+      stockItems = [];
+      renderStockGrid();
+      stockSubteams = [];
+      renderStockFilters();
+      showOrdersView();
     });
 
     loginForm.addEventListener('submit', async (e) => {
@@ -4677,6 +5395,8 @@
       await loadTags();
       await loadPriorityTags();
       fetchOrders();
+      await loadStock();
+      await loadSubteams();
       loadVendors();
       loadUsers();
       refreshCatalogView();

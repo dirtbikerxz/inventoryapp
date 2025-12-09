@@ -54,7 +54,9 @@ function defaultPermissions(role) {
     canManageVendors: false,
     canManageUsers: false,
     canManageTags: false,
-    canEditInventoryCatalog: false
+    canEditInventoryCatalog: false,
+    canManageStock: false,
+    canEditStock: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -66,7 +68,9 @@ function defaultPermissions(role) {
         canManageVendors: true,
         canManageUsers: true,
         canManageTags: true,
-        canEditInventoryCatalog: true
+        canEditInventoryCatalog: true,
+        canManageStock: true,
+        canEditStock: true
       };
     case 'mentor':
       return {
@@ -77,7 +81,9 @@ function defaultPermissions(role) {
         canManageVendors: true,
         canManageUsers: false,
         canManageTags: true,
-        canEditInventoryCatalog: true
+        canEditInventoryCatalog: true,
+        canManageStock: true,
+        canEditStock: true
       };
     case 'student':
       return base;
@@ -538,6 +544,163 @@ app.delete('/api/catalog/items/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to delete catalog item');
     res.status(500).json({ error: 'Unable to delete catalog item', details: error.message });
+  }
+});
+
+app.get('/api/stock/subteams', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const data = await client.query('stock:listSubteams', {});
+    res.json(data);
+  } catch (error) {
+    logger.error(error, 'Failed to list stock subteams');
+    res.status(500).json({ error: 'Unable to list stock subteams' });
+  }
+});
+
+app.post('/api/stock/subteams', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  try {
+    const result = await client.mutation('stock:upsertSubteam', {
+      name: req.body?.name,
+      description: req.body?.description,
+      userId: user._id?.toString()
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create subteam');
+    res.status(500).json({ error: 'Unable to create subteam', details: error.message });
+  }
+});
+
+app.patch('/api/stock/subteams/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  try {
+    const result = await client.mutation('stock:upsertSubteam', {
+      id: req.params.id,
+      name: req.body?.name,
+      description: req.body?.description,
+      userId: user._id?.toString()
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to update subteam');
+    res.status(500).json({ error: 'Unable to update subteam', details: error.message });
+  }
+});
+
+app.delete('/api/stock/subteams/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  try {
+    const result = await client.mutation('stock:deleteSubteam', {
+      id: req.params.id,
+      userId: user._id?.toString()
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete subteam');
+    res.status(500).json({ error: 'Unable to delete subteam', details: error.message });
+  }
+});
+
+app.get('/api/stock', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const data = await client.query('stock:list', {
+      subteamId: req.query.subteamId || undefined,
+      search: req.query.search || undefined,
+      includeArchived: req.query.includeArchived === 'true'
+    });
+    res.json(data);
+  } catch (error) {
+    logger.error(error, 'Failed to load stock');
+    res.status(500).json({ error: 'Unable to load stock' });
+  }
+});
+
+app.post('/api/stock', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  const { catalogItemId, subteamId, quantityOnHand, lowStockThreshold, location, notes } = req.body || {};
+  if (!catalogItemId || quantityOnHand === undefined) {
+    return res.status(400).json({ error: 'catalogItemId and quantityOnHand are required' });
+  }
+  try {
+    const result = await client.mutation('stock:create', {
+      catalogItemId,
+      subteamId,
+      quantityOnHand,
+      lowStockThreshold,
+      location,
+      notes,
+      userId: user._id?.toString()
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create stock item');
+    res.status(500).json({ error: 'Unable to create stock item', details: error.message });
+  }
+});
+
+app.patch('/api/stock/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  const { subteamId, lowStockThreshold, location, notes, quantityOnHand } = req.body || {};
+  try {
+    const result = await client.mutation('stock:update', {
+      id: req.params.id,
+      subteamId,
+      lowStockThreshold,
+      location,
+      notes,
+      quantityOnHand,
+      userId: user._id?.toString()
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to update stock item');
+    res.status(500).json({ error: 'Unable to update stock item', details: error.message });
+  }
+});
+
+app.post('/api/stock/:id/adjust', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  if (!user.permissions?.canEditStock && !user.permissions?.canManageStock) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { delta, quantityOnHand } = req.body || {};
+  try {
+    const result = await client.mutation('stock:adjustQuantity', {
+      id: req.params.id,
+      delta,
+      quantityOnHand,
+      userId: user._id?.toString()
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to adjust stock quantity');
+    res.status(500).json({ error: 'Unable to adjust stock quantity', details: error.message });
+  }
+});
+
+app.delete('/api/stock/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageStock');
+  if (!user) return;
+  try {
+    const result = await client.mutation('stock:remove', {
+      id: req.params.id,
+      hard: req.query.hard === 'true'
+    });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete stock item');
+    res.status(500).json({ error: 'Unable to delete stock item', details: error.message });
   }
 });
 
