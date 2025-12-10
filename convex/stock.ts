@@ -38,9 +38,6 @@ export const list = query({
     subteams.forEach(st => subteamMap.set(st._id.toString(), st));
 
     let items = await ctx.db.query("stockItems").collect();
-    if (!args.includeArchived) {
-      items = items.filter(i => !i.archived);
-    }
 
     if (args.catalogItemId) {
       const catalogId = ctx.db.normalizeId("catalogItems", args.catalogItemId);
@@ -207,28 +204,7 @@ export const create = mutation({
       .collect();
     const duplicate = existing.find(e => (e.subteamId?.toString() || "") === (subteamId?.toString() || ""));
     if (duplicate) {
-      if (!duplicate.archived) {
-        throw new Error("Item already exists in location");
-      }
-      await ctx.db.patch(duplicate._id, {
-        name: catalogItem.name,
-        vendor: catalogItem.vendor,
-        vendorPartNumber: catalogItem.vendorPartNumber,
-        supplierLink: catalogItem.supplierLink,
-        unitCost: catalogItem.unitCost,
-        catalogFullPath: catalogItem.fullPath,
-        subteamId: subteamId ?? undefined,
-        subteam: subteam?.name,
-        location: args.location,
-        category: args.category,
-        quantityOnHand: normalizeQuantity(args.quantityOnHand, 0),
-        lowStockThreshold: args.lowStockThreshold !== undefined ? normalizeQuantity(args.lowStockThreshold, 0) : duplicate.lowStockThreshold,
-        notes: args.notes,
-        archived: false,
-        updatedAt: now,
-        updatedBy: userId ?? duplicate.updatedBy
-      });
-      return { id: duplicate._id };
+      throw new Error("Item already exists in location");
     }
 
     const id = await ctx.db.insert("stockItems", {
@@ -246,7 +222,6 @@ export const create = mutation({
       quantityOnHand: normalizeQuantity(args.quantityOnHand, 0),
       lowStockThreshold: args.lowStockThreshold !== undefined ? normalizeQuantity(args.lowStockThreshold, 0) : undefined,
       notes: args.notes,
-      archived: false,
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
@@ -335,11 +310,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("stockItems", args.id);
     if (!id) throw new Error("Invalid stock id");
-    if (args.hard) {
-      await ctx.db.delete(id);
-      return { id };
-    }
-    await ctx.db.patch(id, { archived: true, updatedAt: Date.now() });
+    await ctx.db.delete(id);
     return { id };
   }
 });

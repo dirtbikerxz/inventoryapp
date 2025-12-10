@@ -219,7 +219,6 @@ export default defineSchema({
   quantityOnHand: v.number(),
   lowStockThreshold: v.optional(v.number()),
   notes: v.optional(v.string()),
-  archived: v.optional(v.boolean()),
   createdAt: v.number(),
     updatedAt: v.number(),
     createdBy: v.optional(v.id("users")),
