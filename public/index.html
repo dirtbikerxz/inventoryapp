@@ -1805,7 +1805,8 @@
       return (order?.supplier || order?.vendor || '').toLowerCase();
     }
     function snapshotOrder(id) {
-      return orders.find(o => o._id === id);
+      const o = orders.find(o => o._id === id);
+      return o ? JSON.parse(JSON.stringify(o)) : null;
     }
     function sanitizeOrderForCreate(order) {
       if (!order) return null;
@@ -1896,25 +1897,44 @@
           await assignGroup(step.payload.orderId, step.payload.groupId);
           break;
         }
-    case 'createGroup': {
-      const res = await fetch('/api/order-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: step.payload.title,
-          supplier: step.payload.supplier,
-          requestedDisplayAt: step.payload.requestedDisplayAt,
-          orderIds: step.payload.orderIds
-        })
-      });
+        case 'createGroup': {
+          const res = await fetch('/api/order-groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: step.payload.title,
+              supplier: step.payload.supplier,
+              requestedDisplayAt: step.payload.requestedDisplayAt,
+              orderIds: step.payload.orderIds
+            })
+          });
           const data = await res.json();
           const newGroupId = data.groupId || data._id;
+          if (Array.isArray(step.payload.orderIds)) {
+            for (const oid of step.payload.orderIds) {
+              await patchStatusOnly(oid, step.payload.status || 'Ordered');
+              await assignGroup(oid, newGroupId);
+            }
+          }
+          if (step.payload.notes || (step.payload.tracking && step.payload.tracking.length)) {
+            await fetch(`/api/order-groups/${newGroupId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ notes: step.payload.notes, tracking: step.payload.tracking })
+            });
+          }
           if (counterpart && counterpart.type === 'deleteGroup') {
             counterpart.payload.groupId = newGroupId;
           }
           break;
         }
         case 'deleteGroup': {
+          if (Array.isArray(step.payload?.orderIds)) {
+            for (const oid of step.payload.orderIds) {
+              await assignGroup(oid, undefined);
+              await patchStatusOnly(oid, 'Requested');
+            }
+          }
           await fetch(`/api/order-groups/${step.payload.groupId}`, { method: 'DELETE' });
           break;
         }
@@ -2360,6 +2380,10 @@
           e.stopPropagation();
           openConfirm('Delete this order?', async () => {
             const snapshot = snapshotOrder(order._id);
+            if (order.groupId || order.group?._id) {
+              await assignGroup(order._id, undefined);
+              await patchStatusOnly(order._id, 'Requested');
+            }
             await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
             if (snapshot) {
               recordAction({
@@ -2616,10 +2640,17 @@
               e.stopPropagation();
               const orderIds = items.map(o => o._id);
               openConfirm('Delete this group? Orders will be ungrouped.', async () => {
+                const originalStatus = first.status || 'Ordered';
+                const originalTracking = trackingList || [];
+                const originalNotes = first.group?.notes || '';
+                for (const oid of orderIds) {
+                  await assignGroup(oid, undefined);
+                  await patchStatusOnly(oid, 'Requested');
+                }
                 await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
                 recordAction({
-                  undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt, orderIds } },
-                  redo: { type: 'deleteGroup', payload: { groupId: gid } }
+                  undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt, orderIds, status: originalStatus, tracking: originalTracking, notes: originalNotes } },
+                  redo: { type: 'deleteGroup', payload: { groupId: gid, orderIds, status: originalStatus } }
                 });
                 fetchOrders();
               });
@@ -2650,7 +2681,9 @@
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
               const oid = e.target.closest('.group-item').dataset.id;
-              await removePartFromGroup(oid);
+              openConfirm('Remove this part from the order?', async () => {
+                await removePartFromGroup(oid, gid, status);
+              });
             });
           });
           card.querySelectorAll('a[data-action="link-part"]').forEach(anchor => {
@@ -3517,9 +3550,16 @@
       await fetchOrders();
     }
 
-    async function removePartFromGroup(orderId) {
+    async function removePartFromGroup(orderId, fromGroupId, fromStatus) {
+      const snapshot = snapshotOrder(orderId);
       await assignGroup(orderId, undefined);
       await patchStatusOnly(orderId, 'Requested');
+      if (snapshot) {
+        recordAction({
+          undo: { type: 'updateStatus', payload: { orderId, status: fromStatus || 'Ordered', groupId: fromGroupId } },
+          redo: { type: 'updateStatus', payload: { orderId, status: 'Requested', groupId: undefined } }
+        });
+      }
       await fetchOrders();
     }
 
