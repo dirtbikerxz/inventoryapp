@@ -441,17 +441,17 @@
     </div>
     <div class="toolbar">
       <div class="toolbar-buttons">
-        <div id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></div>
-        <button class="btn ghost" id="login-btn">Login</button>
-        <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
-        <button class="btn ghost" id="account-btn">Account</button>
-        <button class="btn ghost" id="tags-btn" style="display:none;">Tags</button>
+        <button class="btn ghost" id="refresh-btn">Refresh</button>
         <button class="btn ghost" id="catalog-btn" style="display:none;">Catalog</button>
         <button class="btn ghost" id="admin-btn" style="display:none;">Admin</button>
-        <button class="btn ghost" id="refresh-btn">Refresh</button>
-        <button class="btn primary" id="new-order-btn">New order</button>
+        <button class="btn ghost" id="account-btn">Account</button>
+        <button class="btn ghost" id="login-btn">Login</button>
+        <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
       </div>
-      <div id="tracking-updated" class="small" style="color: var(--muted);"></div>
+      <div class="user-status">
+        <span id="tracking-updated" class="small" style="color: var(--muted);"></span>
+        <span id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></span>
+      </div>
     </div>
   </header>
 
@@ -467,10 +467,14 @@
       </div>
     </div>
 
-    <div id="orders-layout-row" style="display:flex; justify-content:flex-end; margin-top:4px;">
+    <div id="orders-layout-row" class="flex-between" style="align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
       <div class="view-toggle" id="orders-layout-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
+      </div>
+      <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-left:auto;">
+        <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
+        <button class="btn primary" id="new-order-btn">New order</button>
       </div>
     </div>
 
@@ -2839,6 +2843,13 @@
       const location = stockLocationInput?.value?.trim() || undefined;
       const category = stockCategoryInput?.value?.trim() || undefined;
       const notes = stockNotesInput?.value?.trim() || undefined;
+      const targetLocationName = subteamId
+        ? (stockSubteams?.find?.(s => s._id === subteamId)?.name || 'Selected location')
+        : 'Common Stock';
+      const finalizeSuccess = () => {
+        if (stockModal) stockModal.style.display = 'none';
+        showBoardMessage('Stock saved.', 'info');
+      };
       if (!id && !selectedStockCatalogItem) {
         stockModalMessage.textContent = 'Select a catalog item first.';
         stockModalMessage.className = 'error';
@@ -2870,7 +2881,7 @@
           } else {
             mergeStockItem(id, {
               subteamId: subteamId || undefined,
-              subteam: subteamId ? subteamName || undefined : 'Common stock',
+              subteam: subteamId ? subteamName || undefined : 'Common Stock',
               quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
               lowStockThreshold: Number.isFinite(low) ? low : undefined,
               location,
@@ -2878,6 +2889,7 @@
               notes
             });
           }
+          finalizeSuccess();
         } else {
           const payload = {
             catalogItemId: selectedStockCatalogItem?._id || selectedStockCatalogItem?.id,
@@ -2888,17 +2900,54 @@
             category,
             notes
           };
-          const res = await fetch('/api/stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to create stock');
-          await loadStock();
+          const execCreate = async () => {
+            const res = await fetch('/api/stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to create stock');
+            await loadStock();
+          };
+          try {
+            const checkUrl = `/api/stock?catalogItemId=${encodeURIComponent(payload.catalogItemId)}`;
+            const dupRes = await fetch(checkUrl);
+            if (dupRes.ok) {
+              const dupData = await dupRes.json();
+              const items = dupData.items || [];
+              const norm = (val) => (val ? val.toString() : '');
+              const targetId = norm(subteamId || undefined);
+              const sameLocation = items.find(i => norm(i.subteamId) === targetId);
+              if (sameLocation) {
+                throw new Error('Item already exists in location');
+              }
+              const otherLocation = items.find(i => norm(i.subteamId) !== targetId);
+              if (otherLocation) {
+                const otherName = otherLocation.subteam || 'Common Stock';
+                openConfirm(`This item already exists in ${otherName}. Add it to ${targetLocationName} as well?`, async () => {
+                  try {
+                    if (stockModalMessage) { stockModalMessage.textContent = 'Saving...'; stockModalMessage.className = 'small'; }
+                    await execCreate();
+                    finalizeSuccess();
+                  } catch (err) {
+                    if (stockModalMessage) {
+                      stockModalMessage.textContent = err.message || 'Failed to save stock';
+                      stockModalMessage.className = 'error';
+                    }
+                  }
+                });
+                if (stockModalMessage) { stockModalMessage.textContent = 'Awaiting confirmation...'; stockModalMessage.className = 'small'; }
+                return;
+              }
+            }
+          } catch (err) {
+            if (err?.message === 'Item already exists in location') throw err;
+            // If the duplicate check fails for network/other reasons, fall through to attempt creation
+          }
+          await execCreate();
+          finalizeSuccess();
         }
-        if (stockModal) stockModal.style.display = 'none';
-        showBoardMessage('Stock saved.', 'info');
       } catch (err) {
         if (stockModalMessage) {
           stockModalMessage.textContent = err.message || 'Failed to save stock';

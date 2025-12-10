@@ -29,7 +29,8 @@ export const list = query({
   args: {
     subteamId: v.optional(v.string()),
     search: v.optional(v.string()),
-    includeArchived: v.optional(v.boolean())
+    includeArchived: v.optional(v.boolean()),
+    catalogItemId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const subteams = await ctx.db.query("stockSubteams").collect();
@@ -39,6 +40,16 @@ export const list = query({
     let items = await ctx.db.query("stockItems").collect();
     if (!args.includeArchived) {
       items = items.filter(i => !i.archived);
+    }
+
+    if (args.catalogItemId) {
+      const catalogId = ctx.db.normalizeId("catalogItems", args.catalogItemId);
+      if (!catalogId) {
+        items = [];
+      } else {
+        const catStr = catalogId.toString();
+        items = items.filter(i => i.catalogItemId?.toString() === catStr);
+      }
     }
 
     if (args.subteamId) {
@@ -197,7 +208,7 @@ export const create = mutation({
     const duplicate = existing.find(e => (e.subteamId?.toString() || "") === (subteamId?.toString() || ""));
     if (duplicate) {
       if (!duplicate.archived) {
-        throw new Error("Stock entry already exists for this catalog item and subteam");
+        throw new Error("Item already exists in location");
       }
       await ctx.db.patch(duplicate._id, {
         name: catalogItem.name,

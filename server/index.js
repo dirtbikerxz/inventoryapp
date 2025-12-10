@@ -614,7 +614,8 @@ app.get('/api/stock', async (req, res) => {
     const data = await client.query('stock:list', {
       subteamId: req.query.subteamId || undefined,
       search: req.query.search || undefined,
-      includeArchived: req.query.includeArchived === 'true'
+      includeArchived: req.query.includeArchived === 'true',
+      catalogItemId: req.query.catalogItemId || undefined
     });
     res.json(data);
   } catch (error) {
@@ -644,6 +645,10 @@ app.post('/api/stock', async (req, res) => {
     res.status(201).json(result);
   } catch (error) {
     logger.error(error, 'Failed to create stock item');
+    const message = error?.message || '';
+    if (message.includes('Item already exists in location')) {
+      return res.status(400).json({ error: 'Item already exists in location' });
+    }
     res.status(500).json({ error: 'Unable to create stock item', details: error.message });
   }
 });
