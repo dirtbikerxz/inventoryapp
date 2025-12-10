@@ -2789,13 +2789,13 @@
                 ${item.vendorPartNumber ? `<span class="tag">${escapeHtml(item.vendorPartNumber)}</span>` : ''}
               </div>
             </div>
-            ${statusText ? `<div>${statusText}</div>` : ''}
           </div>
           <div class="stock-row">
             <div class="stock-adjust">
               ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ''}
               <div class="stock-level">${qty}</div>
               ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ''}
+              ${statusText ? `<div style="display:flex; align-items:center; gap:6px; margin-left:4px;">${statusText}</div>` : ''}
             </div>
             <div class="stock-actions" style="margin-left:auto;">
               ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:4px 8px;">Link</a>` : ''}
