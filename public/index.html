@@ -2267,7 +2267,7 @@
             <div class="meta">Requested by ${order.studentName || 'Unknown'} · ${fmtDate(order.requestedDisplayAt || order.requestedAt)}</div>
           </div>
         </div>
-          <div class="meta">
+        <div class="meta">
           ${(() => {
             const unit = order.unitCost ?? order.fetchedPrice;
             const qty = order.quantityRequested || 1;
@@ -2276,6 +2276,7 @@
           })()}
           ${order.quantityRequested ? ' · x' + order.quantityRequested : ''}
         </div>
+        ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;">Notes: ${escapeHtml(order.notes)}</div>` : ''}
         <div class="meta" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
           <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:200px;">
             <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
@@ -2290,7 +2291,7 @@
             </div>
             ${renderTrackingBadges((order.group?.tracking && order.group.tracking.length) ? order.group.tracking : (order.tracking || []))}
           </div>
-         <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
+          <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
             ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === 'approved' ? 'Unapprove' : 'Approve'}</button>` : ''}
             ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
             ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
