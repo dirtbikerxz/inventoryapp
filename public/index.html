@@ -2958,6 +2958,7 @@
     function resetStockModal() {
       if (!stockForm) return;
       stockForm.reset();
+      if (stockForm.elements.id) stockForm.elements.id.value = '';
       setSelectedStockCatalogItem(null);
       if (stockCatalogSearch) { stockCatalogSearch.value = ''; stockCatalogSearch.disabled = false; }
       if (stockCatalogResults) { stockCatalogResults.innerHTML = ''; stockCatalogResults.style.display = 'none'; }
@@ -2966,6 +2967,7 @@
       if (stockModalTitle) stockModalTitle.textContent = 'Add Stock';
       if (stockModalSubtitle) stockModalSubtitle.textContent = 'Pick a catalog part to track and set the starting quantity.';
       if (stockCategoryInput) stockCategoryInput.value = '';
+      if (stockCatalogSelected) stockCatalogSelected.textContent = 'Search for a catalog item to track.';
     }
 
     function openStockModal(item = null) {
@@ -3018,6 +3020,7 @@
       const finalizeSuccess = () => {
         if (stockModal) stockModal.style.display = 'none';
         showBoardMessage('Stock saved.', 'info');
+        resetStockModal();
       };
       if (!id && !selectedStockCatalogItem) {
         stockModalMessage.textContent = 'Select a catalog item first.';
@@ -3060,6 +3063,10 @@
           }
           finalizeSuccess();
         } else {
+          if (!selectedStockCatalogItem?._id && !selectedStockCatalogItem?.id) {
+            if (stockModalMessage) { stockModalMessage.textContent = 'Select a catalog item first.'; stockModalMessage.className = 'error'; }
+            return;
+          }
           const payload = {
             catalogItemId: selectedStockCatalogItem?._id || selectedStockCatalogItem?.id,
             subteamId: subteamId === '' ? undefined : subteamId,
