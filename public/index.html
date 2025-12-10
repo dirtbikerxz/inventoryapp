@@ -347,6 +347,7 @@
       grid-auto-rows: auto;
       grid-template-columns: repeat(auto-fit, minmax(400px, 520px));
       justify-content: flex-start;
+      align-content: start;
     }
     .stock-grid .card {
       width: 100%;
@@ -373,6 +374,7 @@
       grid-template-columns: repeat(auto-fit, minmax(400px, 520px));
       align-items: start;
       width: 100%;
+      align-content: start;
     }
     .stock-row {
       display: flex;
@@ -398,6 +400,16 @@
       color: var(--text);
     }
     .stock-adjust { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .stock-adjust .btn {
+      min-width: 38px;
+      min-height: 38px;
+      border-radius: 12px;
+      font-size: 16px;
+      padding: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
     .stock-chip {
       background: #1b2440;
       color: var(--text);
@@ -493,8 +505,8 @@
           <select id="stock-subteam-filter" class="input" style="min-width:180px;"></select>
         </div>
         <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
-          <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage subteams</button>
-          <button class="btn primary" id="add-stock-btn" style="display:none;">Add stock item</button>
+          <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage Locations</button>
+          <button class="btn primary" id="add-stock-btn" style="display:none;">Add Stock</button>
         </div>
       </div>
       <div id="stock-grid" class="board stock-grid" style="flex:1; min-height:0; overflow:auto; padding-bottom:12px;"></div>
@@ -1090,8 +1102,8 @@
     <div class="tag-modal-card">
       <div class="flex-between" style="align-items:flex-start;">
         <div>
-          <div class="page-title" id="stock-modal-title" style="font-size:20px;">Add stock item</div>
-          <div class="subtitle" id="stock-modal-subtitle" style="margin-bottom:10px;">Pick a catalog part to track and set the starting quantity.</div>
+          <div class="page-title" id="stock-modal-title" style="font-size:20px;">Add Stock</div>
+        <div class="subtitle" id="stock-modal-subtitle" style="margin-bottom:10px;">Pick a catalog part to track and set the starting quantity and location.</div>
         </div>
         <button class="btn ghost" id="close-stock-modal">Close</button>
       </div>
@@ -1120,7 +1132,7 @@
           <input id="stock-location" class="input" placeholder="Bay, drawer, bin" />
         </div>
         <div>
-          <label class="small">Stock category (per subteam)</label>
+          <label class="small">Stock category (per location)</label>
           <input id="stock-category" class="input" placeholder="e.g., Fasteners, Raw Stock" />
         </div>
         <div style="grid-column: span 2;">
@@ -1139,15 +1151,39 @@
     </div>
   </div>
 
-  <div id="stock-subteams-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:63; align-items:center; justify-content:center; padding:16px;">
-    <div class="tag-modal-card">
-      <div class="flex-between" style="align-items:flex-start;">
-        <div>
-          <div class="page-title" style="font-size:20px;">Stock subteams</div>
-          <div class="subtitle" style="margin-bottom:10px;">Control the subteam/area options used for stock filtering.</div>
-        </div>
-        <button class="btn ghost" id="close-subteams-modal">Close</button>
+  <div id="stock-delete-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:64; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card" style="max-width:420px; width:100%;">
+      <div class="page-title" style="font-size:20px;">Untrack stock item</div>
+      <div class="subtitle" style="margin-bottom:12px;">This will remove the item from live stock tracking.</div>
+      <div id="stock-delete-message" class="small" style="margin-bottom:12px;">Are you sure you want to untrack this item?</div>
+      <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
+        <button class="btn ghost" id="cancel-delete-stock">Cancel</button>
+        <button class="btn primary" id="confirm-delete-stock" style="background: var(--danger); border-color: var(--danger); color: #fff;">Untrack</button>
       </div>
+    </div>
+  </div>
+
+  <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card" style="max-width:420px; width:100%;">
+      <div class="page-title" style="font-size:20px;">Confirm action</div>
+      <div id="confirm-message" class="subtitle" style="margin-bottom:12px;">Are you sure?</div>
+      <div id="confirm-status" class="small" style="margin-bottom:12px;"></div>
+      <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
+        <button class="btn ghost" id="confirm-cancel">Cancel</button>
+        <button class="btn primary" id="confirm-ok" style="background: var(--danger); border-color: var(--danger); color: #fff;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+    <div id="stock-subteams-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:63; align-items:center; justify-content:center; padding:16px;">
+      <div class="tag-modal-card">
+        <div class="flex-between" style="align-items:flex-start;">
+          <div>
+          <div class="page-title" style="font-size:20px;">Stock locations</div>
+          <div class="subtitle" style="margin-bottom:10px;">Control the location options used for stock filtering.</div>
+          </div>
+          <button class="btn ghost" id="close-subteams-modal">Close</button>
+        </div>
       <form id="stock-subteam-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:6px;">
         <input type="hidden" name="id" />
         <div>
@@ -1505,6 +1541,15 @@
     const stockSubteamMessage = document.getElementById('stock-subteam-message');
     const clearSubteamFormBtn = document.getElementById('clear-subteam-form');
     const closeSubteamsModal = document.getElementById('close-subteams-modal');
+    const stockDeleteModal = document.getElementById('stock-delete-modal');
+    const stockDeleteMessage = document.getElementById('stock-delete-message');
+    const cancelDeleteStock = document.getElementById('cancel-delete-stock');
+    const confirmDeleteStock = document.getElementById('confirm-delete-stock');
+    const confirmModal = document.getElementById('confirm-modal');
+    const confirmMessage = document.getElementById('confirm-message');
+    const confirmStatus = document.getElementById('confirm-status');
+    const confirmCancel = document.getElementById('confirm-cancel');
+    const confirmOk = document.getElementById('confirm-ok');
     const catalogBackBtn = document.getElementById('catalog-back');
     const catalogCategoryList = document.getElementById('catalog-category-list');
     const catalogPathDisplay = document.getElementById('catalog-path-display');
@@ -1686,6 +1731,8 @@
     let selectedStockCatalogItem = null;
     let stockCatalogSearchTimer = null;
     let stockSearchTimer = null;
+    let pendingDeleteStockId = null;
+    let pendingConfirmAction = null;
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
     setOrderSource('manual');
@@ -2267,16 +2314,17 @@
       card.querySelectorAll('button[data-action="delete"]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!confirm('Delete this order?')) return;
-          const snapshot = snapshotOrder(order._id);
-          await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
-          if (snapshot) {
-            recordAction({
-              undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
-              redo: { type: 'deleteOrder', payload: { orderId: order._id } }
-            });
-          }
-          fetchOrders();
+          openConfirm('Delete this order?', async () => {
+            const snapshot = snapshotOrder(order._id);
+            await fetch(`/api/orders/${order._id}`, { method: 'DELETE' });
+            if (snapshot) {
+              recordAction({
+                undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
+                redo: { type: 'deleteOrder', payload: { orderId: order._id } }
+              });
+            }
+            fetchOrders();
+          });
         });
       });
 
@@ -2472,15 +2520,16 @@
           card.querySelectorAll('button[data-action="delete-group"]').forEach(btn => {
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
-              if (!confirm('Delete this group? Orders will be ungrouped.')) return;
               const orderIds = items.map(o => o._id);
-              await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
-              recordAction({
-              undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt, orderIds } },
-              redo: { type: 'deleteGroup', payload: { groupId: gid } }
+              openConfirm('Delete this group? Orders will be ungrouped.', async () => {
+                await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
+                recordAction({
+                  undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt, orderIds } },
+                  redo: { type: 'deleteGroup', payload: { groupId: gid } }
+                });
+                fetchOrders();
+              });
             });
-            fetchOrders();
-          });
           });
 
           card.querySelectorAll('button[data-action="edit-part"]').forEach(btn => {
@@ -2495,9 +2544,10 @@
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
               const oid = e.target.closest('.group-item').dataset.id;
-              if (!confirm('Delete this order?')) return;
-              await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
-              fetchOrders();
+              openConfirm('Delete this order?', async () => {
+                await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
+                fetchOrders();
+              });
             });
           });
 
@@ -2520,7 +2570,7 @@
 
     function renderStockFilters() {
       if (!stockSubteamFilter) return;
-      const options = [`<option value="all">All subteams</option>`, `<option value="none">Common stock</option>`];
+      const options = [`<option value="all">All locations</option>`, `<option value="none">Common Stock</option>`];
       (stockSubteams || []).forEach(st => {
         options.push(`<option value="${st._id}">${escapeHtml(st.name)}</option>`);
       });
@@ -2549,7 +2599,7 @@
       if (isLow) card.classList.add('stock-low');
       if (isEmpty) card.classList.add('stock-empty');
       card.dataset.id = item._id;
-      const subteamLabel = item.subteam || 'Common stock';
+      const subteamLabel = item.subteam || 'Common Stock';
       const statusText = isEmpty ? '<span class="stock-empty-text">Out of stock</span>' : (isLow ? '<span class="stock-low-text">Low</span>' : '');
       card.innerHTML = `
           <div class="flex-between" style="gap:8px; align-items:flex-start;">
@@ -2583,6 +2633,28 @@
           </div>
         `;
       return card;
+    }
+
+    function mergeStockItem(id, changes) {
+      const idx = stockItems.findIndex(s => s._id === id);
+      if (idx === -1) return false;
+      stockItems[idx] = { ...stockItems[idx], ...changes };
+      renderStockGrid();
+      return true;
+    }
+
+    function openDeleteStockModal(id) {
+      pendingDeleteStockId = id;
+      if (stockDeleteMessage) stockDeleteMessage.textContent = 'Are you sure you want to untrack this item?';
+      if (stockDeleteModal) stockDeleteModal.style.display = 'flex';
+    }
+
+    function openConfirm(message, action) {
+      if (!confirmModal) return action?.();
+      pendingConfirmAction = action;
+      if (confirmMessage) confirmMessage.textContent = message || 'Are you sure?';
+      if (confirmStatus) { confirmStatus.textContent = ''; confirmStatus.className = 'small'; }
+      confirmModal.style.display = 'flex';
     }
 
     function renderStockGrid() {
@@ -2675,7 +2747,7 @@
         btn.addEventListener('click', async (e) => {
           const id = e.target.dataset.id;
           if (!id) return;
-          await deleteStockItem(id);
+          openDeleteStockModal(id);
         });
       });
     }
@@ -2718,7 +2790,7 @@
       if (stockCatalogResults) { stockCatalogResults.innerHTML = ''; stockCatalogResults.style.display = 'none'; }
       if (stockModalMessage) { stockModalMessage.textContent = ''; stockModalMessage.className = 'small'; }
       if (deleteStockBtn) deleteStockBtn.style.display = 'none';
-      if (stockModalTitle) stockModalTitle.textContent = 'Add stock item';
+      if (stockModalTitle) stockModalTitle.textContent = 'Add Stock';
       if (stockModalSubtitle) stockModalSubtitle.textContent = 'Pick a catalog part to track and set the starting quantity.';
       if (stockCategoryInput) stockCategoryInput.value = '';
     }
@@ -2732,7 +2804,7 @@
       resetStockModal();
       renderStockFilters();
       if (stockSubteamSelect) {
-        const opts = [`<option value="">Common stock</option>`].concat(
+        const opts = [`<option value="">Common Stock</option>`].concat(
           (stockSubteams || []).map(st => `<option value="${st._id}">${escapeHtml(st.name)}</option>`)
         );
         stockSubteamSelect.innerHTML = opts.join('');
@@ -2748,7 +2820,7 @@
         setSelectedStockCatalogItem(item.catalogItem || item);
         if (stockCatalogSearch) stockCatalogSearch.disabled = true;
         if (stockModalTitle) stockModalTitle.textContent = 'Edit stock item';
-        if (stockModalSubtitle) stockModalSubtitle.textContent = 'Update subteam, location, thresholds, or counts.';
+        if (stockModalSubtitle) stockModalSubtitle.textContent = 'Update location, thresholds, or counts.';
         if (deleteStockBtn) deleteStockBtn.style.display = 'inline-flex';
       } else {
         if (stockSubteamSelect) stockSubteamSelect.value = selectedStockSubteam && selectedStockSubteam !== 'all' ? selectedStockSubteam : '';
@@ -2775,7 +2847,7 @@
       if (stockModalMessage) { stockModalMessage.textContent = 'Saving...'; stockModalMessage.className = 'small'; }
       try {
         if (id) {
-          await fetch(`/api/stock/${id}`, {
+          const res = await fetch(`/api/stock/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2787,6 +2859,25 @@
               notes
             })
           });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'Failed to update stock');
+          }
+          const subteamName = subteamId && stockSubteams?.find?.(s => s._id === subteamId)?.name;
+          const moveOutOfView = selectedStockSubteam && selectedStockSubteam !== 'all' && selectedStockSubteam !== subteamId && !(selectedStockSubteam === 'none' && !subteamId);
+          if (moveOutOfView) {
+            stockItems = stockItems.filter(s => s._id !== id);
+          } else {
+            mergeStockItem(id, {
+              subteamId: subteamId || undefined,
+              subteam: subteamId ? subteamName || undefined : 'Common stock',
+              quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
+              lowStockThreshold: Number.isFinite(low) ? low : undefined,
+              location,
+              category,
+              notes
+            });
+          }
         } else {
           const payload = {
             catalogItemId: selectedStockCatalogItem?._id || selectedStockCatalogItem?.id,
@@ -2804,9 +2895,9 @@
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Failed to create stock');
+          await loadStock();
         }
         if (stockModal) stockModal.style.display = 'none';
-        await loadStock();
         showBoardMessage('Stock saved.', 'info');
       } catch (err) {
         if (stockModalMessage) {
@@ -2822,7 +2913,7 @@
         return;
       }
       try {
-        await fetch(`/api/stock/${id}/adjust`, {
+        const res = await fetch(`/api/stock/${id}/adjust`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2830,7 +2921,12 @@
             quantityOnHand: absolute
           })
         });
-        await loadStock();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update stock');
+        const nextQty = data.quantityOnHand;
+        if (!mergeStockItem(id, { quantityOnHand: nextQty })) {
+          await loadStock();
+        }
       } catch (err) {
         showBoardMessage(err.message || 'Failed to update stock', 'error');
       }
@@ -2858,7 +2954,6 @@
         showBoardMessage('No permission to untrack stock.', 'error');
         return;
       }
-      if (!confirm('Stop tracking this stock item?')) return;
       try {
         await fetch(`/api/stock/${id}`, { method: 'DELETE' });
         await loadStock();
@@ -2871,7 +2966,7 @@
     function renderSubteamList() {
       if (!stockSubteamList) return;
       if (!stockSubteams.length) {
-        stockSubteamList.innerHTML = '<div class="empty">No subteams yet.</div>';
+        stockSubteamList.innerHTML = '<div class="empty">No locations yet.</div>';
         return;
       }
       stockSubteamList.innerHTML = stockSubteams.map(st => `
@@ -2900,7 +2995,9 @@
         btn.addEventListener('click', async (e) => {
           const id = e.target.closest('.tag-manager-item')?.dataset.id;
           if (!id) return;
-          await removeSubteam(id);
+          openConfirm('Delete this location? Items will become unassigned.', async () => {
+            await removeSubteam(id);
+          });
         });
       });
     }
@@ -2910,13 +3007,13 @@
       try {
         const res = await fetch('/api/stock/subteams');
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to load subteams');
+        if (!res.ok) throw new Error(data.error || 'Failed to load locations');
         stockSubteams = data.subteams || [];
         renderSubteamList();
         renderStockFilters();
       } catch (err) {
         if (stockSubteamMessage) {
-          stockSubteamMessage.textContent = err.message || 'Failed to load subteams';
+          stockSubteamMessage.textContent = err.message || 'Failed to load locations';
           stockSubteamMessage.className = 'error';
         }
       }
@@ -2947,26 +3044,23 @@
           body: JSON.stringify({ name, description })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save subteam');
+        if (!res.ok) throw new Error(data.error || 'Failed to save location');
         stockSubteamForm.reset();
         await loadSubteams();
         await loadStock();
         if (stockSubteamMessage) { stockSubteamMessage.textContent = 'Saved.'; stockSubteamMessage.className = 'success'; }
       } catch (err) {
-        if (stockSubteamMessage) { stockSubteamMessage.textContent = err.message || 'Failed to save subteam'; stockSubteamMessage.className = 'error'; }
+        if (stockSubteamMessage) { stockSubteamMessage.textContent = err.message || 'Failed to save location'; stockSubteamMessage.className = 'error'; }
       }
     }
 
     async function removeSubteam(id) {
       if (!currentUser?.permissions?.canManageStock) return;
-      if (!confirm('Delete this subteam? Items will become unassigned.')) return;
-      try {
+      openConfirm('Delete this location? Items will become unassigned.', async () => {
         await fetch(`/api/stock/subteams/${id}`, { method: 'DELETE' });
         await loadSubteams();
         await loadStock();
-      } catch (err) {
-        if (stockSubteamMessage) { stockSubteamMessage.textContent = err.message || 'Failed to delete subteam'; stockSubteamMessage.className = 'error'; }
-      }
+      });
     }
 
     async function searchStockCatalog(term) {
@@ -3193,7 +3287,7 @@
       tableSection.style.display = 'none';
       if (stockSection) stockSection.style.display = 'flex';
       if (primaryTitle) primaryTitle.textContent = 'Stock';
-      if (primarySubtitle) primarySubtitle.textContent = 'Live view of parts on-hand by subteam.';
+      if (primarySubtitle) primarySubtitle.textContent = 'Live view of parts on-hand by location.';
       loadStock();
       updateSearchPlaceholder();
       resizeColumns();
@@ -3241,8 +3335,10 @@
     stockForm?.addEventListener('submit', saveStockForm);
     deleteStockBtn?.addEventListener('click', async () => {
       const id = stockForm?.elements?.id?.value;
-      if (id) await deleteStockItem(id);
-      if (stockModal) stockModal.style.display = 'none';
+      if (id) {
+        if (stockModal) stockModal.style.display = 'none';
+        openDeleteStockModal(id);
+      }
     });
     cancelStockBtn?.addEventListener('click', () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
     closeStockModalBtn?.addEventListener('click', () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
@@ -3253,6 +3349,40 @@
     stockSubteamForm?.addEventListener('submit', saveSubteam);
     clearSubteamFormBtn?.addEventListener('click', () => { stockSubteamForm?.reset(); });
     closeSubteamsModal?.addEventListener('click', () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
+    cancelDeleteStock?.addEventListener('click', () => {
+      pendingDeleteStockId = null;
+      if (stockDeleteModal) stockDeleteModal.style.display = 'none';
+    });
+    confirmDeleteStock?.addEventListener('click', async () => {
+      if (!pendingDeleteStockId) return;
+      const id = pendingDeleteStockId;
+      pendingDeleteStockId = null;
+      if (stockDeleteModal) stockDeleteModal.style.display = 'none';
+      await deleteStockItem(id);
+    });
+    confirmCancel?.addEventListener('click', () => {
+      pendingConfirmAction = null;
+      if (confirmModal) confirmModal.style.display = 'none';
+    });
+    confirmOk?.addEventListener('click', async () => {
+      if (!pendingConfirmAction) {
+        if (confirmModal) confirmModal.style.display = 'none';
+        return;
+      }
+      try {
+        const result = pendingConfirmAction();
+        if (result instanceof Promise) await result;
+        if (confirmStatus) confirmStatus.textContent = '';
+        if (confirmModal) confirmModal.style.display = 'none';
+      } catch (err) {
+        if (confirmStatus) {
+          confirmStatus.textContent = err.message || 'Action failed';
+          confirmStatus.className = 'error';
+        }
+      } finally {
+        pendingConfirmAction = null;
+      }
+    });
     groupBtn.addEventListener('click', createGroup);
     deleteSelectedBtn?.addEventListener('click', async () => {
       if (!currentUser?.permissions?.canDeleteOrders) {
@@ -3260,19 +3390,20 @@
         return;
       }
       if (!selected.size) return;
-      if (!confirm(`Delete ${selected.size} selected item(s)?`)) return;
-      for (const id of Array.from(selected)) {
-        const snapshot = snapshotOrder(id);
-        await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-        if (snapshot) {
-          recordAction({
-            undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
-            redo: { type: 'deleteOrder', payload: { orderId: id } }
-          });
+      openConfirm(`Delete ${selected.size} selected item(s)?`, async () => {
+        for (const id of Array.from(selected)) {
+          const snapshot = snapshotOrder(id);
+          await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+          if (snapshot) {
+            recordAction({
+              undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
+              redo: { type: 'deleteOrder', payload: { orderId: id } }
+            });
+          }
         }
-      }
-      selected.clear();
-      await fetchOrders();
+        selected.clear();
+        await fetchOrders();
+      });
     });
     document.getElementById('new-order-btn').addEventListener('click', () => {
       editingOrderId = null;
@@ -3385,12 +3516,15 @@
     attachBackdropClose(accountModal, () => { accountModal.style.display = 'none'; });
     attachBackdropClose(tagsModal, () => { tagsModal.style.display = 'none'; });
     attachBackdropClose(adminModal, () => { adminModal.style.display = 'none'; });
+    attachBackdropClose(catalogModal, () => { catalogModal.style.display = 'none'; if (catalogItemModal) catalogItemModal.style.display = 'none'; });
     attachBackdropClose(catalogCategoryNewModal, () => { catalogCategoryNewModal.style.display = 'none'; });
     attachBackdropClose(catalogCategoryEditModal, () => { catalogCategoryEditModal.style.display = 'none'; });
     attachBackdropClose(catalogItemModal, () => { catalogItemModal.style.display = 'none'; resetCatalogItemForm(); });
     attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
     attachBackdropClose(stockModal, () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
     attachBackdropClose(stockSubteamsModal, () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
+    attachBackdropClose(stockDeleteModal, () => { if (stockDeleteModal) stockDeleteModal.style.display = 'none'; pendingDeleteStockId = null; });
+    attachBackdropClose(confirmModal, () => { if (confirmModal) confirmModal.style.display = 'none'; pendingConfirmAction = null; });
     attachBackdropClose(vendorModal, closeVendorModal);
     attachBackdropClose(userModal, closeUserModal);
 
@@ -4103,8 +4237,10 @@
             const card = e.target.closest('.card');
             const id = card.dataset.id;
             if (!id) return;
-            await fetch(`/api/vendors/configs/${id}`, { method: 'DELETE' });
-            loadVendors();
+            openConfirm('Delete this vendor config?', async () => {
+              await fetch(`/api/vendors/configs/${id}`, { method: 'DELETE' });
+              loadVendors();
+            });
           });
         });
       } catch (e) {
@@ -4214,14 +4350,11 @@
             e.stopPropagation();
             const id = el.dataset.id;
             if (!id) return;
-            if (!confirm('Delete this category? Subcategories will also be removed if cascade is allowed.')) return;
-            try {
+            openConfirm('Delete this category? Subcategories will also be removed if cascade is allowed.', async () => {
               await fetch(`/api/catalog/categories/${id}?cascade=true`, { method: 'DELETE' });
               await refreshCatalogCategories();
               await refreshCatalogItems();
-            } catch (err) {
-              showBoardMessage(err.message || 'Failed to delete category', 'error');
-            }
+            });
           });
         });
       });
@@ -4421,10 +4554,11 @@
           btn.addEventListener('click', async (e) => {
             const id = e.target.closest('.card')?.dataset.id;
             if (!id) return;
-            if (!confirm('Delete this saved item?')) return;
-            await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
-            await refreshCatalogItems();
-            resetCatalogItemForm();
+            openConfirm('Delete this saved item?', async () => {
+              await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
+              await refreshCatalogItems();
+              resetCatalogItemForm();
+            });
           });
         });
       }
@@ -4487,11 +4621,12 @@
     deleteCatalogItemBtn?.addEventListener('click', async () => {
       const id = catalogItemForm?.elements.id.value;
       if (!id) return;
-      if (!confirm('Delete this saved item?')) return;
-      await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
-      await refreshCatalogItems();
-      resetCatalogItemForm();
-      if (catalogItemModal) catalogItemModal.style.display = 'none';
+      openConfirm('Delete this saved item?', async () => {
+        await fetch(`/api/catalog/items/${id}`, { method: 'DELETE' });
+        await refreshCatalogItems();
+        resetCatalogItemForm();
+        if (catalogItemModal) catalogItemModal.style.display = 'none';
+      });
     });
     newCatalogItemBtn?.addEventListener('click', () => {
       resetCatalogItemForm({ name: '', categoryPathLabels: currentCategory() ? [categoryPathLabel(currentCategory())] : [] }, true);
@@ -4729,9 +4864,10 @@
         btn.addEventListener('click', async (e) => {
           const id = e.target.closest('.tag-manager-item')?.dataset.id;
           if (!id) return;
-          if (!confirm('Delete this tag?')) return;
-          await fetch(`/api/tags/${id}`, { method: 'DELETE' });
-          await loadTags();
+          openConfirm('Delete this tag?', async () => {
+            await fetch(`/api/tags/${id}`, { method: 'DELETE' });
+            await loadTags();
+          });
         });
       });
     }
@@ -4839,9 +4975,10 @@
           btn.addEventListener('click', async (e) => {
             const id = e.target.closest('.tag-manager-item')?.dataset.id;
             if (!id) return;
-            if (!confirm('Delete this priority?')) return;
-            await fetch(`/api/priority-tags/${id}`, { method: 'DELETE' });
-            await loadPriorityTags();
+            openConfirm('Delete this priority?', async () => {
+              await fetch(`/api/priority-tags/${id}`, { method: 'DELETE' });
+              await loadPriorityTags();
+            });
           });
         });
       }
@@ -5280,9 +5417,10 @@
           btn.addEventListener('click', async (e) => {
             const id = e.target.closest('.card')?.dataset.id;
             if (!id) return;
-            if (!confirm('Delete this user?')) return;
-            await fetch(`/api/users/${id}`, { method: 'DELETE' });
-            loadUsers();
+            openConfirm('Delete this user?', async () => {
+              await fetch(`/api/users/${id}`, { method: 'DELETE' });
+              loadUsers();
+            });
           });
         });
       } catch (e) {
@@ -5328,7 +5466,7 @@
               ${renderToggle(role, 'canManageUsers', 'Can manage users')}
               ${renderToggle(role, 'canManageTags', 'Can manage tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Can edit inventory catalog')}
-              ${renderToggle(role, 'canManageStock', 'Can configure tracked stock & subteams')}
+              ${renderToggle(role, 'canManageStock', 'Can configure tracked stock & locations')}
               ${renderToggle(role, 'canEditStock', 'Can edit stock levels')}
             </div>
             ${role === 'admin'
