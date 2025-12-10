@@ -1624,9 +1624,9 @@
     const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
+      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -1803,6 +1803,10 @@
     }
     function getOrderVendor(order) {
       return (order?.supplier || order?.vendor || '').toLowerCase();
+    }
+    function isOwnOrder(order) {
+      if (!order || !currentUser?.name) return false;
+      return (order.studentName || '').toLowerCase() === currentUser.name.toLowerCase();
     }
     function snapshotOrder(id) {
       const o = orders.find(o => o._id === id);
@@ -2343,10 +2347,10 @@
             ${renderTrackingBadges((order.group?.tracking && order.group.tracking.length) ? order.group.tracking : (order.tracking || []))}
           </div>
           <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
-            ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === 'approved' ? 'Unapprove' : 'Approve'}</button>` : ''}
+            ${currentUser?.permissions?.canManagePartRequests ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === 'approved' ? 'Unapprove' : 'Approve'}</button>` : ''}
             ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
-            ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
-            ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
+            ${(currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order))) ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
+            ${(currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order))) ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
           </div>
         </div>
       `;
@@ -2424,6 +2428,10 @@
       const showSelectSameVendor = sameVendor;
       const showSelectAll = selectedOrders.length === 0 || !sameVendor;
       const hasSelection = selected.size > 0;
+      const canManageOrders = currentUser?.permissions?.canManageOrders;
+      const canManagePartRequests = currentUser?.permissions?.canManagePartRequests;
+      const canManageOwnPartRequests = currentUser?.permissions?.canManageOwnPartRequests;
+      const canDeleteSelected = canManagePartRequests || (canManageOwnPartRequests && hasSelection && selectedOrders.every(isOwnOrder));
       [selectAllBtn, selectSameVendorBtn, unselectAllBtn, addToOrderBtn, groupBtn, deleteSelectedBtn].forEach(btn => {
         if (!btn) return;
         actionsRow.appendChild(btn);
@@ -2431,9 +2439,9 @@
       if (selectAllBtn) selectAllBtn.style.display = showSelectAll ? 'inline-flex' : 'none';
       if (selectSameVendorBtn) selectSameVendorBtn.style.display = showSelectSameVendor ? 'inline-flex' : 'none';
       if (unselectAllBtn) unselectAllBtn.style.display = hasSelection ? 'inline-flex' : 'none';
-      if (addToOrderBtn) addToOrderBtn.style.display = hasSelection && sameVendor ? 'inline-flex' : 'none';
-      if (groupBtn) groupBtn.style.display = hasSelection && sameVendor ? 'inline-flex' : 'none';
-      if (deleteSelectedBtn) deleteSelectedBtn.style.display = hasSelection ? 'inline-flex' : 'none';
+      if (addToOrderBtn) addToOrderBtn.style.display = hasSelection && sameVendor && canManageOrders ? 'inline-flex' : 'none';
+      if (groupBtn) groupBtn.style.display = hasSelection && sameVendor && canManageOrders ? 'inline-flex' : 'none';
+      if (deleteSelectedBtn) deleteSelectedBtn.style.display = hasSelection && canDeleteSelected ? 'inline-flex' : 'none';
     }
 
     function refreshBoardSelectionUI() {
@@ -2571,12 +2579,13 @@
               <div>
                 <h4>${groupTitle}</h4>
                 <div class="meta">Items in order: ${items.length}</div>
+                ${first.group?.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;">Notes: ${escapeHtml(first.group.notes)}</div>` : ''}
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
-                ${status === 'Ordered' ? `<button class="btn ghost" data-action="advance-group" style="padding:4px 8px;">Advance</button>` : ''}
-                ${status === 'Received' ? `<button class="btn ghost" data-action="revert-group" style="padding:4px 8px;">Revert</button>` : ''}
-                ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
-                ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
+                ${currentUser?.permissions?.canManageOrders && status === 'Ordered' ? `<button class="btn ghost" data-action="advance-group" style="padding:4px 8px;">Advance</button>` : ''}
+                ${currentUser?.permissions?.canManageOrders && status === 'Received' ? `<button class="btn ghost" data-action="revert-group" style="padding:4px 8px;">Revert</button>` : ''}
+                ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
+                ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
               </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -2597,9 +2606,9 @@
                   </div>
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
                     ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
-                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ''}
-                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ''}
-                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ''}
+                    ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ''}
+                    ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ''}
+                    ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -2883,8 +2892,8 @@
           const id = e.target.dataset.id;
           const item = stockItems.find(s => s._id === id);
           if (!item) return;
-          if (!currentUser?.permissions?.canPlaceOrders) {
-            showBoardMessage('No permission to place orders.', 'error');
+          if (!currentUser?.permissions?.canPlacePartRequests) {
+            showBoardMessage('No permission to place part requests.', 'error');
             return;
           }
           const requestItem = item.catalogItem || {
@@ -3441,6 +3450,10 @@
     }
 
     async function createGroup() {
+      if (!currentUser?.permissions?.canManageOrders) {
+        showBoardMessage('No permission to manage orders.', 'error');
+        return;
+      }
       if (selected.size === 0) return;
       const selectedOrders = orders.filter(o => selected.has(o._id));
       const baseVendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor;
@@ -3480,6 +3493,10 @@
     }
 
     function startAddToOrderMode() {
+      if (!currentUser?.permissions?.canManageOrders) {
+        showBoardMessage('No permission to manage orders.', 'error');
+        return;
+      }
       if (!selected.size) return;
       withScrollRestoration(() => {
         const selectedOrders = orders.filter(o => selected.has(o._id));
@@ -3497,6 +3514,10 @@
     }
 
     async function addSelectedToGroup(groupId, targetStatus) {
+      if (!currentUser?.permissions?.canManageOrders) {
+        showBoardMessage('No permission to manage orders.', 'error');
+        return;
+      }
       if (!selected.size) return;
       const ids = Array.from(selected);
       for (const id of ids) {
@@ -3510,6 +3531,10 @@
     }
 
     async function addSelectedToOrder(order) {
+      if (!currentUser?.permissions?.canManageOrders) {
+        showBoardMessage('No permission to manage orders.', 'error');
+        return;
+      }
       if (!order || !selected.size) return;
       const targetVendor = getOrderVendor(order);
       if (addToOrderVendor && targetVendor !== addToOrderVendor) {
@@ -3736,8 +3761,11 @@
     });
     groupBtn.addEventListener('click', createGroup);
     deleteSelectedBtn?.addEventListener('click', async () => {
-      if (!currentUser?.permissions?.canDeleteOrders) {
-        showBoardMessage('No permission to delete orders.', 'error');
+      const selectedOrders = orders.filter(o => selected.has(o._id));
+      const hasGlobal = currentUser?.permissions?.canManagePartRequests;
+      const hasOwn = currentUser?.permissions?.canManageOwnPartRequests && selectedOrders.length > 0 && selectedOrders.every(isOwnOrder);
+      if (!hasGlobal && !hasOwn) {
+        showBoardMessage('No permission to manage these part requests.', 'error');
         return;
       }
       if (!selected.size) return;
@@ -5362,8 +5390,8 @@
         showBoardMessage('Login to create an order.', 'error');
         return;
       }
-      if (!currentUser.permissions?.canPlaceOrders) {
-        showBoardMessage('No permission to place orders.', 'error');
+      if (!currentUser.permissions?.canPlacePartRequests) {
+        showBoardMessage('No permission to place part requests.', 'error');
         return;
       }
       const qty = Number(catalogRequestQty?.value || item.defaultQuantity || 1);
@@ -5715,7 +5743,7 @@
       }
       const perms = computePerms(currentUser);
       if (currentUser) currentUser.permissions = perms;
-      newOrderBtn.disabled = !perms.canPlaceOrders;
+      newOrderBtn.disabled = !perms.canPlacePartRequests;
       adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings) ? 'inline-flex' : 'none';
       if (addStockBtn) addStockBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       if (manageSubteamsBtn) manageSubteamsBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
@@ -5790,9 +5818,9 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
+          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
@@ -5810,10 +5838,10 @@
             <div class="page-title" style="font-size:16px;">${role}</div>
             <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
               ${renderToggle(role, 'canEditStock', 'Manage Stock Levels')}
-              ${renderToggle(role, 'canPlaceOrders', 'Place Orders')}
-              ${renderToggle(role, 'canMoveOrders', 'Move Orders')}
-              ${renderToggle(role, 'canEditOrders', 'Edit Orders')}
-              ${renderToggle(role, 'canDeleteOrders', 'Delete Orders')}
+              ${renderToggle(role, 'canPlacePartRequests', 'Place Part Requests')}
+              ${renderToggle(role, 'canManagePartRequests', 'Manage Part Requests')}
+              ${renderToggle(role, 'canManageOwnPartRequests', 'Manage Own Part Requests')}
+              ${renderToggle(role, 'canManageOrders', 'Create and Manage Orders')}
               ${renderToggle(role, 'canManageTags', 'Manage Tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Manage Inventory Catalog')}
               ${renderToggle(role, 'canManageStock', 'Manage Tracked Stock & Locations')}

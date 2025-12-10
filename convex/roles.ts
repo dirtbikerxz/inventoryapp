@@ -3,10 +3,10 @@ import { v } from "convex/values";
 
 const DEFAULTS: Record<string, Record<string, boolean>> = {
   admin: {
-    canPlaceOrders: true,
-    canMoveOrders: true,
-    canEditOrders: true,
-    canDeleteOrders: true,
+    canPlacePartRequests: true,
+    canManageOwnPartRequests: true,
+    canManagePartRequests: true,
+    canManageOrders: true,
     canManageVendors: true,
     canManageUsers: true,
     canManageTags: true,
@@ -16,29 +16,29 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canEditStock: true
   },
   mentor: {
-    canPlaceOrders: true,
-    canMoveOrders: true,
-    canEditOrders: true,
-    canDeleteOrders: true,
-    canManageVendors: true,
+    canPlacePartRequests: true,
+    canManageOwnPartRequests: true,
+    canManagePartRequests: true,
+    canManageOrders: true,
+    canManageVendors: false,
     canManageUsers: false,
     canManageTags: true,
     canEditInventoryCatalog: true,
-    canEditTrackingSettings: true,
+    canEditTrackingSettings: false,
     canManageStock: true,
     canEditStock: true
   },
   student: {
-    canPlaceOrders: true,
-    canMoveOrders: false,
-    canEditOrders: false,
-    canDeleteOrders: false,
+    canPlacePartRequests: true,
+    canManageOwnPartRequests: true,
+    canManagePartRequests: false,
+    canManageOrders: false,
     canManageVendors: false,
     canManageUsers: false,
     canManageTags: false,
     canEditInventoryCatalog: false,
     canEditTrackingSettings: false,
-    canManageStock: false,
+    canManageStock: true,
     canEditStock: false
   }
 };

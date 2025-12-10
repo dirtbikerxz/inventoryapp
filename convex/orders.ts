@@ -106,6 +106,22 @@ export const list = query({
   }
 });
 
+export const getOne = query({
+  args: { orderId: v.string() },
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("orders", args.orderId);
+    if (!id) return null;
+    const order = await ctx.db.get(id);
+    if (!order) return null;
+    const group = order.groupId ? await ctx.db.get(order.groupId) : null;
+    return {
+      ...order,
+      _id: id,
+      group: group ? { ...group, _id: group._id } : null
+    };
+  }
+});
+
 export const create = mutation({
   args: {
     department: v.optional(v.string()),

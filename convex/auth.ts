@@ -2,15 +2,17 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 const DEFAULT_PERMISSIONS = {
-  canPlaceOrders: true,
-  canMoveOrders: false,
-  canEditOrders: false,
-  canDeleteOrders: false,
+  canPlacePartRequests: true,
+  canManageOwnPartRequests: false,
+  canManagePartRequests: false,
+  canManageOrders: false,
   canManageVendors: false,
   canManageUsers: false,
   canManageTags: false,
   canEditInventoryCatalog: false,
-  canEditTrackingSettings: false
+  canEditTrackingSettings: false,
+  canManageStock: false,
+  canEditStock: false
 };
 
 function permissionsForRole(role: string) {
@@ -18,27 +20,31 @@ function permissionsForRole(role: string) {
   switch (role.toLowerCase()) {
     case "admin":
       return {
-        canPlaceOrders: true,
-        canMoveOrders: true,
-        canEditOrders: true,
-        canDeleteOrders: true,
+        canPlacePartRequests: true,
+        canManageOwnPartRequests: true,
+        canManagePartRequests: true,
+        canManageOrders: true,
         canManageVendors: true,
         canManageUsers: true,
         canManageTags: true,
         canEditInventoryCatalog: true,
-        canEditTrackingSettings: true
+        canEditTrackingSettings: true,
+        canManageStock: true,
+        canEditStock: true
       };
     case "mentor":
       return {
-        canPlaceOrders: true,
-        canMoveOrders: true,
-        canEditOrders: true,
-        canDeleteOrders: true,
+        canPlacePartRequests: true,
+        canManageOwnPartRequests: true,
+        canManagePartRequests: true,
+        canManageOrders: true,
         canManageVendors: true,
         canManageUsers: false,
         canManageTags: true,
         canEditInventoryCatalog: true,
-        canEditTrackingSettings: true
+        canEditTrackingSettings: true,
+        canManageStock: true,
+        canEditStock: true
       };
     case "student":
       return { ...DEFAULT_PERMISSIONS };

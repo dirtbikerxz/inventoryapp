@@ -47,41 +47,44 @@ app.get('/', (req, res) => {
 
 function defaultPermissions(role) {
   const base = {
-    canPlaceOrders: true,
-    canMoveOrders: false,
-    canEditOrders: false,
-    canDeleteOrders: false,
+    canPlacePartRequests: true,
+    canManageOwnPartRequests: false,
+    canManagePartRequests: false,
+    canManageOrders: false,
     canManageVendors: false,
     canManageUsers: false,
     canManageTags: false,
     canEditInventoryCatalog: false,
+    canEditTrackingSettings: false,
     canManageStock: false,
     canEditStock: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
       return {
-        canPlaceOrders: true,
-        canMoveOrders: true,
-        canEditOrders: true,
-        canDeleteOrders: true,
+        canPlacePartRequests: true,
+        canManageOwnPartRequests: true,
+        canManagePartRequests: true,
+        canManageOrders: true,
         canManageVendors: true,
         canManageUsers: true,
         canManageTags: true,
         canEditInventoryCatalog: true,
+        canEditTrackingSettings: true,
         canManageStock: true,
         canEditStock: true
       };
     case 'mentor':
       return {
-        canPlaceOrders: true,
-        canMoveOrders: true,
-        canEditOrders: true,
-        canDeleteOrders: true,
+        canPlacePartRequests: true,
+        canManageOwnPartRequests: true,
+        canManagePartRequests: true,
+        canManageOrders: true,
         canManageVendors: true,
         canManageUsers: false,
         canManageTags: true,
         canEditInventoryCatalog: true,
+        canEditTrackingSettings: true,
         canManageStock: true,
         canEditStock: true
       };
@@ -90,6 +93,11 @@ function defaultPermissions(role) {
     default:
       return base;
   }
+}
+
+function isOwnOrder(order, user) {
+  if (!order || !user?.name) return false;
+  return (order.studentName || '').toLowerCase() === user.name.toLowerCase();
 }
 
 async function getSessionUser(token) {
@@ -726,7 +734,7 @@ app.get('/api/orders', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  const user = await requireAuth(req, res, 'canPlaceOrders');
+  const user = await requireAuth(req, res, 'canPlacePartRequests');
   if (!user) return;
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: 'Order payload is required' });
@@ -734,7 +742,7 @@ app.post('/api/orders', async (req, res) => {
 
   try {
     const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
-    const isPrivileged = ['admin','mentor'].includes((user.role || '').toLowerCase()) || user.permissions?.canEditOrders;
+    const isPrivileged = ['admin','mentor'].includes((user.role || '').toLowerCase()) || user.permissions?.canManagePartRequests;
     const approvalStatus = isPrivileged ? 'approved' : 'pending';
     const payload = {
       ...req.body,
@@ -759,8 +767,19 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.patch('/api/orders/:id', async (req, res) => {
-  const user = await requireAuth(req, res, 'canEditOrders');
+  const user = await requireAuth(req, res, null);
   if (!user) return;
+  const order = await client.query('orders:getOne', { orderId: req.params.id });
+  if (!order) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+  const hasGlobal = user.permissions?.canManagePartRequests;
+  const hasOrders = user.permissions?.canManageOrders;
+  const hasOwn = user.permissions?.canManageOwnPartRequests && isOwnOrder(order, user);
+  if (!hasGlobal && !hasOwn && !hasOrders) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   try {
     const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
     const payload = { ...req.body };
@@ -783,8 +802,19 @@ app.patch('/api/orders/:id', async (req, res) => {
 });
 
 app.delete('/api/orders/:id', async (req, res) => {
-  const user = await requireAuth(req, res, 'canDeleteOrders');
+  const user = await requireAuth(req, res, null);
   if (!user) return;
+  const order = await client.query('orders:getOne', { orderId: req.params.id });
+  if (!order) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+  const hasGlobal = user.permissions?.canManagePartRequests;
+  const hasOrders = user.permissions?.canManageOrders;
+  const hasOwn = user.permissions?.canManageOwnPartRequests && isOwnOrder(order, user);
+  if (!hasGlobal && !hasOwn && !hasOrders) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   try {
     await client.mutation('orders:deleteOrder', { orderId: req.params.id });
     res.json({ ok: true });
@@ -795,8 +825,11 @@ app.delete('/api/orders/:id', async (req, res) => {
 });
 
 app.patch('/api/orders/:id/status', async (req, res) => {
-  const user = await requireAuth(req, res, 'canMoveOrders');
+  const user = await requireAuth(req, res, null);
   if (!user) return;
+  if (!user.permissions?.canManagePartRequests && !user.permissions?.canManageOrders) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   const { status, trackingNumber } = req.body || {};
   if (!status) {
     return res.status(400).json({ error: 'status is required' });
@@ -820,7 +853,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
 });
 
 app.patch('/api/orders/:id/approval', async (req, res) => {
-  const user = await requireAuth(req, res, 'canEditOrders');
+  const user = await requireAuth(req, res, 'canManagePartRequests');
   if (!user) return;
   const { approvalStatus } = req.body || {};
   if (!approvalStatus) {
@@ -841,7 +874,7 @@ app.patch('/api/orders/:id/approval', async (req, res) => {
 });
 
 app.patch('/api/orders/:id/group', async (req, res) => {
-  const user = await requireAuth(req, res, 'canMoveOrders');
+  const user = await requireAuth(req, res, 'canManageOrders');
   if (!user) return;
   const { groupId } = req.body || {};
   try {
@@ -869,7 +902,7 @@ app.get('/api/order-groups', async (req, res) => {
 });
 
 app.post('/api/order-groups', async (req, res) => {
-  const user = await requireAuth(req, res, 'canMoveOrders');
+  const user = await requireAuth(req, res, 'canManageOrders');
   if (!user) return;
   if (!req.body) {
     return res.status(400).json({ error: 'Group payload is required' });
@@ -893,7 +926,7 @@ app.post('/api/order-groups', async (req, res) => {
 });
 
 app.patch('/api/order-groups/:id', async (req, res) => {
-  const user = await requireAuth(req, res, 'canMoveOrders');
+  const user = await requireAuth(req, res, 'canManageOrders');
   if (!user) return;
   try {
     const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
@@ -917,7 +950,7 @@ app.patch('/api/order-groups/:id', async (req, res) => {
 });
 
 app.delete('/api/order-groups/:id', async (req, res) => {
-  const user = await requireAuth(req, res, 'canDeleteOrders');
+  const user = await requireAuth(req, res, 'canManageOrders');
   if (!user) return;
   try {
     const result = await client.mutation('orderGroups:remove', { groupId: req.params.id });
