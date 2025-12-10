@@ -106,7 +106,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      line-height: 1.1;
+      line-height: 1.2;
       transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
     .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(70, 29, 124, 0.25); }
@@ -2456,8 +2456,9 @@
                     ${renderTagChips(o.tags || [])}
                   </div>
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
-                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:2px 6px;">Edit</button>` : ''}
-                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:2px 6px; color:var(--danger);">Delete</button>` : ''}
+                    ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
+                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ''}
+                    ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -2552,6 +2553,11 @@
               const oid = e.target.closest('.group-item').dataset.id;
               const order = orders.find(o => o._id === oid);
               if (order) openEdit(order);
+            });
+          });
+          card.querySelectorAll('a[data-action="link-part"]').forEach(anchor => {
+            anchor.addEventListener('click', (e) => {
+              e.stopPropagation();
             });
           });
           card.querySelectorAll('button[data-action="delete-part"]').forEach(btn => {
