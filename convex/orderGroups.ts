@@ -79,6 +79,7 @@ export const create = mutation({
         const orderId = ctx.db.normalizeId("orders", orderIdStr);
         if (!orderId) continue;
         const order = await ctx.db.get(orderId);
+        if (!order) continue;
         const orderTracking = order ? normalizeTracking((order as any).tracking, (order as any).trackingNumber) : [];
         // If group has no tracking yet, inherit from first order with tracking
         if (tracking.length === 0 && orderTracking.length) {
@@ -136,6 +137,7 @@ export const update = mutation({
         const orderId = ctx.db.normalizeId("orders", orderIdStr);
         if (!orderId) continue;
         const order = await ctx.db.get(orderId);
+        if (!order) continue;
         const orderTracking = order ? normalizeTracking((order as any).tracking, (order as any).trackingNumber) : [];
         if ((updates.tracking || []).length === 0 && orderTracking.length) {
           updates.tracking = orderTracking;

@@ -1174,10 +1174,11 @@
     </div>
   </div>
 
-  <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
+    <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div class="tag-modal-card" style="max-width:420px; width:100%;">
       <div class="page-title" style="font-size:20px;">Confirm action</div>
       <div id="confirm-message" class="subtitle" style="margin-bottom:12px;">Are you sure?</div>
+      <div id="confirm-extra" style="margin-bottom:12px; display:none;"></div>
       <div id="confirm-status" class="small" style="margin-bottom:12px;"></div>
       <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
         <button class="btn ghost" id="confirm-cancel">Cancel</button>
@@ -1584,6 +1585,7 @@
     const confirmStatus = document.getElementById('confirm-status');
     const confirmCancel = document.getElementById('confirm-cancel');
     const confirmOk = document.getElementById('confirm-ok');
+    const confirmExtra = document.getElementById('confirm-extra');
     const catalogBackBtn = document.getElementById('catalog-back');
     const catalogCategoryList = document.getElementById('catalog-category-list');
     const catalogPathDisplay = document.getElementById('catalog-path-display');
@@ -1767,6 +1769,7 @@
     let stockSearchTimer = null;
     let pendingDeleteStockId = null;
     let pendingConfirmAction = null;
+    let pendingConfirmExtraGetter = null;
     let addToOrderMode = false;
     let addToOrderVendor = null;
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
@@ -1902,11 +1905,11 @@
           break;
         }
         case 'createGroup': {
-          const res = await fetch('/api/order-groups', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: step.payload.title,
+      const res = await fetch('/api/order-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: step.payload.title,
               supplier: step.payload.supplier,
               requestedDisplayAt: step.payload.requestedDisplayAt,
               orderIds: step.payload.orderIds
@@ -1929,6 +1932,62 @@
           }
           if (counterpart && counterpart.type === 'deleteGroup') {
             counterpart.payload.groupId = newGroupId;
+          }
+          break;
+        }
+        case 'restoreOrders': {
+          if (Array.isArray(step.payload?.orders)) {
+            let newGroupId = null;
+            if (step.payload.group) {
+              const g = step.payload.group;
+              try {
+                const res = await fetch('/api/order-groups', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    title: g.title,
+                    supplier: g.supplier,
+                    requestedDisplayAt: g.requestedDisplayAt,
+                    status: g.status || 'Ordered',
+                    tracking: g.tracking || [],
+                    notes: g.notes || ''
+                  })
+                });
+                const data = await res.json();
+                newGroupId = data.groupId || data._id || null;
+              } catch (err) {
+                console.warn('Failed to recreate group during restore', err);
+              }
+            }
+            for (const o of step.payload.orders) {
+              const sanitized = sanitizeOrderForCreate(o);
+              if (!sanitized) continue;
+              const res = await fetch('/api/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...sanitized,
+                  groupId: undefined
+                })
+              });
+              const data = await res.json();
+              const newId = data.order?.orderId || data.orderId || data.order?._id;
+              const targetGroupId = newGroupId || null;
+              if (targetGroupId && newId) {
+                await assignGroup(newId, targetGroupId);
+              }
+              if (o.status && newId) {
+                await patchStatusOnly(newId, o.status, Array.isArray(o.tracking) ? o.tracking[0]?.trackingNumber : undefined);
+              }
+            }
+          }
+          break;
+        }
+        case 'deleteOrders': {
+          if (Array.isArray(step.payload?.orderIds)) {
+            for (const oid of step.payload.orderIds) {
+              await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
+            }
           }
           break;
         }
@@ -2648,10 +2707,32 @@
             btn.addEventListener('click', async (e) => {
               e.stopPropagation();
               const orderIds = items.map(o => o._id);
-              openConfirm('Delete this group? Orders will be ungrouped.', async () => {
+              openConfirm('Delete this group?', async (extra) => {
+                const deleteParts = extra?.deleteParts;
                 const originalStatus = first.status || 'Ordered';
                 const originalTracking = trackingList || [];
                 const originalNotes = first.group?.notes || '';
+                if (deleteParts) {
+                  const snapshots = orderIds.map(id => snapshotOrder(id)).filter(Boolean);
+                  const groupSnapshot = {
+                    title: groupTitle,
+                    supplier: vendor || undefined,
+                    requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt,
+                    status: originalStatus,
+                    tracking: originalTracking,
+                    notes: originalNotes
+                  };
+                  for (const oid of orderIds) {
+                    await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
+                  }
+                  await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
+                  recordAction({
+                    undo: { type: 'restoreOrders', payload: { orders: snapshots, group: groupSnapshot } },
+                    redo: { type: 'deleteOrders', payload: { orderIds } }
+                  });
+                  fetchOrders();
+                  return;
+                }
                 for (const oid of orderIds) {
                   await assignGroup(oid, undefined);
                   await patchStatusOnly(oid, 'Requested');
@@ -2662,6 +2743,12 @@
                   redo: { type: 'deleteGroup', payload: { groupId: gid, orderIds, status: originalStatus } }
                 });
                 fetchOrders();
+              }, () => {
+                const checkboxId = `confirm-delete-orders-${gid}`;
+                return {
+                  content: `<label class="small" style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="${checkboxId}"> Delete part requests instead of ungrouping</label>`,
+                  getValue: () => ({ deleteParts: document.getElementById(checkboxId)?.checked })
+                };
               });
             });
           });
@@ -2822,11 +2909,26 @@
       if (stockDeleteModal) stockDeleteModal.style.display = 'flex';
     }
 
-    function openConfirm(message, action) {
+    function openConfirm(message, action, renderExtra) {
       if (!confirmModal) return action?.();
       pendingConfirmAction = action;
+      pendingConfirmExtraGetter = null;
       if (confirmMessage) confirmMessage.textContent = message || 'Are you sure?';
       if (confirmStatus) { confirmStatus.textContent = ''; confirmStatus.className = 'small'; }
+      if (confirmExtra) {
+        confirmExtra.style.display = 'none';
+        confirmExtra.innerHTML = '';
+      }
+      if (renderExtra && confirmExtra) {
+        const res = renderExtra();
+        if (res?.content) {
+          confirmExtra.innerHTML = res.content;
+          confirmExtra.style.display = 'block';
+        }
+        if (typeof res?.getValue === 'function') {
+          pendingConfirmExtraGetter = res.getValue;
+        }
+      }
       confirmModal.style.display = 'flex';
     }
 
@@ -3754,7 +3856,8 @@
         return;
       }
       try {
-        const result = pendingConfirmAction();
+      const extra = pendingConfirmExtraGetter ? pendingConfirmExtraGetter() : undefined;
+      const result = pendingConfirmAction(extra);
         if (result instanceof Promise) await result;
         if (confirmStatus) confirmStatus.textContent = '';
         if (confirmModal) confirmModal.style.display = 'none';
