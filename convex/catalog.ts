@@ -74,6 +74,23 @@ async function updateDescendantPaths(ctx: Ctx, categories: any[], parentId: any,
   }
 }
 
+function buildPathFromLeaf(catMap: Map<string, any>, leafId: any) {
+  if (!leafId) return [];
+  const path: any[] = [];
+  let current = leafId;
+  const visited = new Set<string>();
+  while (current) {
+    const key = current.toString();
+    if (visited.has(key)) break; // safeguard against cycles
+    visited.add(key);
+    const cat = catMap.get(key);
+    if (!cat) break;
+    path.unshift(cat);
+    current = cat.parentId;
+  }
+  return path;
+}
+
 async function refreshItemPaths(ctx: Ctx, categoryIds: Set<string>) {
   const items = await ctx.db.query("catalogItems").collect();
   const categories = await ctx.db.query("catalogCategories").collect();
@@ -84,11 +101,10 @@ async function refreshItemPaths(ctx: Ctx, categoryIds: Set<string>) {
     (item.categoryId && categoryIds.has(item.categoryId.toString()))
   );
   for (const item of affected) {
-    const ids = (item.categoryPathIds || []).map((id: any) => ctx.db.normalizeId("catalogCategories", id)) as any[];
-    const labels = ids
-      .map((id: any) => id && catMap.get(id.toString()))
-      .filter(Boolean)
-      .map((c: any) => c.name);
+    const leafId = item.categoryId || (item.categoryPathIds || []).slice(-1)[0];
+    const pathCats = buildPathFromLeaf(catMap, leafId);
+    const ids = pathCats.map(c => ctx.db.normalizeId("catalogCategories", c._id)) as any[];
+    const labels = pathCats.map(c => c.name);
     const fullPath = labels.join(" / ");
     await ctx.db.patch(item._id, {
       categoryPathIds: ids.filter(Boolean),
