@@ -345,6 +345,49 @@
     .stock-grid {
       align-items: start;
       grid-auto-rows: auto;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 520px));
+      justify-content: flex-start;
+    }
+    .stock-grid .card {
+      width: 100%;
+      max-width: 520px;
+    }
+    .stock-grid.grouped {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .stock-category-title {
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--gold);
+      margin: 0 0 8px;
+      padding: 0 2px;
+    }
+    .stock-category-block {
+      width: 100%;
+    }
+    .stock-category-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 520px));
+      align-items: start;
+      width: 100%;
+    }
+    .stock-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: nowrap;
+    }
+    .stock-actions .btn {
+      padding: 4px 8px;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+    .stock-actions .btn.primary {
+      padding: 4px 10px;
     }
     .stock-level {
       display: flex;
@@ -448,7 +491,6 @@
       <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
         <div class="flex-between" style="gap:8px; flex-wrap:wrap; align-items:center;">
           <select id="stock-subteam-filter" class="input" style="min-width:180px;"></select>
-          <input id="stock-search" class="input" placeholder="Search stock..." style="min-width:200px;" />
         </div>
         <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
           <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage subteams</button>
@@ -763,6 +805,96 @@
     </div>
   </div>
 
+  <div id="vendor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:68; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:900px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div class="page-title" style="font-size:20px;">Vendor extraction</div>
+          <div class="subtitle" style="margin-bottom:10px;">Create or edit vendor configurations.</div>
+        </div>
+        <button class="btn ghost" id="close-vendor-modal">Close</button>
+      </div>
+      <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-top:10px;">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="small">Vendor name</label>
+          <input name="vendor" class="input" placeholder="e.g., WCP" required />
+        </div>
+        <div>
+          <label class="small">Base URL</label>
+          <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
+        </div>
+        <div>
+          <label class="small">Product URL template</label>
+          <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
+          <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
+        </div>
+        <div>
+          <label class="small">Part # example</label>
+          <input name="partNumberExample" class="input" placeholder="WCP-0921" />
+        </div>
+        <div>
+          <label class="small">Part # regex</label>
+          <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
+          <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
+        </div>
+        <div>
+          <label class="small">Name selector</label>
+          <input name="nameSelector" class="input" placeholder=".product-title" />
+        </div>
+        <div>
+          <label class="small">Price selector</label>
+          <input name="priceSelector" class="input" placeholder=".price" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Paste copied selector or JS path</label>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+            <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
+            <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
+              <select id="selector-target" class="input">
+                <option value="nameSelector">Apply to Name</option>
+                <option value="priceSelector">Apply to Price</option>
+              </select>
+              <button type="button" class="btn ghost" id="apply-selector">Apply</button>
+            </div>
+          </div>
+          <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes / headers JSON (optional)</label>
+          <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
+        </div>
+        <div style="grid-column: span 2;">
+          <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+            <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
+            <button type="button" class="btn primary" id="test-extract">Test</button>
+          </div>
+          <div id="extract-results" class="small" style="margin-top:8px;"></div>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
+            <div>
+              <label class="small">Pick name</label>
+              <select id="pick-name" class="input"></select>
+              <div id="preview-name" class="small"></div>
+            </div>
+            <div>
+              <label class="small">Pick price</label>
+              <select id="pick-price" class="input"></select>
+              <div id="preview-price" class="small"></div>
+            </div>
+          </div>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+          <div id="vendor-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="cancel-vendor">Cancel</button>
+            <button type="submit" class="btn primary">Save vendor</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
       <div class="page-title" style="font-size:22px;">Sign In</div>
@@ -987,6 +1119,10 @@
           <label class="small">Location</label>
           <input id="stock-location" class="input" placeholder="Bay, drawer, bin" />
         </div>
+        <div>
+          <label class="small">Stock category (per subteam)</label>
+          <input id="stock-category" class="input" placeholder="e.g., Fasteners, Raw Stock" />
+        </div>
         <div style="grid-column: span 2;">
           <label class="small">Notes</label>
           <textarea id="stock-notes" class="input" rows="2" placeholder="Label, kit info, etc."></textarea>
@@ -1113,88 +1249,15 @@
       </div>
 
       <div id="admin-vendors-section" style="display:none;">
-        <div id="vendor-list" style="margin-top:14px;"></div>
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
-          <div class="page-title" style="font-size:18px;">Vendor Extraction Settings</div>
-          <div class="subtitle" style="margin-bottom:12px;">Configure how to pull product details from each vendor.</div>
-          <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
-            <input type="hidden" name="id" />
+          <div class="flex-between" style="align-items:center; gap:8px;">
             <div>
-              <label class="small">Vendor name</label>
-              <input name="vendor" class="input" placeholder="e.g., WCP" required />
+              <div class="page-title" style="font-size:18px;">Vendor Extraction Settings</div>
+              <div class="subtitle">Configure how to pull product details from each vendor.</div>
             </div>
-            <div>
-              <label class="small">Base URL</label>
-              <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
-            </div>
-            <div>
-              <label class="small">Product URL template</label>
-              <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
-              <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
-            </div>
-            <div>
-              <label class="small">Part # example</label>
-              <input name="partNumberExample" class="input" placeholder="WCP-0921" />
-            </div>
-            <div>
-              <label class="small">Part # regex</label>
-              <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
-              <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
-            </div>
-            <div>
-              <label class="small">Name selector</label>
-              <input name="nameSelector" class="input" placeholder=".product-title" />
-            </div>
-            <div>
-              <label class="small">Price selector</label>
-              <input name="priceSelector" class="input" placeholder=".price" />
-            </div>
-            <div style="grid-column: span 2;">
-              <label class="small">Paste copied selector or JS path</label>
-              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
-                <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
-                <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
-                  <select id="selector-target" class="input">
-                    <option value="nameSelector">Apply to Name</option>
-                    <option value="priceSelector">Apply to Price</option>
-                  </select>
-                  <button type="button" class="btn ghost" id="apply-selector">Apply</button>
-                </div>
-              </div>
-              <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
-            </div>
-            <div style="grid-column: span 2;">
-              <label class="small">Notes / headers JSON (optional)</label>
-              <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
-            </div>
-            <div style="grid-column: span 2;">
-              <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
-              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
-                <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
-                <button type="button" class="btn primary" id="test-extract">Test</button>
-              </div>
-              <div id="extract-results" class="small" style="margin-top:8px;"></div>
-              <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
-                <div>
-                  <label class="small">Pick name</label>
-                  <select id="pick-name" class="input"></select>
-                  <div id="preview-name" class="small"></div>
-                </div>
-                <div>
-                  <label class="small">Pick price</label>
-                  <select id="pick-price" class="input"></select>
-                  <div id="preview-price" class="small"></div>
-                </div>
-              </div>
-            </div>
-            <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
-              <div id="vendor-message" class="small"></div>
-              <div class="flex-between" style="gap:8px;">
-                <button type="button" class="btn ghost" id="clear-vendor">Clear</button>
-                <button type="submit" class="btn primary">Save vendor</button>
-              </div>
-            </div>
-          </form>
+            <button class="btn primary" id="new-vendor-btn" style="padding:6px 10px;">New vendor</button>
+          </div>
+          <div id="vendor-list" class="small" style="margin-top:10px;">Loading vendors...</div>
         </div>
       </div>
 
@@ -1210,7 +1273,6 @@
     const stockSection = document.getElementById('stock-section');
     const stockGrid = document.getElementById('stock-grid');
     const stockSubteamFilter = document.getElementById('stock-subteam-filter');
-    const stockSearch = document.getElementById('stock-search');
     const primaryTitle = document.getElementById('primary-title');
     const primarySubtitle = document.getElementById('primary-subtitle');
     const ordersViewBtn = document.getElementById('orders-view-btn');
@@ -1291,9 +1353,12 @@
     const groupMessage = document.getElementById('group-message');
     const vendorForm = document.getElementById('vendor-form');
     const vendorMessage = document.getElementById('vendor-message');
-    const clearVendor = document.getElementById('clear-vendor');
     const vendorList = document.getElementById('vendor-list');
     const testUrl = document.getElementById('test-url');
+    const vendorModal = document.getElementById('vendor-modal');
+    const newVendorBtn = document.getElementById('new-vendor-btn');
+    const closeVendorModalBtn = document.getElementById('close-vendor-modal');
+    const cancelVendorBtn = document.getElementById('cancel-vendor');
     function resizeColumns() {
       window.requestAnimationFrame(() => {
         const main = document.querySelector('main');
@@ -1432,6 +1497,7 @@
     const stockQuantityInput = document.getElementById('stock-quantity');
     const stockLowInput = document.getElementById('stock-low');
     const stockLocationInput = document.getElementById('stock-location');
+    const stockCategoryInput = document.getElementById('stock-category');
     const stockNotesInput = document.getElementById('stock-notes');
     const stockSubteamsModal = document.getElementById('stock-subteams-modal');
     const stockSubteamForm = document.getElementById('stock-subteam-form');
@@ -1623,6 +1689,13 @@
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
     setOrderSource('manual');
+
+    function updateSearchPlaceholder() {
+      if (!globalSearch) return;
+      globalSearch.placeholder = activePrimaryView === 'stock'
+        ? 'Search stock...'
+        : 'Search parts, suppliers, users...';
+    }
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -2466,6 +2539,52 @@
       }
     }
 
+    function buildStockCard(item, canAdjustStock) {
+      const qty = item.quantityOnHand ?? 0;
+      const low = item.lowStockThreshold;
+      const isEmpty = qty <= 0;
+      const isLow = !isEmpty && low !== undefined && qty <= low;
+      const card = document.createElement('div');
+      card.className = 'card stock-card';
+      if (isLow) card.classList.add('stock-low');
+      if (isEmpty) card.classList.add('stock-empty');
+      card.dataset.id = item._id;
+      const subteamLabel = item.subteam || 'Common stock';
+      const statusText = isEmpty ? '<span class="stock-empty-text">Out of stock</span>' : (isLow ? '<span class="stock-low-text">Low</span>' : '');
+      card.innerHTML = `
+          <div class="flex-between" style="gap:8px; align-items:flex-start;">
+            <div>
+              <h4 style="margin:0 0 6px;">${escapeHtml(item.name)}</h4>
+              <div class="meta">
+                <span class="stock-chip">${escapeHtml(subteamLabel)}</span>
+                ${item.category ? `<span class="stock-chip">${escapeHtml(item.category)}</span>` : ''}
+                ${item.location ? `<span class="stock-chip">📍 ${escapeHtml(item.location)}</span>` : ''}
+              </div>
+              <div class="meta">
+                ${item.vendor ? `<span class="tag supplier">${escapeHtml(item.vendor)}</span>` : ''}
+                ${item.vendorPartNumber ? `<span class="tag">${escapeHtml(item.vendorPartNumber)}</span>` : ''}
+              </div>
+            </div>
+            ${statusText ? `<div>${statusText}</div>` : ''}
+          </div>
+          <div class="stock-row">
+            <div class="stock-adjust">
+              ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ''}
+              <div class="stock-level">${qty}</div>
+              ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ''}
+              ${!canAdjustStock ? `<div class="small">View only</div>` : ''}
+            </div>
+            <div class="stock-actions" style="margin-left:auto;">
+              ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:4px 8px;">Link</a>` : ''}
+              ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="edit-stock" data-id="${item._id}" style="padding:4px 8px;">Edit</button>` : ''}
+              ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="delete-stock" data-id="${item._id}" style="padding:4px 8px; color: var(--danger);">Untrack</button>` : ''}
+              <button class="btn primary" data-action="request-stock" data-id="${item._id}" style="padding:4px 10px;">Request</button>
+            </div>
+          </div>
+        `;
+      return card;
+    }
+
     function renderStockGrid() {
       if (!stockGrid) return;
       if (!currentUser) {
@@ -2478,49 +2597,44 @@
       }
       stockGrid.innerHTML = '';
       const canAdjustStock = currentUser?.permissions?.canEditStock || currentUser?.permissions?.canManageStock;
-      stockItems.forEach(item => {
-        const qty = item.quantityOnHand ?? 0;
-        const low = item.lowStockThreshold;
-        const isEmpty = qty <= 0;
-        const isLow = !isEmpty && low !== undefined && qty <= low;
-        const card = document.createElement('div');
-        card.className = 'card stock-card';
-        if (isLow) card.classList.add('stock-low');
-        if (isEmpty) card.classList.add('stock-empty');
-        card.dataset.id = item._id;
-        const subteamLabel = item.subteam || 'Common stock';
-        const statusText = isEmpty ? '<span class="stock-empty-text">Out of stock</span>' : (isLow ? '<span class="stock-low-text">Low</span>' : '');
-        card.innerHTML = `
-          <div class="flex-between" style="gap:8px; align-items:flex-start;">
-            <div>
-              <h4 style="margin:0 0 6px;">${escapeHtml(item.name)}</h4>
-              <div class="meta">
-                ${item.vendor ? `<span class="tag supplier">${escapeHtml(item.vendor)}</span>` : ''}
-                ${item.vendorPartNumber ? `<span class="tag">${escapeHtml(item.vendorPartNumber)}</span>` : ''}
-                ${item.catalogFullPath ? `<span class="tag group">${escapeHtml(item.catalogFullPath)}</span>` : ''}
-              </div>
-            </div>
-            ${statusText ? `<div>${statusText}</div>` : ''}
-          </div>
-          <div class="stock-adjust">
-            ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ''}
-            <div class="stock-level">${qty}</div>
-            ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ''}
-            ${!canAdjustStock ? `<div class="small">View only</div>` : ''}
-          </div>
-          <div class="stock-meta-row" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <span class="stock-chip">${escapeHtml(subteamLabel)}</span>
-            ${item.location ? `<span class="stock-chip">📍 ${escapeHtml(item.location)}</span>` : ''}
-          </div>
-          <div class="stock-actions">
-            <button class="btn primary" data-action="request-stock" data-id="${item._id}" style="padding:6px 10px;">Request order</button>
-            ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="edit-stock" data-id="${item._id}" style="padding:6px 10px;">Edit</button>` : ''}
-            ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="delete-stock" data-id="${item._id}" style="padding:6px 10px; color: var(--danger);">Untrack</button>` : ''}
-            ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:6px 10px;">Link</a>` : ''}
-          </div>
-        `;
-        stockGrid.appendChild(card);
-      });
+      const isGrouped = selectedStockSubteam && selectedStockSubteam !== 'all';
+      stockGrid.classList.toggle('grouped', isGrouped);
+
+      const buildCategoryLabel = (item) => {
+        return (item.category || '').trim() ||
+          'Uncategorized';
+      };
+
+      if (isGrouped) {
+        const groups = new Map();
+        stockItems.forEach(item => {
+          const label = buildCategoryLabel(item);
+          if (!groups.has(label)) groups.set(label, []);
+          groups.get(label).push(item);
+        });
+        const sortedLabels = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+        sortedLabels.forEach(label => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'stock-category-block';
+          const title = document.createElement('div');
+          title.className = 'stock-category-title';
+          title.textContent = label;
+          const grid = document.createElement('div');
+          grid.className = 'stock-category-grid';
+          const items = groups.get(label) || [];
+          items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          items.forEach(item => grid.appendChild(buildStockCard(item, canAdjustStock)));
+          wrapper.appendChild(title);
+          wrapper.appendChild(grid);
+          stockGrid.appendChild(wrapper);
+        });
+      } else {
+        stockItems
+          .slice()
+          .sort((a, b) => (a.subteam || '').localeCompare(b.subteam || '') || (a.name || '').localeCompare(b.name || ''))
+          .forEach(item => stockGrid.appendChild(buildStockCard(item, canAdjustStock)));
+      }
+
       stockGrid.querySelectorAll('button[data-action="adjust-stock"]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const id = e.target.dataset.id;
@@ -2573,7 +2687,7 @@
         return;
       }
       const params = new URLSearchParams();
-      const searchTerm = stockSearch?.value?.trim();
+      const searchTerm = (globalSearch?.value || '').trim();
       if (searchTerm) params.set('search', searchTerm);
       if (selectedStockSubteam && selectedStockSubteam !== 'all' && selectedStockSubteam !== 'none') {
         params.set('subteamId', selectedStockSubteam);
@@ -2606,6 +2720,7 @@
       if (deleteStockBtn) deleteStockBtn.style.display = 'none';
       if (stockModalTitle) stockModalTitle.textContent = 'Add stock item';
       if (stockModalSubtitle) stockModalSubtitle.textContent = 'Pick a catalog part to track and set the starting quantity.';
+      if (stockCategoryInput) stockCategoryInput.value = '';
     }
 
     function openStockModal(item = null) {
@@ -2627,6 +2742,7 @@
         if (stockQuantityInput) stockQuantityInput.value = item.quantityOnHand ?? 0;
         if (stockLowInput) stockLowInput.value = item.lowStockThreshold ?? '';
         if (stockLocationInput) stockLocationInput.value = item.location || '';
+        if (stockCategoryInput) stockCategoryInput.value = item.category || '';
         if (stockNotesInput) stockNotesInput.value = item.notes || '';
         if (stockSubteamSelect) stockSubteamSelect.value = item.subteamId ? item.subteamId.toString() : '';
         setSelectedStockCatalogItem(item.catalogItem || item);
@@ -2649,6 +2765,7 @@
       const low = stockLowInput?.value === '' ? undefined : Number(stockLowInput?.value);
       const subteamId = stockSubteamSelect ? stockSubteamSelect.value : '';
       const location = stockLocationInput?.value?.trim() || undefined;
+      const category = stockCategoryInput?.value?.trim() || undefined;
       const notes = stockNotesInput?.value?.trim() || undefined;
       if (!id && !selectedStockCatalogItem) {
         stockModalMessage.textContent = 'Select a catalog item first.';
@@ -2666,6 +2783,7 @@
               quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
               lowStockThreshold: Number.isFinite(low) ? low : undefined,
               location,
+              category,
               notes
             })
           });
@@ -2676,6 +2794,7 @@
             quantityOnHand: Number.isFinite(quantity) ? quantity : 0,
             lowStockThreshold: Number.isFinite(low) ? low : undefined,
             location,
+            category,
             notes
           };
           const res = await fetch('/api/stock', {
@@ -3058,6 +3177,7 @@
       tableSection.style.display = tableBtn.classList.contains('active') ? 'flex' : 'none';
       if (primaryTitle) primaryTitle.textContent = 'Orders';
       if (primarySubtitle) primarySubtitle.textContent = 'Track parts from request to delivery.';
+      updateSearchPlaceholder();
       resizeColumns();
       setTimeout(resizeColumns, 30);
     }
@@ -3075,6 +3195,7 @@
       if (primaryTitle) primaryTitle.textContent = 'Stock';
       if (primarySubtitle) primarySubtitle.textContent = 'Live view of parts on-hand by subteam.';
       loadStock();
+      updateSearchPlaceholder();
       resizeColumns();
       setTimeout(resizeColumns, 30);
     }
@@ -3102,16 +3223,19 @@
     });
     undoBtn.addEventListener('click', doUndo);
     redoBtn.addEventListener('click', doRedo);
-    globalSearch.addEventListener('input', () => { renderBoard(); renderTable(); });
+    globalSearch.addEventListener('input', () => {
+      if (activePrimaryView === 'stock') {
+        clearTimeout(stockSearchTimer);
+        stockSearchTimer = setTimeout(() => loadStock(), 250);
+      } else {
+        renderBoard(); renderTable();
+      }
+    });
     statusFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
     vendorFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
     startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     stockSubteamFilter?.addEventListener('change', () => { selectedStockSubteam = stockSubteamFilter.value; loadStock(); });
-    stockSearch?.addEventListener('input', () => {
-      clearTimeout(stockSearchTimer);
-      stockSearchTimer = setTimeout(() => loadStock(), 250);
-    });
     addStockBtn?.addEventListener('click', () => openStockModal());
     manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
     stockForm?.addEventListener('submit', saveStockForm);
@@ -3208,6 +3332,53 @@
     closeUserModalBtn?.addEventListener('click', closeUserModal);
     cancelUserBtn?.addEventListener('click', closeUserModal);
 
+    function resetVendorForm() {
+      vendorForm?.reset();
+      if (vendorForm?.elements?.id) vendorForm.elements.id.value = '';
+      if (vendorMessage) {
+        vendorMessage.textContent = '';
+        vendorMessage.className = 'small';
+      }
+      const resultsEl = document.getElementById('extract-results');
+      if (resultsEl) resultsEl.textContent = '';
+      const previewNameEl = document.getElementById('preview-name');
+      const previewPriceEl = document.getElementById('preview-price');
+      const pickNameEl = document.getElementById('pick-name');
+      const pickPriceEl = document.getElementById('pick-price');
+      const selectorSnippetEl = document.getElementById('selector-snippet');
+      if (previewNameEl) previewNameEl.textContent = '';
+      if (previewPriceEl) previewPriceEl.textContent = '';
+      if (pickNameEl) pickNameEl.innerHTML = '';
+      if (pickPriceEl) pickPriceEl.innerHTML = '';
+      if (selectorSnippetEl) selectorSnippetEl.value = '';
+      if (testUrl) testUrl.value = '';
+    }
+
+    function closeVendorModal() {
+      if (vendorModal) vendorModal.style.display = 'none';
+      resetVendorForm();
+    }
+
+    function openVendorModal(vendor) {
+      resetVendorForm();
+      if (vendor) {
+        if (vendorForm?.elements?.id) vendorForm.elements.id.value = vendor._id || '';
+        vendorForm.elements.vendor.value = vendor.vendor || '';
+        vendorForm.elements.baseUrl.value = vendor.baseUrl || '';
+        vendorForm.elements.productUrlTemplate.value = vendor.productUrlTemplate || '';
+        vendorForm.elements.partNumberExample.value = vendor.partNumberExample || '';
+        vendorForm.elements.partNumberPattern.value = vendor.partNumberPattern || '';
+        vendorForm.elements.nameSelector.value = vendor.nameSelector || '';
+        vendorForm.elements.priceSelector.value = vendor.priceSelector || '';
+        vendorForm.elements.notes.value = vendor.notes || '';
+      }
+      if (vendorModal) vendorModal.style.display = 'flex';
+    }
+
+    newVendorBtn?.addEventListener('click', () => openVendorModal());
+    closeVendorModalBtn?.addEventListener('click', closeVendorModal);
+    cancelVendorBtn?.addEventListener('click', closeVendorModal);
+
     attachBackdropClose(modal, () => { modal.style.display = 'none'; });
     attachBackdropClose(groupModal, resetGroupModal);
     attachBackdropClose(loginModal, () => { loginModal.style.display = 'none'; });
@@ -3220,6 +3391,7 @@
     attachBackdropClose(catalogRequestModal, () => { catalogRequestModal.style.display = 'none'; pendingCatalogRequest = null; });
     attachBackdropClose(stockModal, () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
     attachBackdropClose(stockSubteamsModal, () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
+    attachBackdropClose(vendorModal, closeVendorModal);
     attachBackdropClose(userModal, closeUserModal);
 
     function findVendorConfig(name) {
@@ -3817,7 +3989,7 @@
     tagsTabTags?.addEventListener('click', () => showTagsModalTab('tags'));
     tagsTabPriorities?.addEventListener('click', () => showTagsModalTab('priorities'));
     closeTags?.addEventListener('click', () => { tagsModal.style.display = 'none'; });
-    closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; resetCatalogItemForm(); });
+    closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; resetCatalogItemForm(); closeVendorModal(); });
     function updateCatalogEditVisibility() {
       const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
       if (catalogItemForm) catalogItemForm.style.display = canEdit ? catalogItemForm.style.display : 'none';
@@ -3846,7 +4018,6 @@
     accountBtn.addEventListener('click', () => {
       accountModal.style.display = 'flex';
     });
-    clearVendor.addEventListener('click', () => { vendorForm.reset(); vendorForm.elements.id.value = ''; });
 
     function openGroupModal(data) {
       editingGroupId = data?.id || null;
@@ -3897,7 +4068,7 @@
         vendorConfigs = data.vendors || [];
         renderVendorOptions();
         if (!vendorConfigs.length) {
-          vendorList.innerHTML = '<div class="empty">No vendor configs yet. Create one above.</div>';
+          vendorList.innerHTML = '<div class="empty">No vendor configs yet. Click "New vendor" to add one.</div>';
           return;
         }
         vendorList.innerHTML = vendorConfigs.map(v => `
@@ -3923,15 +4094,7 @@
             const id = card.dataset.id;
             const v = vendorConfigs.find(x => x._id === id);
             if (!v) return;
-            vendorForm.elements.id.value = id;
-            vendorForm.elements.vendor.value = v.vendor || '';
-            vendorForm.elements.baseUrl.value = v.baseUrl || '';
-            vendorForm.elements.productUrlTemplate.value = v.productUrlTemplate || '';
-            vendorForm.elements.partNumberExample.value = v.partNumberExample || '';
-            vendorForm.elements.partNumberPattern.value = v.partNumberPattern || '';
-            vendorForm.elements.nameSelector.value = v.nameSelector || '';
-            vendorForm.elements.priceSelector.value = v.priceSelector || '';
-            vendorForm.elements.notes.value = v.notes || '';
+            openVendorModal(v);
           });
         });
 
@@ -4840,8 +5003,8 @@
         });
         vendorMessage.textContent = 'Saved.';
         vendorMessage.className = 'success';
-        vendorForm.reset();
         loadVendors();
+        closeVendorModal();
       } catch (err) {
         vendorMessage.textContent = 'Failed to save vendor';
         vendorMessage.className = 'error';
@@ -5430,6 +5593,7 @@
       refreshCatalogView();
     });
 
+    updateSearchPlaceholder();
     startTrackingAutoRefresh(DEFAULT_TRACKING_POLL_MINUTES);
     fetchMe();
   </script>

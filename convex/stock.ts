@@ -175,6 +175,7 @@ export const create = mutation({
     quantityOnHand: v.number(),
     lowStockThreshold: v.optional(v.number()),
     location: v.optional(v.string()),
+    category: v.optional(v.string()),
     notes: v.optional(v.string()),
     userId: v.optional(v.string())
   },
@@ -208,6 +209,7 @@ export const create = mutation({
         subteamId: subteamId ?? undefined,
         subteam: subteam?.name,
         location: args.location,
+        category: args.category,
         quantityOnHand: normalizeQuantity(args.quantityOnHand, 0),
         lowStockThreshold: args.lowStockThreshold !== undefined ? normalizeQuantity(args.lowStockThreshold, 0) : duplicate.lowStockThreshold,
         notes: args.notes,
@@ -229,6 +231,7 @@ export const create = mutation({
       subteamId: subteamId ?? undefined,
       subteam: subteam?.name,
       location: args.location,
+      category: args.category,
       quantityOnHand: normalizeQuantity(args.quantityOnHand, 0),
       lowStockThreshold: args.lowStockThreshold !== undefined ? normalizeQuantity(args.lowStockThreshold, 0) : undefined,
       notes: args.notes,
@@ -248,6 +251,7 @@ export const update = mutation({
     subteamId: v.optional(v.union(v.string(), v.null())),
     lowStockThreshold: v.optional(v.number()),
     location: v.optional(v.string()),
+    category: v.optional(v.string()),
     notes: v.optional(v.string()),
     quantityOnHand: v.optional(v.number()),
     userId: v.optional(v.string())
@@ -278,6 +282,7 @@ export const update = mutation({
       updates.lowStockThreshold = normalizeQuantity(args.lowStockThreshold, 0);
     }
     if (args.location !== undefined) updates.location = args.location;
+    if (args.category !== undefined) updates.category = args.category;
     if (args.notes !== undefined) updates.notes = args.notes;
     if (args.quantityOnHand !== undefined) {
       updates.quantityOnHand = normalizeQuantity(args.quantityOnHand, item.quantityOnHand);
