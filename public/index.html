@@ -493,14 +493,7 @@
         <div id="selection-count"></div>
         <div id="group-vendor-note" class="small">Vendor: auto from selection</div>
       </div>
-      <div class="flex-between selection-actions" style="gap:8px;">
-        <button class="btn ghost" id="select-all-btn">Select all</button>
-        <button class="btn ghost" id="select-same-vendor-btn">Select Vendor</button>
-        <button class="btn ghost" id="unselect-all-btn">Unselect all</button>
-        <button class="btn primary" id="group-btn">Create Order</button>
-        <button class="btn ghost" id="add-to-order-btn">Add to Order</button>
-        <button class="btn ghost" id="delete-selected" style="color: var(--danger);">Delete selected</button>
-      </div>
+      <div class="flex-between selection-actions" style="gap:8px;"></div>
     </div>
 
     <section id="board-section" style="flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; padding-bottom: 12px;">
@@ -1344,13 +1337,32 @@
     const tableContainer = document.getElementById('table-container');
     const selectionBar = document.getElementById('selection-bar');
     const selectionCount = document.getElementById('selection-count');
-    const groupBtn = document.getElementById('group-btn');
-    const addToOrderBtn = document.getElementById('add-to-order-btn');
     const groupVendorNote = document.getElementById('group-vendor-note');
-    const deleteSelectedBtn = document.getElementById('delete-selected');
-    const selectSameVendorBtn = document.getElementById('select-same-vendor-btn');
-    const selectAllBtn = document.getElementById('select-all-btn');
-    const unselectAllBtn = document.getElementById('unselect-all-btn');
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.id = 'select-all-btn';
+    selectAllBtn.className = 'btn ghost';
+    selectAllBtn.textContent = 'Select all';
+    const selectSameVendorBtn = document.createElement('button');
+    selectSameVendorBtn.id = 'select-same-vendor-btn';
+    selectSameVendorBtn.className = 'btn ghost';
+    selectSameVendorBtn.textContent = 'Select same vendor';
+    const unselectAllBtn = document.createElement('button');
+    unselectAllBtn.id = 'unselect-all-btn';
+    unselectAllBtn.className = 'btn ghost';
+    unselectAllBtn.textContent = 'Unselect all';
+    const addToOrderBtn = document.createElement('button');
+    addToOrderBtn.id = 'add-to-order-btn';
+    addToOrderBtn.className = 'btn ghost';
+    addToOrderBtn.textContent = 'Add to Order';
+    const groupBtn = document.createElement('button');
+    groupBtn.id = 'group-btn';
+    groupBtn.className = 'btn primary';
+    groupBtn.textContent = 'Create Order';
+    const deleteSelectedBtn = document.createElement('button');
+    deleteSelectedBtn.id = 'delete-selected';
+    deleteSelectedBtn.className = 'btn ghost';
+    deleteSelectedBtn.style.color = 'var(--danger)';
+    deleteSelectedBtn.textContent = 'Delete selected';
     const undoBtn = document.createElement('button');
     undoBtn.className = 'btn ghost';
     undoBtn.id = 'undo-btn';
@@ -2379,12 +2391,60 @@
       el.classList.add(canTarget ? 'add-target-valid' : 'add-target-disabled');
     }
 
+    function updateToOrderActionsUI() {
+      const actionsRow = document.querySelector('.column[data-status="Requested"] .to-order-actions');
+      if (!actionsRow) return;
+      const selectedOrders = orders.filter(o => selected.has(o._id));
+      const allRequested = selectedOrders.every(o => o.status === 'Requested');
+      const sameVendor = selectedOrders.length > 0 && allRequested && selectedOrders.every(o => getOrderVendor(o) === getOrderVendor(selectedOrders[0]));
+      const showSelectSameVendor = sameVendor;
+      const showSelectAll = selectedOrders.length === 0 || !sameVendor;
+      const hasSelection = selected.size > 0;
+      [selectAllBtn, selectSameVendorBtn, unselectAllBtn, addToOrderBtn, groupBtn, deleteSelectedBtn].forEach(btn => {
+        if (!btn) return;
+        actionsRow.appendChild(btn);
+      });
+      if (selectAllBtn) selectAllBtn.style.display = showSelectAll ? 'inline-flex' : 'none';
+      if (selectSameVendorBtn) selectSameVendorBtn.style.display = showSelectSameVendor ? 'inline-flex' : 'none';
+      if (unselectAllBtn) unselectAllBtn.style.display = hasSelection ? 'inline-flex' : 'none';
+      if (addToOrderBtn) addToOrderBtn.style.display = hasSelection && sameVendor ? 'inline-flex' : 'none';
+      if (groupBtn) groupBtn.style.display = hasSelection && sameVendor ? 'inline-flex' : 'none';
+      if (deleteSelectedBtn) deleteSelectedBtn.style.display = hasSelection ? 'inline-flex' : 'none';
+    }
+
+    function refreshBoardSelectionUI() {
+      if (!boardEl) return;
+      boardEl.querySelectorAll('.board .card').forEach(card => {
+        const id = card.dataset.id;
+        if (id) card.classList.toggle('selected', selected.has(id));
+        const vendor = card.dataset.vendor || '';
+        const isGroup = Boolean(card.dataset.groupId);
+        const isSelected = id ? selected.has(id) : false;
+        applyAddTargetStyles(card, vendor, isSelected, isGroup);
+      });
+      updateToOrderActionsUI();
+    }
+
+    function withScrollRestoration(fn) {
+      const sx = window.scrollX;
+      const sy = window.scrollY;
+      const bScroll = boardEl ? boardEl.scrollTop : null;
+      fn();
+      window.requestAnimationFrame(() => {
+        if (boardEl && bScroll !== null) boardEl.scrollTop = bScroll;
+        window.scrollTo(sx, sy);
+      });
+    }
+
     function renderBoard() {
+      const savedScrollY = window.scrollY;
+      const savedScrollX = window.scrollX;
+      const savedBoardScroll = boardEl ? boardEl.scrollTop : null;
       const fo = filteredOrders();
       const groupedByStatus = {};
       const groupMap = {};
       const selectionActions = selectionBar?.querySelector('.selection-actions');
-      [selectAllBtn, selectSameVendorBtn, unselectAllBtn, groupBtn, addToOrderBtn].forEach(btn => {
+      [selectAllBtn, selectSameVendorBtn, unselectAllBtn, groupBtn, addToOrderBtn, deleteSelectedBtn].forEach(btn => {
         if (btn && selectionActions && btn.parentElement !== selectionActions) {
           selectionActions.appendChild(btn);
         }
@@ -2423,11 +2483,11 @@
           const selectedOrders = orders.filter(o => selected.has(o._id));
           const allRequested = selectedOrders.every(o => o.status === 'Requested');
           const sameVendor = selectedOrders.length > 0 && allRequested && selectedOrders.every(o => getOrderVendor(o) === getOrderVendor(selectedOrders[0]));
-          const selectAllBtnEl = document.getElementById('select-all-btn');
-          const selectSameVendorBtnEl = document.getElementById('select-same-vendor-btn');
-          const unselectAllBtnEl = document.getElementById('unselect-all-btn');
-          const groupBtnEl = document.getElementById('group-btn');
-          const addToOrderBtnEl = document.getElementById('add-to-order-btn');
+          const selectAllBtnEl = selectAllBtn;
+          const selectSameVendorBtnEl = selectSameVendorBtn;
+          const unselectAllBtnEl = unselectAllBtn;
+          const groupBtnEl = groupBtn;
+          const addToOrderBtnEl = addToOrderBtn;
           const showSelectSameVendor = sameVendor;
           const showSelectAll = selectedOrders.length === 0 || !sameVendor;
           if (selectAllBtnEl) {
@@ -2617,7 +2677,7 @@
         if (!hasSingles && !hasGroups) {
           const empty = document.createElement('div');
           empty.className = 'empty';
-          empty.textContent = 'Drag an order here or create a new one.';
+          empty.textContent = 'No Orders';
           dropArea.appendChild(empty);
         }
 
@@ -2632,6 +2692,10 @@
           applyAddTargetStyles(card, vendor, isSelected, isGroup);
         });
       }
+      window.requestAnimationFrame(() => {
+        if (boardEl && savedBoardScroll !== null) boardEl.scrollTop = savedBoardScroll;
+        window.scrollTo(savedScrollX, savedScrollY);
+      });
       resizeColumns();
     }
 
@@ -3275,24 +3339,28 @@
       tableContainer.querySelector('#select-all').addEventListener('change', (e) => {
         const check = e.target.checked;
         rows.forEach(o => { if (check) selected.add(o._id); else selected.delete(o._id); });
-        renderBoard(); renderTable(); updateSelectionBar();
+        refreshBoardSelectionUI();
+        renderTable(); updateSelectionBar();
       });
       tableContainer.querySelectorAll('.row-check').forEach(cb => {
         cb.addEventListener('change', (e) => {
           const id = e.target.closest('tr').dataset.id;
           if (e.target.checked) selected.add(id); else selected.delete(id);
-          renderBoard(); updateSelectionBar();
+          refreshBoardSelectionUI();
+          updateSelectionBar();
         });
       });
       resizeColumns();
     }
 
     function toggleSelect(id) {
-      if (selected.has(id)) selected.delete(id);
-      else selected.add(id);
-      renderBoard();
-      renderTable();
-      updateSelectionBar();
+      withScrollRestoration(() => {
+        if (selected.has(id)) selected.delete(id);
+        else selected.add(id);
+        refreshBoardSelectionUI();
+        if (tableSection && tableSection.style.display !== 'none') renderTable();
+        updateSelectionBar();
+      });
     }
 
     const canLeaveRequested = (order) => Boolean(order?.groupId || order?.group);
@@ -3326,20 +3394,19 @@
       if (selected.size === 0) {
         selectionCount.textContent = 'No parts selected';
         groupVendorNote.textContent = '';
-      document.getElementById('delete-selected').style.display = 'none';
-      if (addToOrderBtn) addToOrderBtn.style.display = 'none';
-      addToOrderMode = false;
-      addToOrderVendor = null;
-    } else {
-    const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
-    selectionCount.textContent = `${selected.size} selected`;
-    groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
-    document.getElementById('delete-selected').style.display = 'inline-flex';
-    if (addToOrderMode && addToOrderVendor && selectedOrders.some(o => getOrderVendor(o) !== addToOrderVendor)) {
-      resetAddToOrderMode();
+        if (deleteSelectedBtn) deleteSelectedBtn.style.display = 'none';
+        addToOrderMode = false;
+        addToOrderVendor = null;
+      } else {
+        const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
+        selectionCount.textContent = `${selected.size} selected`;
+        groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
+        if (deleteSelectedBtn) deleteSelectedBtn.style.display = 'inline-flex';
+        if (addToOrderMode && addToOrderVendor && selectedOrders.some(o => getOrderVendor(o) !== addToOrderVendor)) {
+          resetAddToOrderMode();
+        }
+      }
     }
-  }
-  }
 
     async function createGroup() {
       if (selected.size === 0) return;
@@ -3377,21 +3444,23 @@
     function resetAddToOrderMode() {
       addToOrderMode = false;
       addToOrderVendor = null;
-      renderBoard();
+      refreshBoardSelectionUI();
     }
 
     function startAddToOrderMode() {
       if (!selected.size) return;
-      const selectedOrders = orders.filter(o => selected.has(o._id));
-      const vendor = getOrderVendor(selectedOrders[0]);
-      const mixed = selectedOrders.some(o => getOrderVendor(o) !== vendor);
-      if (!vendor || mixed) {
-        showBoardMessage('Select parts from the same vendor to add to an order.', 'error');
-        return;
-      }
-      addToOrderVendor = vendor;
-      addToOrderMode = true;
-      renderBoard();
+      withScrollRestoration(() => {
+        const selectedOrders = orders.filter(o => selected.has(o._id));
+        const vendor = getOrderVendor(selectedOrders[0]);
+        const mixed = selectedOrders.some(o => getOrderVendor(o) !== vendor);
+        if (!vendor || mixed) {
+          showBoardMessage('Select parts from the same vendor to add to an order.', 'error');
+          return;
+        }
+        addToOrderVendor = vendor;
+        addToOrderMode = true;
+        refreshBoardSelectionUI();
+      });
       showBoardMessage('Tap an existing order with the same vendor to add the selected parts.', 'info', 3000);
     }
 
@@ -3459,13 +3528,15 @@
       if (!current) return;
       const vendor = getOrderVendor(current);
       if (!vendor) return;
-      orders.forEach(o => {
-        if (o.status === 'Requested' && getOrderVendor(o) === vendor) {
-          selected.add(o._id);
-        }
+      withScrollRestoration(() => {
+        orders.forEach(o => {
+          if (o.status === 'Requested' && getOrderVendor(o) === vendor) {
+            selected.add(o._id);
+          }
+        });
+        updateSelectionBar();
+        refreshBoardSelectionUI();
       });
-      updateSelectionBar();
-      renderBoard();
     }
 
     // Event wiring
@@ -3510,6 +3581,7 @@
       if (activePrimaryView !== 'orders') showOrdersView();
       boardBtn.classList.add('active'); tableBtn.classList.remove('active');
       boardSection.style.display = 'flex'; tableSection.style.display = 'none';
+      refreshBoardSelectionUI();
       resizeColumns();
       setTimeout(resizeColumns, 30);
     };
@@ -3530,7 +3602,7 @@
       if (e.target.closest('.to-order-actions') || e.target.closest('.selection-actions')) return;
       if (!e.target.closest('.card')) {
         resetAddToOrderMode();
-        renderBoard();
+        refreshBoardSelectionUI();
       }
     });
     refreshBtn.addEventListener('click', () => {
@@ -3554,19 +3626,25 @@
       addStockBtn?.addEventListener('click', () => openStockModal());
       manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
       stockForm?.addEventListener('submit', saveStockForm);
-      addToOrderBtn?.addEventListener('click', () => {
-        if (addToOrderMode) resetAddToOrderMode(); else startAddToOrderMode();
-      });
-      selectAllBtn?.addEventListener('click', () => {
+    addToOrderBtn?.addEventListener('click', () => {
+      if (addToOrderMode) resetAddToOrderMode(); else startAddToOrderMode();
+    });
+    selectAllBtn?.addEventListener('click', () => {
+      withScrollRestoration(() => {
         orders.filter(o => o.status === 'Requested').forEach(o => selected.add(o._id));
         updateSelectionBar();
-        renderBoard(); renderTable();
+        refreshBoardSelectionUI();
+        if (tableSection && tableSection.style.display !== 'none') renderTable();
       });
-      unselectAllBtn?.addEventListener('click', () => {
+    });
+    unselectAllBtn?.addEventListener('click', () => {
+      withScrollRestoration(() => {
         selected.clear();
         updateSelectionBar();
-        renderBoard(); renderTable();
+        refreshBoardSelectionUI();
+        if (tableSection && tableSection.style.display !== 'none') renderTable();
       });
+    });
       deleteStockBtn?.addEventListener('click', async () => {
         const id = stockForm?.elements?.id?.value;
         if (id) {
