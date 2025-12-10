@@ -424,6 +424,14 @@
       font-size: 12px;
       font-weight: 700;
     }
+    .card.add-target-disabled {
+      opacity: 0.35;
+      pointer-events: none;
+      filter: grayscale(0.3);
+    }
+    .card.add-target-valid {
+      box-shadow: 0 0 0 1px var(--accent);
+    }
     .stock-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
     .stock-low-text { color: var(--warning); font-weight: 700; }
     .stock-empty-text { color: var(--danger); font-weight: 700; }
@@ -486,7 +494,11 @@
         <div id="group-vendor-note" class="small">Vendor: auto from selection</div>
       </div>
       <div class="flex-between selection-actions" style="gap:8px;">
+        <button class="btn ghost" id="select-all-btn">Select all</button>
+        <button class="btn ghost" id="select-same-vendor-btn">Select Vendor</button>
+        <button class="btn ghost" id="unselect-all-btn">Unselect all</button>
         <button class="btn primary" id="group-btn">Create Order</button>
+        <button class="btn ghost" id="add-to-order-btn">Add to Order</button>
         <button class="btn ghost" id="delete-selected" style="color: var(--danger);">Delete selected</button>
       </div>
     </div>
@@ -1333,8 +1345,12 @@
     const selectionBar = document.getElementById('selection-bar');
     const selectionCount = document.getElementById('selection-count');
     const groupBtn = document.getElementById('group-btn');
+    const addToOrderBtn = document.getElementById('add-to-order-btn');
     const groupVendorNote = document.getElementById('group-vendor-note');
     const deleteSelectedBtn = document.getElementById('delete-selected');
+    const selectSameVendorBtn = document.getElementById('select-same-vendor-btn');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const unselectAllBtn = document.getElementById('unselect-all-btn');
     const undoBtn = document.createElement('button');
     undoBtn.className = 'btn ghost';
     undoBtn.id = 'undo-btn';
@@ -1739,6 +1755,8 @@
     let stockSearchTimer = null;
     let pendingDeleteStockId = null;
     let pendingConfirmAction = null;
+    let addToOrderMode = false;
+    let addToOrderVendor = null;
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
     setOrderSource('manual');
@@ -2256,8 +2274,9 @@
     function createCard(order) {
       const card = document.createElement('div');
       card.className = 'card';
-      card.draggable = true;
+      card.draggable = false;
       card.dataset.id = order._id;
+      card.dataset.vendor = getOrderVendor(order) || '';
       if (selected.has(order._id)) card.classList.add('selected');
 
       card.innerHTML = `
@@ -2302,6 +2321,10 @@
       card.addEventListener('click', (e) => {
         if (e.target.closest('button')) return;
         if (e.target.closest('a')) return;
+        if (addToOrderMode && addToOrderVendor) {
+          showBoardMessage('Tap a grouped order to add these parts.', 'error', 2000);
+          return;
+        }
         toggleSelect(order._id);
       });
 
@@ -2341,19 +2364,31 @@
           e.stopPropagation();
         });
       });
-
-      card.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', order._id);
-        card.style.opacity = '0.6';
-      });
-      card.addEventListener('dragend', () => { card.style.opacity = '1'; });
       return card;
+    }
+
+    function applyAddTargetStyles(el, vendor, isSelected, isGroup = false) {
+      if (!el) return;
+      el.classList.remove('add-target-valid', 'add-target-disabled');
+      if (!addToOrderMode) return;
+      if (!isGroup) {
+        el.classList.add('add-target-disabled');
+        return;
+      }
+      const canTarget = addToOrderVendor && vendor && !isSelected && vendor === addToOrderVendor;
+      el.classList.add(canTarget ? 'add-target-valid' : 'add-target-disabled');
     }
 
     function renderBoard() {
       const fo = filteredOrders();
       const groupedByStatus = {};
       const groupMap = {};
+      const selectionActions = selectionBar?.querySelector('.selection-actions');
+      [selectAllBtn, selectSameVendorBtn, unselectAllBtn, groupBtn, addToOrderBtn].forEach(btn => {
+        if (btn && selectionActions && btn.parentElement !== selectionActions) {
+          selectionActions.appendChild(btn);
+        }
+      });
 
       fo.forEach(order => {
         if (order.groupId || order.group?._id) {
@@ -2368,66 +2403,85 @@
 
       boardEl.innerHTML = '';
       statuses.forEach(col => {
-        const column = document.createElement('div');
-        column.className = 'column';
-        column.dataset.status = col.status;
-        column.innerHTML = `
-          <h3>${col.label} <span class="pill">${(groupedByStatus[col.status] || []).length + Object.values(groupMap).filter(items => (items[0]?.status === col.status)).length}</span></h3>
-          <div class="small" style="margin-bottom:6px;">${col.hint}</div>
-          <div class="board-drop"></div>
-        `;
+        const status = col.status;
+      const column = document.createElement('div');
+      column.className = 'column';
+      column.dataset.status = col.status;
+      column.innerHTML = `
+        <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+          <div>
+            <h3>${col.label} <span class="pill">${(groupedByStatus[col.status] || []).length + Object.values(groupMap).filter(items => (items[0]?.status === col.status)).length}</span></h3>
+            <div class="small" style="margin-bottom:6px;">${col.hint}</div>
+          </div>
+          ${col.status === 'Requested' ? `<div class="to-order-actions" style="display:flex; gap:8px; flex-wrap:wrap; margin-left:auto;"></div>` : ''}
+        </div>
+        <div class="board-drop"></div>
+      `;
         const dropArea = column.querySelector('.board-drop');
-
-        const onDropTarget = async (e) => {
-          e.preventDefault();
-          dropArea.style.border = 'none';
-          const id = e.dataTransfer.getData('text/plain');
-          if (!id) return;
-          if (id.startsWith('group:')) {
-            const gid = id.replace('group:', '');
-            updateGroupStatus(gid, col.status);
-          } else {
-            const order = getOrderById(id);
-            if (col.status !== 'Requested' && !canLeaveRequested(order)) {
-              showBoardMessage('Create an order first. Group the part before moving it.', 'error');
-              return;
-            }
-            moveOrderToStatus(id, col.status);
+        const actionsRow = column.querySelector('.to-order-actions');
+        if (actionsRow && col.status === 'Requested') {
+          const selectedOrders = orders.filter(o => selected.has(o._id));
+          const allRequested = selectedOrders.every(o => o.status === 'Requested');
+          const sameVendor = selectedOrders.length > 0 && allRequested && selectedOrders.every(o => getOrderVendor(o) === getOrderVendor(selectedOrders[0]));
+          const selectAllBtnEl = document.getElementById('select-all-btn');
+          const selectSameVendorBtnEl = document.getElementById('select-same-vendor-btn');
+          const unselectAllBtnEl = document.getElementById('unselect-all-btn');
+          const groupBtnEl = document.getElementById('group-btn');
+          const addToOrderBtnEl = document.getElementById('add-to-order-btn');
+          const showSelectSameVendor = sameVendor;
+          const showSelectAll = selectedOrders.length === 0 || !sameVendor;
+          if (selectAllBtnEl) {
+            selectAllBtnEl.style.display = showSelectAll ? 'inline-flex' : 'none';
+            actionsRow.appendChild(selectAllBtnEl);
           }
-        };
-        const onDragOver = (e) => { e.preventDefault(); dropArea.style.border = '1px dashed var(--accent)'; };
-        const onDragLeave = () => { dropArea.style.border = 'none'; };
-
-        dropArea.addEventListener('dragover', onDragOver);
-        dropArea.addEventListener('dragleave', onDragLeave);
-        dropArea.addEventListener('drop', onDropTarget);
-        column.addEventListener('dragover', onDragOver);
-        column.addEventListener('dragleave', onDragLeave);
-        column.addEventListener('drop', onDropTarget);
+          if (selectSameVendorBtnEl) {
+            selectSameVendorBtnEl.style.display = showSelectSameVendor ? 'inline-flex' : 'none';
+            actionsRow.appendChild(selectSameVendorBtnEl);
+          }
+          if (unselectAllBtnEl) {
+            unselectAllBtnEl.style.display = selected.size ? 'inline-flex' : 'none';
+            actionsRow.appendChild(unselectAllBtnEl);
+          }
+          if (addToOrderBtnEl) {
+            addToOrderBtnEl.style.display = selected.size && sameVendor ? 'inline-flex' : 'none';
+            actionsRow.appendChild(addToOrderBtnEl);
+          }
+          if (groupBtnEl) {
+            groupBtnEl.style.display = selected.size && sameVendor ? 'inline-flex' : 'none';
+            actionsRow.appendChild(groupBtnEl);
+          }
+          if (deleteSelectedBtn) {
+            deleteSelectedBtn.style.display = selected.size ? 'inline-flex' : 'none';
+            actionsRow.appendChild(deleteSelectedBtn);
+          }
+        }
 
         (groupedByStatus[col.status] || []).forEach(order => {
-          dropArea.appendChild(createCard(order));
+          const card = createCard(order);
+          applyAddTargetStyles(card, getOrderVendor(order), selected.has(order._id), false);
+          dropArea.appendChild(card);
         });
 
         const groupsForStatus = Object.entries(groupMap)
           .filter(([, items]) => items[0]?.status === col.status)
           .sort(([, a], [, b]) => getGroupTimestamp(b) - getGroupTimestamp(a));
 
-        groupsForStatus.forEach(([gid, items]) => {
-          const first = items[0];
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.style.display = 'flex';
-          card.style.flexDirection = 'column';
-          card.style.gap = '8px';
-          card.draggable = true;
-          card.dataset.groupId = gid;
-          const vendor = first.supplier || first.vendor || '';
+      groupsForStatus.forEach(([gid, items]) => {
+        const first = items[0];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.gap = '8px';
+        card.draggable = false;
+        card.dataset.groupId = gid;
+        card.dataset.vendor = (first.supplier || first.vendor || '').toLowerCase();
+        const vendor = first.supplier || first.vendor || '';
       const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
           const trackingList = (first.group?.tracking && first.group.tracking.length ? first.group.tracking : trackingFromOrder(first));
       const groupedAt = first.group?.requestedDisplayAt || first.group?.createdAt || Date.now();
       const timePart = new Date(groupedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const groupTitle = first.group?.title || `${vendor || 'Grouped Order'} - ${formatShortDate(new Date(groupedAt))} ${timePart}`;
+          const groupTitle = first.group?.title || `${vendor || 'Grouped Order'} - ${formatShortDate(new Date(groupedAt))} ${timePart}`;
           card.innerHTML = `
             <div class="flex-between" style="gap:8px;">
               <div>
@@ -2435,6 +2489,8 @@
                 <div class="meta">Items in order: ${items.length}</div>
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
+                ${status === 'Ordered' ? `<button class="btn ghost" data-action="advance-group" style="padding:4px 8px;">Advance</button>` : ''}
+                ${status === 'Received' ? `<button class="btn ghost" data-action="revert-group" style="padding:4px 8px;">Revert</button>` : ''}
                 ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
                 ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
               </div>
@@ -2448,7 +2504,7 @@
             </div>
             <div class="group-items-container" style="margin-top:6px; display:${expandedGroups.has(gid) ? 'block' : 'none'};">
               ${items.map(o => `
-                <div class="small group-item" data-id="${o._id}" draggable="true" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
+                <div class="small group-item" data-id="${o._id}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
                   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
                     <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ''}</span>
                     <span style="font-weight:700;">${o.partName || ''}</span>
@@ -2458,66 +2514,29 @@
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
                     ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
                     ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ''}
+                    ${currentUser?.permissions?.canEditOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ''}
                     ${currentUser?.permissions?.canDeleteOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ''}
                   </div>
                 </div>
               `).join('')}
             </div>
           `;
-          card.addEventListener('dragstart', (e) => {
-            if (e.target.closest('.group-item')) {
-              e.preventDefault();
-              return;
-            }
-            e.dataTransfer.setData('text/plain', `group:${gid}`);
-            card.style.opacity = '0.6';
-          });
-          card.addEventListener('dragend', () => { card.style.opacity = '1'; });
-
-          card.addEventListener('dragover', (e) => { e.preventDefault(); card.style.borderColor = 'var(--accent)'; });
-          card.addEventListener('dragleave', () => { card.style.borderColor = 'var(--border)'; });
-          card.addEventListener('drop', (e) => {
-            e.preventDefault();
-            card.style.borderColor = 'var(--border)';
-            const id = e.dataTransfer.getData('text/plain');
-            if (!id || id.startsWith('group:')) return;
-            (async () => {
-              const draggedOrder = getOrderById(id);
-              const targetVendor = getOrderVendor(first);
-              const dragVendor = getOrderVendor(draggedOrder);
-              if (dragVendor && targetVendor && dragVendor !== targetVendor) {
-                showBoardMessage('Cannot assign part to an order from a different vendor', 'error', 4000);
-                return;
-              }
-              const prev = snapshotOrder(id);
-              const res = await assignGroup(id, gid);
-              if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                showBoardMessage(data.error || 'Cannot assign part to an order from a different vendor', 'error');
-                return;
-              }
-              recordAction({
-                undo: { type: 'assignGroup', payload: { orderId: id, groupId: prev?.groupId || prev?.group?._id || undefined } },
-                redo: { type: 'assignGroup', payload: { orderId: id, groupId: gid } }
-              });
-              await patchStatusOnly(id, status);
-              await fetchOrders();
-            })();
-          });
+          applyAddTargetStyles(card, vendor.toLowerCase(), false, true);
 
           card.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('.group-item')) return;
+            if (addToOrderMode && addToOrderVendor) {
+              const valid = vendor && vendor.toLowerCase() === addToOrderVendor;
+              if (valid) {
+                addSelectedToGroup(gid, status);
+                return;
+              }
+              showBoardMessage('Vendor mismatch. Pick a matching grouped order.', 'error', 2000);
+              return;
+            }
             if (expandedGroups.has(gid)) expandedGroups.delete(gid); else expandedGroups.add(gid);
             const container = card.querySelector('.group-items-container');
             if (container) container.style.display = expandedGroups.has(gid) ? 'block' : 'none';
-          });
-
-          card.querySelectorAll('.group-item').forEach(el => {
-            const oid = el.dataset.id;
-            el.addEventListener('dragstart', (e) => {
-              e.stopPropagation();
-              e.dataTransfer.setData('text/plain', oid);
-            });
           });
 
           card.querySelectorAll('button[data-action="edit-group"]').forEach(btn => {
@@ -2546,6 +2565,18 @@
               });
             });
           });
+          card.querySelectorAll('button[data-action="advance-group"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              await updateGroupStatus(gid, 'Received');
+            });
+          });
+          card.querySelectorAll('button[data-action="revert-group"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              await updateGroupStatus(gid, 'Ordered');
+            });
+          });
 
           card.querySelectorAll('button[data-action="edit-part"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -2553,6 +2584,13 @@
               const oid = e.target.closest('.group-item').dataset.id;
               const order = orders.find(o => o._id === oid);
               if (order) openEdit(order);
+            });
+          });
+          card.querySelectorAll('button[data-action="remove-part"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              const oid = e.target.closest('.group-item').dataset.id;
+              await removePartFromGroup(oid);
             });
           });
           card.querySelectorAll('a[data-action="link-part"]').forEach(anchor => {
@@ -2585,6 +2623,15 @@
 
         boardEl.appendChild(column);
       });
+
+      if (addToOrderMode && boardEl) {
+        boardEl.querySelectorAll('.board .card').forEach(card => {
+          const vendor = card.dataset.vendor || '';
+          const isGroup = Boolean(card.dataset.groupId);
+          const isSelected = card.dataset.id ? selected.has(card.dataset.id) : false;
+          applyAddTargetStyles(card, vendor, isSelected, isGroup);
+        });
+      }
       resizeColumns();
     }
 
@@ -3279,16 +3326,20 @@
       if (selected.size === 0) {
         selectionCount.textContent = 'No parts selected';
         groupVendorNote.textContent = '';
-        document.getElementById('group-btn').style.display = 'none';
-        document.getElementById('delete-selected').style.display = 'none';
-      } else {
-      const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
-      selectionCount.textContent = `${selected.size} selected`;
-      groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
-      document.getElementById('group-btn').style.display = 'inline-flex';
-      document.getElementById('delete-selected').style.display = 'inline-flex';
+      document.getElementById('delete-selected').style.display = 'none';
+      if (addToOrderBtn) addToOrderBtn.style.display = 'none';
+      addToOrderMode = false;
+      addToOrderVendor = null;
+    } else {
+    const vendor = selectedOrders[0]?.supplier || selectedOrders[0]?.vendor || 'Mixed';
+    selectionCount.textContent = `${selected.size} selected`;
+    groupVendorNote.textContent = `Vendor: ${vendor}${selectedOrders.every(o => (o.supplier || o.vendor) === (selectedOrders[0]?.supplier || selectedOrders[0]?.vendor)) ? '' : ' (mixed - fix selection)'}`;
+    document.getElementById('delete-selected').style.display = 'inline-flex';
+    if (addToOrderMode && addToOrderVendor && selectedOrders.some(o => getOrderVendor(o) !== addToOrderVendor)) {
+      resetAddToOrderMode();
     }
-    }
+  }
+  }
 
     async function createGroup() {
       if (selected.size === 0) return;
@@ -3323,6 +3374,100 @@
       await fetchOrders();
     }
 
+    function resetAddToOrderMode() {
+      addToOrderMode = false;
+      addToOrderVendor = null;
+      renderBoard();
+    }
+
+    function startAddToOrderMode() {
+      if (!selected.size) return;
+      const selectedOrders = orders.filter(o => selected.has(o._id));
+      const vendor = getOrderVendor(selectedOrders[0]);
+      const mixed = selectedOrders.some(o => getOrderVendor(o) !== vendor);
+      if (!vendor || mixed) {
+        showBoardMessage('Select parts from the same vendor to add to an order.', 'error');
+        return;
+      }
+      addToOrderVendor = vendor;
+      addToOrderMode = true;
+      renderBoard();
+      showBoardMessage('Tap an existing order with the same vendor to add the selected parts.', 'info', 3000);
+    }
+
+    async function addSelectedToGroup(groupId, targetStatus) {
+      if (!selected.size) return;
+      const ids = Array.from(selected);
+      for (const id of ids) {
+        await assignGroup(id, groupId);
+        if (targetStatus) await patchStatusOnly(id, targetStatus);
+      }
+      selected.clear();
+      updateSelectionBar();
+      resetAddToOrderMode();
+      await fetchOrders();
+    }
+
+    async function addSelectedToOrder(order) {
+      if (!order || !selected.size) return;
+      const targetVendor = getOrderVendor(order);
+      if (addToOrderVendor && targetVendor !== addToOrderVendor) {
+        showBoardMessage('Select an order with the same vendor.', 'error');
+        return;
+      }
+      const targetStatus = order.status;
+      let groupId = order.groupId || order.group?._id;
+      if (!groupId) {
+        const now = new Date();
+        const title = `${order.supplier || order.vendor || 'Order'} - ${formatShortDate(now)} ${formatTimeShort(now)}`;
+        const payloadIds = [order._id, ...Array.from(selected)];
+        const res = await fetch('/api/order-groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            supplier: order.supplier || order.vendor || undefined,
+            requestedDisplayAt: now.getTime(),
+            orderIds: payloadIds
+          })
+        });
+        const data = await res.json();
+        groupId = data.groupId || data._id;
+        for (const id of Array.from(selected)) {
+          if (targetStatus) await patchStatusOnly(id, targetStatus);
+        }
+      } else {
+        for (const id of Array.from(selected)) {
+          await assignGroup(id, groupId);
+          if (targetStatus) await patchStatusOnly(id, targetStatus);
+        }
+      }
+      selected.clear();
+      updateSelectionBar();
+      resetAddToOrderMode();
+      await fetchOrders();
+    }
+
+    async function removePartFromGroup(orderId) {
+      await assignGroup(orderId, undefined);
+      await patchStatusOnly(orderId, 'Requested');
+      await fetchOrders();
+    }
+
+    function selectSameVendorRequested() {
+      const current = orders.find(o => selected.has(o._id));
+      if (!current) return;
+      const vendor = getOrderVendor(current);
+      if (!vendor) return;
+      orders.forEach(o => {
+        if (o.status === 'Requested' && getOrderVendor(o) === vendor) {
+          selected.add(o._id);
+        }
+      });
+      updateSelectionBar();
+      renderBoard();
+    }
+
     // Event wiring
     function showOrdersView() {
       activePrimaryView = 'orders';
@@ -3337,11 +3482,13 @@
       if (primaryTitle) primaryTitle.textContent = 'Orders';
       if (primarySubtitle) primarySubtitle.textContent = 'Track parts from request to delivery.';
       updateSearchPlaceholder();
+      updateSelectionBar();
       resizeColumns();
       setTimeout(resizeColumns, 30);
     }
 
     function showStockView() {
+      resetAddToOrderMode();
       activePrimaryView = 'stock';
       stockViewBtn?.classList.add('active');
       ordersViewBtn?.classList.remove('active');
@@ -3377,6 +3524,15 @@
     stockViewBtn?.addEventListener('click', showStockView);
     boardBtn.addEventListener('click', switchToBoard);
     tableBtn.addEventListener('click', switchToTable);
+    selectSameVendorBtn?.addEventListener('click', selectSameVendorRequested);
+    boardEl?.addEventListener('click', (e) => {
+      if (!addToOrderMode) return;
+      if (e.target.closest('.to-order-actions') || e.target.closest('.selection-actions')) return;
+      if (!e.target.closest('.card')) {
+        resetAddToOrderMode();
+        renderBoard();
+      }
+    });
     refreshBtn.addEventListener('click', () => {
       if (activePrimaryView === 'stock') loadStock(); else fetchOrders();
     });
@@ -3395,14 +3551,27 @@
     startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
     stockSubteamFilter?.addEventListener('change', () => { selectedStockSubteam = stockSubteamFilter.value; loadStock(); });
-    addStockBtn?.addEventListener('click', () => openStockModal());
-    manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
-    stockForm?.addEventListener('submit', saveStockForm);
-    deleteStockBtn?.addEventListener('click', async () => {
-      const id = stockForm?.elements?.id?.value;
-      if (id) {
-        if (stockModal) stockModal.style.display = 'none';
-        openDeleteStockModal(id);
+      addStockBtn?.addEventListener('click', () => openStockModal());
+      manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
+      stockForm?.addEventListener('submit', saveStockForm);
+      addToOrderBtn?.addEventListener('click', () => {
+        if (addToOrderMode) resetAddToOrderMode(); else startAddToOrderMode();
+      });
+      selectAllBtn?.addEventListener('click', () => {
+        orders.filter(o => o.status === 'Requested').forEach(o => selected.add(o._id));
+        updateSelectionBar();
+        renderBoard(); renderTable();
+      });
+      unselectAllBtn?.addEventListener('click', () => {
+        selected.clear();
+        updateSelectionBar();
+        renderBoard(); renderTable();
+      });
+      deleteStockBtn?.addEventListener('click', async () => {
+        const id = stockForm?.elements?.id?.value;
+        if (id) {
+          if (stockModal) stockModal.style.display = 'none';
+          openDeleteStockModal(id);
       }
     });
     cancelStockBtn?.addEventListener('click', () => { if (stockModal) stockModal.style.display = 'none'; resetStockModal(); });
