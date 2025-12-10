@@ -11,6 +11,7 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageUsers: true,
     canManageTags: true,
     canEditInventoryCatalog: true,
+    canEditTrackingSettings: true,
     canManageStock: true,
     canEditStock: true
   },
@@ -23,6 +24,7 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageUsers: false,
     canManageTags: true,
     canEditInventoryCatalog: true,
+    canEditTrackingSettings: true,
     canManageStock: true,
     canEditStock: true
   },
@@ -35,6 +37,7 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     canManageUsers: false,
     canManageTags: false,
     canEditInventoryCatalog: false,
+    canEditTrackingSettings: false,
     canManageStock: false,
     canEditStock: false
   }

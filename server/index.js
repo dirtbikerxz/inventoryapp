@@ -1113,7 +1113,7 @@ app.delete('/api/vendors/configs/:id', async (req, res) => {
 });
 
 app.get('/api/tracking/settings', async (req, res) => {
-  const user = await requireAuth(req, res, 'canManageUsers');
+  const user = await requireAuth(req, res, 'canEditTrackingSettings');
   if (!user) return;
   try {
     const settings = await client.query('tracking:getSettings', {});
@@ -1125,7 +1125,7 @@ app.get('/api/tracking/settings', async (req, res) => {
 });
 
 app.patch('/api/tracking/settings', async (req, res) => {
-  const user = await requireAuth(req, res, 'canManageUsers');
+  const user = await requireAuth(req, res, 'canEditTrackingSettings');
   if (!user) return;
   const refreshMinutes = Number(req.body?.refreshMinutes ?? 30);
   if (!Number.isFinite(refreshMinutes) || refreshMinutes <= 0) {
@@ -1148,7 +1148,7 @@ app.patch('/api/tracking/settings', async (req, res) => {
 });
 
 app.post('/api/tracking/refresh', async (req, res) => {
-  const user = await requireAuth(req, res, 'canManageUsers');
+  const user = await requireAuth(req, res, 'canEditTrackingSettings');
   if (!user) return;
   try {
     const result = await trackingService.refreshAllNow();

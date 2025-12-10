@@ -1624,9 +1624,9 @@
     const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
-      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
-      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canManageStock: false, canEditStock: false }
+      admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+      mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+      student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -2786,7 +2786,6 @@
               ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ''}
               <div class="stock-level">${qty}</div>
               ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ''}
-              ${!canAdjustStock ? `<div class="small">View only</div>` : ''}
             </div>
             <div class="stock-actions" style="margin-left:auto;">
               ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:4px 8px;">Link</a>` : ''}
@@ -5717,7 +5716,7 @@
       const perms = computePerms(currentUser);
       if (currentUser) currentUser.permissions = perms;
       newOrderBtn.disabled = !perms.canPlaceOrders;
-      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditInventoryCatalog) ? 'inline-flex' : 'none';
+      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings) ? 'inline-flex' : 'none';
       if (addStockBtn) addStockBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       if (manageSubteamsBtn) manageSubteamsBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
@@ -5791,9 +5790,9 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
-          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canManageStock: true, canEditStock: true },
-          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canManageStock: false, canEditStock: false }
+          admin: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+          mentor: { canPlaceOrders: true, canMoveOrders: true, canEditOrders: true, canDeleteOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
+          student: { canPlaceOrders: true, canMoveOrders: false, canEditOrders: false, canDeleteOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
@@ -5810,16 +5809,17 @@
           <div class="card" style="margin-bottom:8px;">
             <div class="page-title" style="font-size:16px;">${role}</div>
             <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
-              ${renderToggle(role, 'canPlaceOrders', 'Can place orders')}
-              ${renderToggle(role, 'canMoveOrders', 'Can move orders')}
-              ${renderToggle(role, 'canEditOrders', 'Can edit orders')}
-              ${renderToggle(role, 'canDeleteOrders', 'Can delete orders')}
-              ${renderToggle(role, 'canManageVendors', 'Can manage vendors')}
-              ${renderToggle(role, 'canManageUsers', 'Can manage users')}
-              ${renderToggle(role, 'canManageTags', 'Can manage tags')}
-              ${renderToggle(role, 'canEditInventoryCatalog', 'Can edit inventory catalog')}
-              ${renderToggle(role, 'canManageStock', 'Can configure tracked stock & locations')}
-              ${renderToggle(role, 'canEditStock', 'Can edit stock levels')}
+              ${renderToggle(role, 'canEditStock', 'Manage Stock Levels')}
+              ${renderToggle(role, 'canPlaceOrders', 'Place Orders')}
+              ${renderToggle(role, 'canMoveOrders', 'Move Orders')}
+              ${renderToggle(role, 'canEditOrders', 'Edit Orders')}
+              ${renderToggle(role, 'canDeleteOrders', 'Delete Orders')}
+              ${renderToggle(role, 'canManageTags', 'Manage Tags')}
+              ${renderToggle(role, 'canEditInventoryCatalog', 'Manage Inventory Catalog')}
+              ${renderToggle(role, 'canManageStock', 'Manage Tracked Stock & Locations')}
+              ${renderToggle(role, 'canManageVendors', 'Manage Vendors')}
+              ${renderToggle(role, 'canManageUsers', 'Manage Users')}
+              ${renderToggle(role, 'canEditTrackingSettings', 'Edit Tracking Settings')}
             </div>
             ${role === 'admin'
               ? `<div class="small" style="margin-top:8px;">Admin permissions are fixed and cannot be changed.</div>`
@@ -5958,7 +5958,10 @@
     function allowedAdminTabs() {
       const tabs = [];
       if (currentUser?.permissions?.canManageUsers) {
-        tabs.push('users', 'roles', 'tracking');
+        tabs.push('users', 'roles');
+      }
+      if (currentUser?.permissions?.canEditTrackingSettings) {
+        tabs.push('tracking');
       }
       if (currentUser?.permissions?.canManageVendors) {
         tabs.push('vendors');
@@ -5970,7 +5973,7 @@
       const allowed = allowedAdminTabs();
       if (adminTabUsers) adminTabUsers.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
-      if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canEditTrackingSettings ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
       if (!allowed.includes(activeAdminTab)) {
         activeAdminTab = allowed[0] || null;

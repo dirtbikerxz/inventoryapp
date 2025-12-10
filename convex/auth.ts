@@ -9,7 +9,8 @@ const DEFAULT_PERMISSIONS = {
   canManageVendors: false,
   canManageUsers: false,
   canManageTags: false,
-  canEditInventoryCatalog: false
+  canEditInventoryCatalog: false,
+  canEditTrackingSettings: false
 };
 
 function permissionsForRole(role: string) {
@@ -24,7 +25,8 @@ function permissionsForRole(role: string) {
         canManageVendors: true,
         canManageUsers: true,
         canManageTags: true,
-        canEditInventoryCatalog: true
+        canEditInventoryCatalog: true,
+        canEditTrackingSettings: true
       };
     case "mentor":
       return {
@@ -35,7 +37,8 @@ function permissionsForRole(role: string) {
         canManageVendors: true,
         canManageUsers: false,
         canManageTags: true,
-        canEditInventoryCatalog: true
+        canEditInventoryCatalog: true,
+        canEditTrackingSettings: true
       };
     case "student":
       return { ...DEFAULT_PERMISSIONS };
