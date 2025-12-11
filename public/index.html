@@ -609,8 +609,40 @@
           <div id="order-source-toggle" style="display:inline-flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn ghost" data-source="manual" id="order-source-manual">Enter new part</button>
             <button type="button" class="btn ghost" data-source="catalog" id="order-source-catalog">Pick from catalog</button>
+            <button type="button" class="btn ghost" data-source="import" id="order-source-import">Vendor import</button>
           </div>
         </div>
+        <div id="order-import-fields" class="order-import-fields" style="grid-column: span 2; display:none;">
+          <label class="small">Vendor import</label>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
+            <select id="vendor-import-vendor" class="input">
+              <option value="">Select vendor</option>
+            </select>
+            <div class="small" id="vendor-import-instructions">Upload a supported vendor CSV or paste part numbers and quantities.</div>
+          </div>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:10px;">
+            <div>
+              <label class="small">Upload vendor CSV</label>
+              <input type="file" id="vendor-import-file" class="input" accept=".csv,text/csv" />
+            </div>
+            <div>
+              <label class="small">Paste part numbers (one per line)</label>
+              <textarea id="vendor-import-text" class="input" rows="4" placeholder="Qty,Part Number or Part Number,Qty"></textarea>
+            </div>
+          </div>
+          <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <button type="button" class="btn ghost" id="vendor-import-clear" style="padding:6px 10px;">Clear</button>
+            <div style="flex:1;"></div>
+            <button type="button" class="btn primary" id="vendor-import-parse" style="padding:6px 12px;">Parse input</button>
+          </div>
+          <div id="vendor-import-message" class="small" style="margin-top:6px;"></div>
+          <div id="vendor-import-preview" class="vendor-import-preview" style="margin-top:10px;"></div>
+          <div class="flex-between" id="vendor-import-actions" style="display:none; align-items:center; gap:8px; margin-top:10px;">
+            <div id="vendor-import-summary" class="small"></div>
+            <button type="button" class="btn primary" id="vendor-import-submit">Add items</button>
+          </div>
+        </div>
+        <div id="order-standard-fields" style="display:contents;">
         <div class="order-manual-fields" style="grid-column: span 2;">
           <label class="small">Product Number</label>
             <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
@@ -697,12 +729,13 @@
           <div id="catalog-save-message" class="small" style="margin-top:6px;"></div>
         </div>
         <div id="catalog-save-status" class="small" style="grid-column: span 2;"></div>
-        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+        <div class="flex-between" id="order-submit-bar" style="grid-column: span 2; margin-top:6px;">
           <div id="order-message" class="small"></div>
           <div class="flex-between" style="gap:8px;">
             <button type="button" class="btn ghost" id="cancel-order">Cancel</button>
             <button type="submit" class="btn primary">Submit order</button>
           </div>
+        </div>
         </div>
       </form>
     </div>
@@ -1669,8 +1702,23 @@
     const createPriorityForm = document.getElementById('create-priority-form');
     const orderSourceManual = document.getElementById('order-source-manual');
     const orderSourceCatalog = document.getElementById('order-source-catalog');
+    const orderSourceImport = document.getElementById('order-source-import');
     const orderManualFields = document.querySelectorAll('.order-manual-fields');
     const orderCatalogFields = document.querySelectorAll('.order-catalog-fields');
+    const orderImportFields = document.getElementById('order-import-fields');
+    const orderStandardFields = document.getElementById('order-standard-fields');
+    const orderSubmitBar = document.getElementById('order-submit-bar');
+    const vendorImportSelect = document.getElementById('vendor-import-vendor');
+    const vendorImportInstructions = document.getElementById('vendor-import-instructions');
+    const vendorImportFile = document.getElementById('vendor-import-file');
+    const vendorImportText = document.getElementById('vendor-import-text');
+    const vendorImportParseBtn = document.getElementById('vendor-import-parse');
+    const vendorImportClearBtn = document.getElementById('vendor-import-clear');
+    const vendorImportMessage = document.getElementById('vendor-import-message');
+    const vendorImportPreview = document.getElementById('vendor-import-preview');
+    const vendorImportActions = document.getElementById('vendor-import-actions');
+    const vendorImportSummary = document.getElementById('vendor-import-summary');
+    const vendorImportSubmit = document.getElementById('vendor-import-submit');
     const catalogLookupInput = document.getElementById('catalog-lookup');
     const catalogLookupResults = document.getElementById('catalog-lookup-results');
     const catalogLookupSelected = document.getElementById('catalog-lookup-selected');
@@ -1724,6 +1772,10 @@
     let vendorFormMode = 'custom';
     let builtinFieldInputs = [];
     let activeBuiltinVendor = null;
+    let vendorImportEntries = [];
+    let vendorImportVendor = null;
+    let orderSource = 'manual';
+    renderVendorImportPreview();
     function detectVendor(partNum, link) {
       if (!vendorConfigs?.length) return null;
       const normalizedLink = (link || '').toLowerCase();
@@ -1758,22 +1810,72 @@
       if (fetchSupportedCatalogEl) fetchSupportedCatalogEl.textContent = msg;
     }
 
+    function vendorOptionValue(v) {
+      return (v?.key || v?.slug || v?.vendor || v?._id || '').toString().toLowerCase();
+    }
+
+    function renderVendorImportOptions() {
+      if (!vendorImportSelect) return;
+      const options = vendorConfigs.filter(v => v?.capabilities?.quickOrderImport);
+      const previous = vendorImportSelect.value;
+      vendorImportSelect.innerHTML = ['<option value="">Select vendor</option>']
+        .concat(options.map(v => `<option value="${vendorOptionValue(v)}">${escapeHtml(v.vendor || v.slug || v.key || 'Vendor')}</option>`))
+        .join('');
+      if (!options.length) {
+        vendorImportSelect.disabled = true;
+        if (vendorImportInstructions) {
+          vendorImportInstructions.textContent = 'No vendors have quick import configured yet.';
+        }
+      } else {
+        vendorImportSelect.disabled = false;
+        const match = options.find(v => vendorOptionValue(v) === previous);
+        vendorImportSelect.value = match ? previous : '';
+        vendorImportVendor = match || null;
+        updateVendorImportInstructions();
+      }
+      renderVendorImportPreview();
+    }
+
+    function updateVendorImportInstructions() {
+      if (!vendorImportInstructions) return;
+      if (!vendorImportVendor) {
+        vendorImportInstructions.textContent = 'Upload a supported vendor CSV or paste part numbers and quantities.';
+        return;
+      }
+      if ((vendorImportVendor.key || vendorImportVendor.slug || '').toLowerCase() === 'digikey' || (vendorImportVendor.vendor || '').toLowerCase().includes('digikey')) {
+        vendorImportInstructions.textContent = 'For Digi-Key, download the cart CSV or paste lines like "2,WM10548-ND".';
+      } else {
+        vendorImportInstructions.textContent = `Import items from ${vendorImportVendor.vendor || 'this vendor'} using a CSV or part number list.`;
+      }
+    }
+
     function setOrderSource(source) {
-      orderSource = source === 'catalog' ? 'catalog' : 'manual';
+      orderSource = source === 'catalog' ? 'catalog' : (source === 'import' ? 'import' : 'manual');
       if (orderSourceManual) orderSourceManual.classList.toggle('primary', orderSource === 'manual');
       if (orderSourceCatalog) orderSourceCatalog.classList.toggle('primary', orderSource === 'catalog');
+      if (orderSourceImport) orderSourceImport.classList.toggle('primary', orderSource === 'import');
       orderManualFields?.forEach(el => { if (el) el.style.display = orderSource === 'manual' ? '' : 'none'; });
       orderCatalogFields?.forEach(el => { if (el) el.style.display = orderSource === 'catalog' ? '' : 'none'; });
+      if (orderImportFields) orderImportFields.style.display = orderSource === 'import' ? 'block' : 'none';
+      if (orderStandardFields) orderStandardFields.style.display = orderSource === 'import' ? 'none' : 'contents';
+      if (orderSubmitBar) orderSubmitBar.style.display = orderSource === 'import' ? 'none' : 'flex';
+      if (vendorImportActions) vendorImportActions.style.display = (orderSource === 'import' && vendorImportEntries.length) ? 'flex' : 'none';
+      if (orderForm) orderForm.noValidate = orderSource === 'import';
       if (orderSource === 'manual') {
         resetCatalogLookup();
         scheduleCatalogPresenceCheck();
-      } else {
+      } else if (orderSource === 'catalog') {
         if (catalogLookupInput) catalogLookupInput.focus();
+      } else if (orderSource === 'import') {
+        if (vendorImportSelect && !vendorImportSelect.value) {
+          vendorImportSelect.focus();
+        }
       }
     }
 
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
+    orderSourceImport?.addEventListener('click', () => setOrderSource('import'));
 
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
@@ -1834,7 +1936,6 @@
     let selectedCatalogMatch = null;
     let selectedCatalogCategoryId = null;
     let selectedCatalogItemId = null;
-    let orderSource = 'manual';
     let catalogAlreadySaved = false;
     let catalogAlreadySavedItem = null;
     let catalogPresenceTimer = null;
@@ -2510,6 +2611,7 @@
           <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
             ${currentUser?.permissions?.canManagePartRequests ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === 'approved' ? 'Unapprove' : 'Approve'}</button>` : ''}
             ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ''}
+            ${supportsVendorExport(order) ? `<button class="btn ghost" data-action="export-order" style="padding:4px 8px;">Export</button>` : ''}
             ${(currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order))) ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ''}
             ${(currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order))) ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ''}
           </div>
@@ -2537,6 +2639,12 @@
           const next = order.approvalStatus === 'approved' ? 'pending' : 'approved';
           await approveOrder(order._id, next);
           fetchOrders();
+        });
+      });
+      card.querySelectorAll('button[data-action="export-order"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          exportOrdersForVendor([order]);
         });
       });
 
@@ -2743,6 +2851,7 @@
                 ${first.group?.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;">Notes: ${escapeHtml(first.group.notes)}</div>` : ''}
               </div>
               <div class="row-actions" style="display:flex; gap:6px;">
+                ${supportsVendorExportByName(vendor) ? `<button class="btn ghost" data-action="export-group" style="padding:4px 8px;">Export</button>` : ''}
                 ${currentUser?.permissions?.canManageOrders && status === 'Ordered' ? `<button class="btn ghost" data-action="advance-group" style="padding:4px 8px;">Advance</button>` : ''}
                 ${currentUser?.permissions?.canManageOrders && status === 'Received' ? `<button class="btn ghost" data-action="revert-group" style="padding:4px 8px;">Revert</button>` : ''}
                 ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:4px 8px;">Edit</button>` : ''}
@@ -2791,6 +2900,12 @@
             if (expandedGroups.has(gid)) expandedGroups.delete(gid); else expandedGroups.add(gid);
             const container = card.querySelector('.group-items-container');
             if (container) container.style.display = expandedGroups.has(gid) ? 'block' : 'none';
+          });
+          card.querySelectorAll('button[data-action="export-group"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              exportOrdersForVendor(items, vendor);
+            });
           });
 
           card.querySelectorAll('button[data-action="edit-group"]').forEach(btn => {
@@ -4017,13 +4132,15 @@
       resetCatalogLookup();
       resetCatalogSavePanel();
       syncCatalogSaveUI();
+      resetVendorImportState(false);
+      updateVendorImportInstructions();
       setOrderSource('manual');
       if (orderTrackingList) setTrackingRows(orderTrackingList, []);
       if (addOrderTracking) addOrderTracking.disabled = true;
       if (orderTrackingList) orderTrackingList.style.display = 'none';
       modal.style.display = 'flex';
     });
-    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); setOrderSource('manual'); });
+    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); resetVendorImportState(false); updateVendorImportInstructions(); setOrderSource('manual'); });
     const resetGroupModal = () => {
       groupModal.style.display = 'none';
       groupForm.reset();
@@ -4291,6 +4408,421 @@
       if (!text) return undefined;
       const num = parseFloat(text.replace(/[^0-9\\.]+/g, ''));
       return Number.isFinite(num) ? num : undefined;
+    }
+
+    function generateId(prefix = 'id') {
+      return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
+    }
+
+    function resetVendorImportState(clearVendor = false) {
+      vendorImportEntries = [];
+      if (clearVendor && vendorImportSelect) {
+        vendorImportSelect.value = '';
+        vendorImportVendor = null;
+        updateVendorImportInstructions();
+      }
+      if (vendorImportFile) vendorImportFile.value = '';
+      if (vendorImportText) vendorImportText.value = '';
+      if (vendorImportMessage) {
+        vendorImportMessage.textContent = '';
+        vendorImportMessage.className = 'small';
+      }
+      renderVendorImportPreview();
+    }
+
+    function renderVendorImportPreview() {
+      if (!vendorImportPreview) return;
+      if (!vendorImportEntries.length) {
+        vendorImportPreview.innerHTML = '<div class="empty">No vendor items parsed yet.</div>';
+      } else {
+        vendorImportPreview.innerHTML = vendorImportEntries.map((entry) => `
+          <div class="card" data-import-id="${entry.id}" style="margin-bottom:8px; padding:10px;">
+            <div class="flex-between" style="gap:8px; flex-wrap:wrap; align-items:flex-start;">
+              <div style="flex:1; min-width:160px;">
+                <div style="font-weight:600;">${escapeHtml(entry.description || entry.manufacturerPartNumber || entry.digiKeyPartNumber || 'Part')}</div>
+                <div class="small">Qty: ${entry.quantity || 1}${entry.digiKeyPartNumber ? ` · Digi-Key: ${escapeHtml(entry.digiKeyPartNumber)}` : ''}${entry.manufacturerPartNumber ? ` · MPN: ${escapeHtml(entry.manufacturerPartNumber)}` : ''}</div>
+                ${entry.customerReference ? `<div class="small">Ref: ${escapeHtml(entry.customerReference)}</div>` : ''}
+              </div>
+              <button class="btn ghost" data-action="remove-import-entry" data-index="${entry.id}" style="padding:4px 8px; color:var(--danger);">Remove</button>
+            </div>
+          </div>
+        `).join('');
+      }
+      if (vendorImportSummary) {
+        vendorImportSummary.textContent = vendorImportEntries.length
+          ? `Ready to import ${vendorImportEntries.length} item(s) from ${vendorImportVendor?.vendor || 'vendor'}.`
+          : '';
+      }
+      if (vendorImportActions) {
+        vendorImportActions.style.display = (orderSource === 'import' && vendorImportEntries.length) ? 'flex' : 'none';
+      }
+    }
+
+    function isDigikeyVendorName(name = '') {
+      const lower = (name || '').toLowerCase();
+      return lower.includes('digikey') || lower.includes('digi-key');
+    }
+
+    function isDigikeyVendor(vendor) {
+      if (!vendor) return false;
+      if (typeof vendor === 'string') return isDigikeyVendorName(vendor);
+      const key = (vendor.key || vendor.slug || '').toLowerCase();
+      if (key === 'digikey') return true;
+      return isDigikeyVendorName(vendor.vendor || vendor.supplier || '');
+    }
+
+    function supportsVendorExport(order) {
+      if (!order) return false;
+      const vendorName = order.vendor || order.supplier || '';
+      if (isDigikeyVendorName(vendorName)) return true;
+      const config = findVendorConfig(vendorName);
+      return Boolean(config?.capabilities?.quickOrderExport);
+    }
+
+    function supportsVendorExportByName(name) {
+      if (!name) return false;
+      if (isDigikeyVendorName(name)) return true;
+      const config = findVendorConfig(name);
+      return Boolean(config?.capabilities?.quickOrderExport);
+    }
+
+    function parseVendorCsv(vendor, text) {
+      if (!text) return [];
+      if (isDigikeyVendor(vendor)) return parseDigikeyCartCsv(text);
+      throw new Error(`CSV import is not implemented for ${vendor.vendor || 'this vendor'}.`);
+    }
+
+    function parseVendorQuickText(vendor, text) {
+      if (!text) return [];
+      if (isDigikeyVendor(vendor)) return parseDigikeyQuickText(text);
+      throw new Error(`Quick entry import is not implemented for ${vendor.vendor || 'this vendor'}.`);
+    }
+
+    function parseCsvText(text) {
+      if (!text) return [];
+      const rows = [];
+      let current = '';
+      let row = [];
+      let inQuotes = false;
+      const pushValue = () => {
+        row.push(current);
+        current = '';
+      };
+      const pushRow = () => {
+        if (row.length && row.some(cell => (cell || '').length)) rows.push(row);
+        row = [];
+      };
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') {
+          if (inQuotes && text[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          pushValue();
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          if (char === '\r' && text[i + 1] === '\n') i++;
+          pushValue();
+          pushRow();
+        } else {
+          current += char;
+        }
+      }
+      pushValue();
+      pushRow();
+      if (rows.length && rows[0].length && rows[0][0] && rows[0][0].charCodeAt(0) === 0xfeff) {
+        rows[0][0] = rows[0][0].substring(1);
+      }
+      return rows;
+    }
+
+    function parseDigikeyCartCsv(text) {
+      const rows = parseCsvText(text);
+      if (!rows.length) return [];
+      const normalizeHeader = (cell = '') => cell.replace(/\ufeff/g, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const headerRow = rows.shift().map(normalizeHeader);
+      const headerMap = {};
+      headerRow.forEach((name, idx) => {
+        if (name) headerMap[name] = idx;
+      });
+      const quantityIdx = headerMap.quantity;
+      const digiKeyPartIdx = headerMap.partnumber;
+      const manufacturerIdx = headerMap.manufacturerpartnumber;
+      const descriptionIdx = headerMap.description;
+      const customerRefIdx = headerMap.customerreference;
+      const unitPriceIdx = headerMap.unitprice;
+      if (quantityIdx === undefined || digiKeyPartIdx === undefined) {
+        throw new Error('Unrecognized Digi-Key cart CSV format.');
+      }
+      const entries = [];
+      rows.forEach((row) => {
+        const qtyRaw = row[quantityIdx];
+        const quantity = Number((qtyRaw || '').replace(/[^0-9.]/g, '')) || 0;
+        if (!quantity) return;
+        const digiKeyPartNumber = (row[digiKeyPartIdx] || '').trim();
+        if (!digiKeyPartNumber) return;
+        const manufacturerPartNumber = (row[manufacturerIdx] || '').trim() || '';
+        const description = (row[descriptionIdx] || '').trim();
+        const customerReference = (row[customerRefIdx] || '').trim();
+        const unitPrice = unitPriceIdx !== undefined
+          ? parseFloat((row[unitPriceIdx] || '').replace(/[^0-9.]/g, '')) : undefined;
+        entries.push({
+          id: generateId('import'),
+          vendorKey: 'digikey',
+          quantity,
+          digiKeyPartNumber,
+          manufacturerPartNumber: manufacturerPartNumber || digiKeyPartNumber,
+          description,
+          customerReference,
+          unitPrice: Number.isFinite(unitPrice) ? unitPrice : undefined,
+          productUrl: buildDigikeySearchUrl(digiKeyPartNumber),
+          source: 'csv'
+        });
+      });
+      if (!entries.length) throw new Error('No items found in the CSV file.');
+      return entries;
+    }
+
+    function parseDigikeyQuickText(text) {
+      return text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+          const tokens = line.split(/[\s,;\t]+/).filter(Boolean);
+          if (!tokens.length) return null;
+          const firstIsQty = /^[0-9]+$/.test(tokens[0]);
+          const lastIsQty = /^[0-9]+$/.test(tokens[tokens.length - 1]);
+          let quantity = 1;
+          let partNumber = '';
+          if (firstIsQty && tokens.length > 1) {
+            quantity = Number(tokens[0]) || 1;
+            partNumber = tokens.slice(1).join(' ');
+          } else if (lastIsQty && tokens.length > 1) {
+            quantity = Number(tokens[tokens.length - 1]) || 1;
+            partNumber = tokens.slice(0, -1).join(' ');
+          } else if (tokens.length >= 2) {
+            partNumber = tokens[0];
+            quantity = Number(tokens[1]) || 1;
+          } else {
+            partNumber = tokens[0];
+          }
+          partNumber = partNumber.trim();
+          if (!partNumber) return null;
+          return {
+            id: generateId('import'),
+            vendorKey: 'digikey',
+            quantity: quantity || 1,
+            digiKeyPartNumber: partNumber,
+            manufacturerPartNumber: '',
+            description: '',
+            customerReference: '',
+            unitPrice: undefined,
+            productUrl: buildDigikeySearchUrl(partNumber),
+            source: 'text'
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function buildDigikeySearchUrl(partNumber) {
+      if (!partNumber) return undefined;
+      return `https://www.digikey.com/en/products/search?keywords=${encodeURIComponent(partNumber)}`;
+    }
+
+    function buildImportPayload(entry, vendor) {
+      const vendorName = vendor?.vendor || vendor?.slug || vendor?.key || 'Vendor';
+      const manufacturerPart = entry.manufacturerPartNumber || entry.digiKeyPartNumber || '';
+      const digiKeyNumber = entry.digiKeyPartNumber || entry.productCode || '';
+      const partName = entry.description || manufacturerPart || digiKeyNumber || 'Imported Part';
+      const partLink = entry.productUrl || buildDigikeySearchUrl(digiKeyNumber || manufacturerPart);
+      const noteParts = ['Vendor import'];
+      if (digiKeyNumber) noteParts.push(`Digi-Key #: ${digiKeyNumber}`);
+      if (entry.customerReference) noteParts.push(`Ref: ${entry.customerReference}`);
+      return {
+        vendor: vendorName,
+        supplier: vendorName,
+        vendorPartNumber: manufacturerPart || digiKeyNumber,
+        productCode: digiKeyNumber || undefined,
+        partName,
+        quantityRequested: entry.quantity || 1,
+        unitCost: entry.unitPrice !== undefined ? entry.unitPrice : undefined,
+        priority: defaultPriorityLabel(),
+        tags: [],
+        notes: noteParts.join(' · '),
+        partLink
+      };
+    }
+
+    async function handleVendorImportParse() {
+      if (!vendorImportVendor) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'Select a vendor before parsing.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
+      const file = vendorImportFile?.files?.[0];
+      const pasted = vendorImportText?.value?.trim();
+      if (!file && !pasted) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'Choose a CSV file or paste part numbers first.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
+      try {
+        let parsed = [];
+        if (file) {
+          const text = await file.text();
+          parsed = parseVendorCsv(vendorImportVendor, text);
+        } else if (pasted) {
+          parsed = parseVendorQuickText(vendorImportVendor, pasted);
+        }
+        vendorImportEntries = parsed;
+        if (!parsed.length) throw new Error('No valid items were found.');
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = `Parsed ${parsed.length} item(s).`;
+          vendorImportMessage.className = 'small success';
+        }
+        if (vendorImportFile) vendorImportFile.value = '';
+        if (vendorImportText && pasted) vendorImportText.value = '';
+      } catch (err) {
+        vendorImportEntries = [];
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = err.message || 'Failed to parse vendor input.';
+          vendorImportMessage.className = 'small error';
+        }
+      }
+      renderVendorImportPreview();
+    }
+
+    async function submitVendorImportEntries() {
+      if (!vendorImportVendor) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'Select a vendor to import from.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
+      if (!vendorImportEntries.length) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'No parsed items to import yet.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
+      if (vendorImportMessage) {
+        vendorImportMessage.textContent = 'Adding items...';
+        vendorImportMessage.className = 'small';
+      }
+      let success = 0;
+      const failed = [];
+      for (const entry of vendorImportEntries) {
+        const payload = buildImportPayload(entry, vendorImportVendor);
+        try {
+          const res = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to create order');
+          success++;
+        } catch (err) {
+          failed.push(entry);
+        }
+      }
+      if (failed.length) {
+        vendorImportEntries = failed;
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = `Added ${success} item(s). ${failed.length} item(s) need attention.`;
+          vendorImportMessage.className = 'small error';
+        }
+        renderVendorImportPreview();
+        fetchOrders();
+        return;
+      }
+      vendorImportEntries = [];
+      renderVendorImportPreview();
+      if (vendorImportMessage) {
+        vendorImportMessage.textContent = `Added ${success} item(s) from ${vendorImportVendor.vendor}.`;
+        vendorImportMessage.className = 'small success';
+      }
+      modal.style.display = 'none';
+      orderForm.reset();
+      if (orderForm.elements.quantityRequested) orderForm.elements.quantityRequested.value = 1;
+      resetCatalogLookup();
+      resetCatalogSavePanel();
+      editingOrderId = null;
+      if (orderTrackingList) setTrackingRows(orderTrackingList, []);
+      setOrderSource('manual');
+      fetchOrders();
+      showBoardMessage(`Imported ${success} request(s) from ${vendorImportVendor.vendor}.`, 'success', 2500);
+    }
+
+    function csvQuote(value) {
+      const str = value === undefined || value === null ? '' : String(value);
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+
+    function buildDigikeyCartCsv(orders) {
+      const header = ['Index','Quantity','Part Number','Manufacturer Part Number','Description','Customer Reference','Available','Backorder','Unit Price','Extended Price USD'];
+      const lines = [header].concat(orders.map((order, idx) => {
+        const quantity = Number(order.quantityRequested) || 1;
+        const unitPrice = Number(order.unitCost ?? order.fetchedPrice);
+        const extended = Number.isFinite(unitPrice) ? unitPrice * quantity : undefined;
+        const digiKeyNumber = order.productCode || order.digiKeyPartNumber || '';
+        const manufacturerPart = order.vendorPartNumber || '';
+        return [
+          idx + 1,
+          quantity,
+          digiKeyNumber || manufacturerPart,
+          manufacturerPart || digiKeyNumber,
+          order.partName || '',
+          '',
+          '',
+          '',
+          Number.isFinite(unitPrice) ? unitPrice.toFixed(5) : '',
+          Number.isFinite(extended) ? extended.toFixed(2) : ''
+        ];
+      }));
+      return '\ufeff' + lines.map(row => row.map(csvQuote).join(',')).join('\r\n');
+    }
+
+    function formatFilenameDate(date = new Date()) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}`;
+    }
+
+    function downloadTextFile(filename, text, mime = 'text/plain;charset=utf-8;') {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    function exportOrdersForVendor(orderList, vendorNameHint) {
+      if (!orderList || !orderList.length) {
+        showBoardMessage('No items to export.', 'error', 2500);
+        return;
+      }
+      const vendorName = vendorNameHint || orderList[0]?.vendor || orderList[0]?.supplier || '';
+      if (isDigikeyVendorName(vendorName)) {
+        const csv = buildDigikeyCartCsv(orderList);
+        downloadTextFile(`digikey-cart-${formatFilenameDate()}.csv`, csv, 'text/csv;charset=utf-8;');
+        showBoardMessage('Digi-Key cart CSV downloaded.', 'info', 2200);
+        return;
+      }
+      showBoardMessage('Export not available for this vendor yet.', 'error', 2500);
     }
 
     async function fetchCatalogDetails() {
@@ -4797,6 +5329,13 @@
 
     orderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (orderSource === 'import') {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'Use the vendor import controls below to add items.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
       const formData = new FormData(orderForm);
       const payload = Object.fromEntries(formData.entries());
       payload.quantityRequested = Number(payload.quantityRequested || 0);
@@ -5018,6 +5557,7 @@
         builtinVendorConfigsState = (data.builtin || []).map(v => ({ ...v, source: 'builtin' }));
         vendorConfigs = customVendorConfigs.concat(builtinVendorConfigsState);
         renderVendorOptions();
+        renderVendorImportOptions();
         const builtinCards = builtinVendorConfigsState.length
           ? builtinVendorConfigsState.map(renderBuiltinVendorCard).join('')
           : '<div class="small">No built-in integrations available yet.</div>';
@@ -6006,6 +6546,31 @@
         vendorMessage.textContent = 'Failed to save vendor';
         vendorMessage.className = 'error';
       }
+    });
+
+    vendorImportSelect?.addEventListener('change', () => {
+      const value = (vendorImportSelect.value || '').toLowerCase();
+      vendorImportVendor = vendorConfigs.find(v => vendorOptionValue(v) === value) || null;
+      if (vendorImportMessage) {
+        vendorImportMessage.textContent = '';
+        vendorImportMessage.className = 'small';
+      }
+      vendorImportEntries = [];
+      updateVendorImportInstructions();
+      renderVendorImportPreview();
+    });
+    vendorImportParseBtn?.addEventListener('click', () => { handleVendorImportParse(); });
+    vendorImportClearBtn?.addEventListener('click', () => {
+      resetVendorImportState(false);
+      updateVendorImportInstructions();
+    });
+    vendorImportSubmit?.addEventListener('click', () => { submitVendorImportEntries(); });
+    vendorImportPreview?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action="remove-import-entry"]');
+      if (!btn) return;
+      const id = btn.dataset.index;
+      vendorImportEntries = vendorImportEntries.filter(entry => String(entry.id) !== String(id));
+      renderVendorImportPreview();
     });
 
     userForm.addEventListener('submit', async (e) => {
