@@ -435,9 +435,81 @@
     .stock-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
     .stock-low-text { color: var(--warning); font-weight: 700; }
     .stock-empty-text { color: var(--danger); font-weight: 700; }
+    /* Login page (VenomMCC styling) */
+    .login-page {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      z-index: 200;
+    }
+    .login-panel {
+      width: min(420px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .login-header h1 { margin: 0; font-size: 28px; color: var(--text); line-height: 1; }
+    .login-header p { margin: 6px 0 0; color: var(--muted); }
+    .login-form { display: flex; flex-direction: column; gap: 18px; }
+    .login-field { display: flex; flex-direction: column; gap: 8px; }
+    .login-field span { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .login-field input {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 16px;
+    }
+    .login-button {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 14px 16px;
+      font-weight: 700;
+      background: var(--gold);
+      color: #1a1000;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      box-shadow: 0 10px 30px rgba(253,208,35,0.25);
+    }
+    .login-button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .login-button:hover { transform: translateY(-1px); }
+    .login-error { color: var(--danger); margin: 0; font-weight: 600; text-align: center; }
+    .login-status { color: var(--muted); }
   </style>
 </head>
 <body>
+  <div id="login-page" class="login-page" style="display:flex;">
+    <section class="login-panel">
+      <header class="login-header">
+        <h1>Sign in</h1>
+      </header>
+      <form id="login-form" class="login-form">
+        <label class="login-field">
+          <span>Username</span>
+          <input name="username" type="text" autocomplete="username" required />
+        </label>
+        <label class="login-field">
+          <span>Password</span>
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit" class="login-button" id="login-submit">Sign in</button>
+        <p id="login-message" class="login-error" style="display:none;"></p>
+      </form>
+    </section>
+  </div>
+
+  <div id="app-shell" style="display:none;">
   <header>
     <div class="brand">
       <img src="/branding/logo.png" alt="Venom Parts logo" />
@@ -918,27 +990,6 @@
     </div>
   </div>
 
-  <div id="login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
-    <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:420px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
-      <div class="page-title" style="font-size:22px;">Sign In</div>
-      <div class="subtitle" style="margin-bottom:12px;">Use your team-issued account.</div>
-      <form id="login-form" class="grid" style="grid-template-columns:1fr; gap:12px;">
-        <div>
-          <label class="small">Username</label>
-          <input name="username" class="input" required />
-        </div>
-        <div>
-          <label class="small">Password</label>
-          <input name="password" class="input" type="password" required />
-        </div>
-        <div class="flex-between">
-          <div id="login-message" class="small"></div>
-          <button type="submit" class="btn primary">Login</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <div id="account-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:65; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:500px; width:100%; box-shadow:var(--card-shadow); padding:18px;">
       <div class="page-title" style="font-size:22px;">My Account</div>
@@ -1092,7 +1143,6 @@
               <div id="catalog-request-tag-picker-options" class="tag-picker-options"></div>
             </div>
           </div>
-          <div class="small" style="margin-top:4px;">Same tags as new order.</div>
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Notes</label>
@@ -1174,7 +1224,7 @@
     </div>
   </div>
 
-    <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
+  <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:70; align-items:center; justify-content:center; padding:16px;">
     <div class="tag-modal-card" style="max-width:420px; width:100%;">
       <div class="page-title" style="font-size:20px;">Confirm action</div>
       <div id="confirm-message" class="subtitle" style="margin-bottom:12px;">Are you sure?</div>
@@ -1184,6 +1234,13 @@
         <button class="btn ghost" id="confirm-cancel">Cancel</button>
         <button class="btn primary" id="confirm-ok" style="background: var(--danger); border-color: var(--danger); color: #fff;">Confirm</button>
       </div>
+    </div>
+  </div>
+
+  <div id="action-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:80; align-items:center; justify-content:center;">
+    <div style="background:rgba(0,0,0,0.65); color:var(--text); padding:14px 18px; border-radius:12px; display:flex; align-items:center; gap:10px; box-shadow:0 6px 30px rgba(0,0,0,0.45);">
+      <div class="spinner" style="width:18px; height:18px; border:3px solid var(--border); border-top-color: var(--primary); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+      <div id="action-overlay-text" class="small">Working…</div>
     </div>
   </div>
 
@@ -1312,6 +1369,8 @@
     </div>
   </div>
 
+  </div> <!-- end app-shell -->
+
   <script>
     const boardEl = document.getElementById('board');
     const boardBtn = document.getElementById('board-view-btn');
@@ -1368,14 +1427,9 @@
     undoBtn.className = 'btn ghost';
     undoBtn.id = 'undo-btn';
     undoBtn.textContent = 'Undo';
-    const redoBtn = document.createElement('button');
-    redoBtn.className = 'btn ghost';
-    redoBtn.id = 'redo-btn';
-    redoBtn.textContent = 'Redo';
     const selectionControls = selectionBar.querySelector('.selection-actions');
     if (selectionControls) {
       selectionControls.appendChild(undoBtn);
-      selectionControls.appendChild(redoBtn);
     }
     const boardMessage = document.createElement('div');
     boardMessage.id = 'board-message';
@@ -1489,7 +1543,8 @@
     const partPattern = vendorForm.elements.partNumberPattern;
     let editingOrderId = null;
     let editingGroupId = null;
-    const loginModal = document.getElementById('login-modal');
+    const appShell = document.getElementById('app-shell');
+    const loginPage = document.getElementById('login-page');
     const loginForm = document.getElementById('login-form');
     const loginMessage = document.getElementById('login-message');
     const loginBtn = document.getElementById('login-btn');
@@ -1586,6 +1641,8 @@
     const confirmCancel = document.getElementById('confirm-cancel');
     const confirmOk = document.getElementById('confirm-ok');
     const confirmExtra = document.getElementById('confirm-extra');
+    const actionOverlay = document.getElementById('action-overlay');
+    const actionOverlayText = document.getElementById('action-overlay-text');
     const catalogBackBtn = document.getElementById('catalog-back');
     const catalogCategoryList = document.getElementById('catalog-category-list');
     const catalogPathDisplay = document.getElementById('catalog-path-display');
@@ -1770,6 +1827,18 @@
     let pendingDeleteStockId = null;
     let pendingConfirmAction = null;
     let pendingConfirmExtraGetter = null;
+    let actionBusy = false;
+
+    function setActionBusy(busy, text) {
+      actionBusy = busy;
+      if (!actionOverlay) return;
+      actionOverlay.style.display = busy ? 'flex' : 'none';
+      if (actionOverlayText) actionOverlayText.textContent = text || 'Working…';
+    }
+    function setAuthenticated(authenticated) {
+      if (appShell) appShell.style.display = authenticated ? '' : 'none';
+      if (loginPage) loginPage.style.display = authenticated ? 'none' : 'flex';
+    }
     let addToOrderMode = false;
     let addToOrderVendor = null;
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
@@ -1785,7 +1854,7 @@
 
     function updateUndoRedoUI() {
       if (undoBtn) undoBtn.disabled = undoStack.length === 0;
-      if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+      // redo button removed
     }
 
     function recordAction(record) {
@@ -1936,6 +2005,8 @@
           break;
         }
         case 'restoreOrders': {
+          const manageOverlay = !actionBusy;
+          if (manageOverlay) setActionBusy(true, 'Restoring…');
           if (Array.isArray(step.payload?.orders)) {
             let newGroupId = null;
             if (step.payload.group) {
@@ -1972,7 +2043,7 @@
               });
               const data = await res.json();
               const newId = data.order?.orderId || data.orderId || data.order?._id;
-              const targetGroupId = newGroupId || null;
+              const targetGroupId = newGroupId || o.groupId || null;
               if (targetGroupId && newId) {
                 await assignGroup(newId, targetGroupId);
               }
@@ -1981,22 +2052,24 @@
               }
             }
           }
+          if (manageOverlay) setActionBusy(false);
           break;
         }
         case 'deleteOrders': {
+          const manageOverlay = !actionBusy;
+          if (manageOverlay) setActionBusy(true, 'Deleting…');
           if (Array.isArray(step.payload?.orderIds)) {
-            for (const oid of step.payload.orderIds) {
-              await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
-            }
+            await Promise.all(step.payload.orderIds.map(oid => fetch(`/api/orders/${oid}`, { method: 'DELETE' })));
           }
+          if (manageOverlay) setActionBusy(false);
           break;
         }
         case 'deleteGroup': {
           if (Array.isArray(step.payload?.orderIds)) {
-            for (const oid of step.payload.orderIds) {
+            await Promise.all(step.payload.orderIds.map(async oid => {
               await assignGroup(oid, undefined);
               await patchStatusOnly(oid, 'Requested');
-            }
+            }));
           }
           await fetch(`/api/order-groups/${step.payload.groupId}`, { method: 'DELETE' });
           break;
@@ -2017,19 +2090,11 @@
     async function doUndo() {
       const record = undoStack.pop();
       if (!record) return;
+      if (!actionBusy) setActionBusy(true, 'Working…');
       await applyStep(record.undo, record.redo);
-      redoStack.push(record);
       updateUndoRedoUI();
       await fetchOrders();
-    }
-
-    async function doRedo() {
-      const record = redoStack.pop();
-      if (!record) return;
-      await applyStep(record.redo, record.undo);
-      undoStack.push(record);
-      updateUndoRedoUI();
-      await fetchOrders();
+      if (actionBusy) setActionBusy(false);
     }
 
     function fmtDate(ts) {
@@ -2705,9 +2770,11 @@
 
           card.querySelectorAll('button[data-action="delete-group"]').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+              if (actionBusy) return;
               e.stopPropagation();
               const orderIds = items.map(o => o._id);
               openConfirm('Delete this group?', async (extra) => {
+                setActionBusy(true, 'Deleting order…');
                 const deleteParts = extra?.deleteParts;
                 const originalStatus = first.status || 'Ordered';
                 const originalTracking = trackingList || [];
@@ -2722,27 +2789,27 @@
                     tracking: originalTracking,
                     notes: originalNotes
                   };
-                  for (const oid of orderIds) {
-                    await fetch(`/api/orders/${oid}`, { method: 'DELETE' });
-                  }
+                  await Promise.all(orderIds.map(oid => fetch(`/api/orders/${oid}`, { method: 'DELETE' })));
                   await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
                   recordAction({
                     undo: { type: 'restoreOrders', payload: { orders: snapshots, group: groupSnapshot } },
                     redo: { type: 'deleteOrders', payload: { orderIds } }
                   });
                   fetchOrders();
+                  setActionBusy(false);
                   return;
                 }
-                for (const oid of orderIds) {
+                await Promise.all(orderIds.map(async oid => {
                   await assignGroup(oid, undefined);
                   await patchStatusOnly(oid, 'Requested');
-                }
+                }));
                 await fetch(`/api/order-groups/${gid}`, { method: 'DELETE' });
                 recordAction({
                   undo: { type: 'createGroup', payload: { title: groupTitle, supplier: vendor || undefined, requestedDisplayAt: first.group?.requestedDisplayAt || first.group?.createdAt, orderIds, status: originalStatus, tracking: originalTracking, notes: originalNotes } },
                   redo: { type: 'deleteGroup', payload: { groupId: gid, orderIds, status: originalStatus } }
                 });
                 fetchOrders();
+                setActionBusy(false);
               }, () => {
                 const checkboxId = `confirm-delete-orders-${gid}`;
                 return {
@@ -3281,12 +3348,16 @@
         showBoardMessage('No permission to untrack stock.', 'error');
         return;
       }
+      if (actionBusy) return;
+      setActionBusy(true, 'Deleting stock…');
       try {
         await fetch(`/api/stock/${id}`, { method: 'DELETE' });
         await loadStock();
         showBoardMessage('Stock entry removed.', 'info');
       } catch (err) {
         showBoardMessage(err.message || 'Failed to remove stock', 'error');
+      } finally {
+        setActionBusy(false);
       }
     }
 
@@ -3560,6 +3631,7 @@
     }
 
     async function createGroup() {
+      if (actionBusy) return;
       if (!currentUser?.permissions?.canManageOrders) {
         showBoardMessage('No permission to manage orders.', 'error');
         return;
@@ -3574,26 +3646,31 @@
       }
       const now = new Date();
       const fallbackTitle = baseVendor ? `${baseVendor} - ${formatShortDate(now)} ${formatTimeShort(now)}` : `Group - ${formatShortDate(now)} ${formatTimeShort(now)}`;
-      const res = await fetch('/api/order-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: fallbackTitle,
-          supplier: baseVendor || undefined,
-          requestedDisplayAt: now.getTime(),
-          orderIds: Array.from(selected)
-        })
-      });
-      const data = await res.json();
-      const newGroupId = data.groupId || data._id;
-      await Promise.all(Array.from(selected).map(id => patchStatusOnly(id, 'Ordered')));
-      recordAction({
-        undo: { type: 'deleteGroup', payload: { groupId: newGroupId } },
-        redo: { type: 'createGroup', payload: { title: fallbackTitle, supplier: baseVendor || undefined, requestedDisplayAt: now.getTime(), orderIds: Array.from(selected) } }
-      });
-      selected.clear();
-      groupVendorNote.textContent = 'Vendor: auto from selection';
-      await fetchOrders();
+      setActionBusy(true, 'Creating order…');
+      try {
+        const res = await fetch('/api/order-groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: fallbackTitle,
+            supplier: baseVendor || undefined,
+            requestedDisplayAt: now.getTime(),
+            orderIds: Array.from(selected)
+          })
+        });
+        const data = await res.json();
+        const newGroupId = data.groupId || data._id;
+        await Promise.all(Array.from(selected).map(id => patchStatusOnly(id, 'Ordered')));
+        recordAction({
+          undo: { type: 'deleteGroup', payload: { groupId: newGroupId } },
+          redo: { type: 'createGroup', payload: { title: fallbackTitle, supplier: baseVendor || undefined, requestedDisplayAt: now.getTime(), orderIds: Array.from(selected) } }
+        });
+        selected.clear();
+        groupVendorNote.textContent = 'Vendor: auto from selection';
+        await fetchOrders();
+      } finally {
+        setActionBusy(false);
+      }
     }
 
     function resetAddToOrderMode() {
@@ -3783,7 +3860,6 @@
       if (activePrimaryView === 'stock') loadStock(); else fetchOrders();
     });
     undoBtn.addEventListener('click', doUndo);
-    redoBtn.addEventListener('click', doRedo);
     globalSearch.addEventListener('input', () => {
       if (activePrimaryView === 'stock') {
         clearTimeout(stockSearchTimer);
@@ -4002,7 +4078,6 @@
 
     attachBackdropClose(modal, () => { modal.style.display = 'none'; });
     attachBackdropClose(groupModal, resetGroupModal);
-    attachBackdropClose(loginModal, () => { loginModal.style.display = 'none'; });
     attachBackdropClose(accountModal, () => { accountModal.style.display = 'none'; });
     attachBackdropClose(tagsModal, () => { tagsModal.style.display = 'none'; });
     attachBackdropClose(adminModal, () => { adminModal.style.display = 'none'; });
@@ -6150,6 +6225,7 @@
         const data = await res.json();
         currentUser = data.user;
         currentUser.permissions = computePerms(currentUser);
+        setAuthenticated(true);
         updateUserUI();
         syncCatalogSaveUI();
         await syncTrackingAutoRefreshFromServer();
@@ -6163,6 +6239,7 @@
         refreshCatalogView();
       } catch {
         currentUser = null;
+        setAuthenticated(false);
         updateUserUI();
         resetCatalogSavePanel();
         resetCatalogLookup();
@@ -6173,11 +6250,13 @@
     }
 
     loginBtn.addEventListener('click', () => {
-      loginModal.style.display = 'flex';
+      if (loginMessage) { loginMessage.textContent = ''; loginMessage.style.display = 'none'; }
+      setAuthenticated(false);
     });
     logoutBtn.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       currentUser = null;
+      setAuthenticated(false);
       updateUserUI();
       resetCatalogSavePanel();
       resetCatalogLookup();
@@ -6196,7 +6275,8 @@
       const formData = new FormData(loginForm);
       const payload = Object.fromEntries(formData.entries());
       loginMessage.textContent = 'Signing in...';
-      loginMessage.className = 'small';
+      loginMessage.className = 'login-status';
+      loginMessage.style.display = 'block';
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -6205,13 +6285,15 @@
       const data = await res.json();
       if (!res.ok) {
         loginMessage.textContent = data.error || 'Login failed';
-        loginMessage.className = 'error';
+        loginMessage.className = 'login-error';
+        loginMessage.style.display = 'block';
         return;
       }
       currentUser = data.user;
       currentUser.permissions = computePerms(currentUser);
       loginMessage.textContent = '';
-      loginModal.style.display = 'none';
+      loginMessage.style.display = 'none';
+      setAuthenticated(true);
       updateUserUI();
       syncCatalogSaveUI();
       syncTrackingAutoRefreshFromServer();
