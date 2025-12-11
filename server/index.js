@@ -10,6 +10,7 @@ const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
 const { TrackingService, buildTrackingUrl } = require('./trackingService');
 const { DigiKeyService } = require('./digikeyService');
+const { MouserService } = require('./mouserService');
 const { builtinVendors, getBuiltinVendor } = require('./builtinVendors');
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
@@ -38,6 +39,7 @@ const client = new ConvexHttpClient(config.convexUrl);
 const app = express();
 const trackingService = new TrackingService({ client, logger });
 const digikeyService = new DigiKeyService({ logger });
+const mouserService = new MouserService({ logger });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -60,7 +62,9 @@ function defaultPermissions(role) {
     canEditInventoryCatalog: false,
     canEditTrackingSettings: false,
     canManageStock: false,
-    canEditStock: false
+    canEditStock: false,
+    notesNotRequired: false,
+    canImportBulkOrders: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -75,7 +79,9 @@ function defaultPermissions(role) {
         canEditInventoryCatalog: true,
         canEditTrackingSettings: true,
         canManageStock: true,
-        canEditStock: true
+        canEditStock: true,
+        notesNotRequired: true,
+        canImportBulkOrders: true
       };
     case 'mentor':
       return {
@@ -89,7 +95,9 @@ function defaultPermissions(role) {
         canEditInventoryCatalog: true,
         canEditTrackingSettings: true,
         canManageStock: true,
-        canEditStock: true
+        canEditStock: true,
+        notesNotRequired: true,
+        canImportBulkOrders: false
       };
     case 'student':
       return base;
@@ -742,6 +750,14 @@ app.post('/api/orders', async (req, res) => {
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: 'Order payload is required' });
   }
+  const notesRequired = !user.permissions?.notesNotRequired;
+  const rawNotes = typeof req.body.notes === 'string' ? req.body.notes.trim() : '';
+  if (notesRequired && !rawNotes) {
+    return res.status(400).json({ error: 'Notes/justification are required for this part request.' });
+  }
+  if (typeof req.body.notes === 'string') {
+    req.body.notes = rawNotes || undefined;
+  }
 
   try {
     const tracking = normalizeTrackingPayload(req.body.tracking, req.body.trackingNumber, req.body.carrier);
@@ -1241,6 +1257,10 @@ app.post('/api/vendors/resolve', async (req, res) => {
       const result = await digikeyService.resolveProductUrl(url);
       return res.json(result);
     }
+    if (def.key === 'mouser') {
+      const result = await mouserService.resolveProductUrl(url);
+      return res.json(result);
+    }
     return res.status(501).json({ error: `Resolver not implemented for ${def.vendor}` });
   } catch (error) {
     logger.error(error, 'Vendor URL resolve failed');
@@ -1416,6 +1436,17 @@ app.post('/api/vendors/extract', async (req, res) => {
           return res.status(400).json({ error: 'partNumber is required for Digi-Key lookup' });
         }
         const result = await digikeyService.lookupPart(partNumber, settings);
+        return res.json({
+          ...result,
+          vendor: def.vendor,
+          vendorKey: def.key
+        });
+      }
+      if (def.key === 'mouser') {
+        if (!partNumber) {
+          return res.status(400).json({ error: 'partNumber is required for Mouser lookup' });
+        }
+        const result = await mouserService.lookupPart(partNumber, settings);
         return res.json({
           ...result,
           vendor: def.vendor,

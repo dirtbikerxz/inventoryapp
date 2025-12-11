@@ -623,7 +623,7 @@
           <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:10px;">
             <div>
               <label class="small">Upload vendor CSV</label>
-              <input type="file" id="vendor-import-file" class="input" accept=".csv,text/csv" />
+              <input type="file" id="vendor-import-file" class="input" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </div>
             <div>
               <label class="small">Paste part numbers (one per line)</label>
@@ -702,7 +702,7 @@
         </div>
         <!-- Tracking managed at group level; no tracking fields for individual parts -->
         <div style="grid-column: span 2;">
-          <label class="small">Notes</label>
+          <label class="small" id="order-notes-label">Notes</label>
           <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
         </div>
         <div id="catalog-save-container" style="grid-column: span 2; display:none;">
@@ -1278,6 +1278,27 @@
     </div>
   </div>
 
+  <div id="vendor-export-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:72; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card" style="max-width:520px; width:100%;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div class="page-title" id="vendor-export-title" style="font-size:20px;">Vendor export</div>
+          <div class="subtitle" id="vendor-export-description" style="margin-top:2px;">Provide this data to the vendor’s quick order form.</div>
+        </div>
+        <button class="btn ghost" id="close-vendor-export">Close</button>
+      </div>
+      <div style="margin-top:12px;">
+        <label class="small">Copy/paste list</label>
+        <textarea id="vendor-export-text" class="input" rows="8" readonly style="margin-top:6px;"></textarea>
+      </div>
+      <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn ghost" id="vendor-export-copy">Copy list</button>
+        <button class="btn primary" id="vendor-export-download">Download CSV</button>
+      </div>
+      <div id="vendor-export-message" class="small" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
   <div id="action-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:80; align-items:center; justify-content:center;">
     <div style="background:rgba(0,0,0,0.65); color:var(--text); padding:14px 18px; border-radius:12px; display:flex; align-items:center; gap:10px; box-shadow:0 6px 30px rgba(0,0,0,0.45);">
       <div class="spinner" style="width:18px; height:18px; border:3px solid var(--border); border-top-color: var(--primary); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
@@ -1688,6 +1709,14 @@
     const confirmCancel = document.getElementById('confirm-cancel');
     const confirmOk = document.getElementById('confirm-ok');
     const confirmExtra = document.getElementById('confirm-extra');
+    const vendorExportModal = document.getElementById('vendor-export-modal');
+    const vendorExportTitle = document.getElementById('vendor-export-title');
+    const vendorExportDescription = document.getElementById('vendor-export-description');
+    const vendorExportText = document.getElementById('vendor-export-text');
+    const vendorExportCopy = document.getElementById('vendor-export-copy');
+    const vendorExportDownload = document.getElementById('vendor-export-download');
+    const vendorExportMessage = document.getElementById('vendor-export-message');
+    const closeVendorExport = document.getElementById('close-vendor-export');
     const actionOverlay = document.getElementById('action-overlay');
     const actionOverlayText = document.getElementById('action-overlay-text');
     const catalogBackBtn = document.getElementById('catalog-back');
@@ -1742,12 +1771,13 @@
     const cancelCatalogItemBtn = document.getElementById('cancel-catalog-item');
     const catalogItemHint = document.getElementById('catalog-item-hint');
     const catalogItemModal = document.getElementById('catalog-item-modal');
+    const orderNotesLabel = document.getElementById('order-notes-label');
     const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
+      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false },
+      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -1775,6 +1805,8 @@
     let vendorImportEntries = [];
     let vendorImportVendor = null;
     let orderSource = 'manual';
+    let vendorExportData = null;
+    let xlsxLoaderPromise = null;
     renderVendorImportPreview();
     function detectVendor(partNum, link) {
       if (!vendorConfigs?.length) return null;
@@ -1816,6 +1848,14 @@
 
     function renderVendorImportOptions() {
       if (!vendorImportSelect) return;
+      if (!canUseVendorImport()) {
+        vendorImportSelect.innerHTML = '<option value="">Select vendor</option>';
+        vendorImportSelect.disabled = true;
+        vendorImportVendor = null;
+        updateVendorImportInstructions();
+        renderVendorImportPreview();
+        return;
+      }
       const options = vendorConfigs.filter(v => v?.capabilities?.quickOrderImport);
       const previous = vendorImportSelect.value;
       vendorImportSelect.innerHTML = ['<option value="">Select vendor</option>']
@@ -1836,37 +1876,87 @@
       renderVendorImportPreview();
     }
 
+    function canUseVendorImport() {
+      return Boolean(currentUser?.permissions?.canImportBulkOrders);
+    }
+
+    function requiresOrderNotes() {
+      return !currentUser?.permissions?.notesNotRequired;
+    }
+
+    function syncOrderNotesRequirement() {
+      const required = requiresOrderNotes();
+      const notesInput = orderForm?.elements?.notes;
+      if (notesInput) notesInput.required = required;
+      if (orderNotesLabel) orderNotesLabel.textContent = required ? 'Notes (required)' : 'Notes';
+    }
+
+    function syncVendorImportVisibility() {
+      const allowed = canUseVendorImport();
+      if (orderSourceImport) orderSourceImport.style.display = allowed ? 'inline-flex' : 'none';
+      if (!allowed) {
+        if (orderImportFields) orderImportFields.style.display = 'none';
+        if (orderSource === 'import') setOrderSource('manual');
+        vendorImportVendor = null;
+        if (vendorImportSelect) {
+          vendorImportSelect.value = '';
+          vendorImportSelect.disabled = true;
+        }
+        if (vendorImportInstructions) {
+          vendorImportInstructions.textContent = 'Bulk vendor import is disabled for this account.';
+        }
+        if (vendorImportActions) vendorImportActions.style.display = 'none';
+      } else {
+        if (vendorImportSelect) vendorImportSelect.disabled = false;
+        updateVendorImportInstructions();
+      }
+    }
+
     function updateVendorImportInstructions() {
       if (!vendorImportInstructions) return;
+      if (!canUseVendorImport()) {
+        vendorImportInstructions.textContent = 'Bulk vendor import is disabled for this account.';
+        return;
+      }
       if (!vendorImportVendor) {
         vendorImportInstructions.textContent = 'Upload a supported vendor CSV or paste part numbers and quantities.';
         return;
       }
-      if ((vendorImportVendor.key || vendorImportVendor.slug || '').toLowerCase() === 'digikey' || (vendorImportVendor.vendor || '').toLowerCase().includes('digikey')) {
+      if (isDigikeyVendor(vendorImportVendor)) {
         vendorImportInstructions.textContent = 'For Digi-Key, download the cart CSV or paste lines like "2,WM10548-ND".';
+      } else if (isMouserVendor(vendorImportVendor)) {
+        vendorImportInstructions.textContent = 'For Mouser, upload the cart XLS/CSV export or paste lines like "2,595-12345".';
       } else {
         vendorImportInstructions.textContent = `Import items from ${vendorImportVendor.vendor || 'this vendor'} using a CSV or part number list.`;
       }
     }
 
     function setOrderSource(source) {
+      const importAllowed = canUseVendorImport();
+      if (source === 'import' && !importAllowed) {
+        if (currentUser) {
+          showBoardMessage('Bulk vendor import is disabled for this account.', 'error', 2500);
+        }
+        source = 'manual';
+      }
       orderSource = source === 'catalog' ? 'catalog' : (source === 'import' ? 'import' : 'manual');
+      const showImport = orderSource === 'import' && importAllowed;
       if (orderSourceManual) orderSourceManual.classList.toggle('primary', orderSource === 'manual');
       if (orderSourceCatalog) orderSourceCatalog.classList.toggle('primary', orderSource === 'catalog');
-      if (orderSourceImport) orderSourceImport.classList.toggle('primary', orderSource === 'import');
+      if (orderSourceImport) orderSourceImport.classList.toggle('primary', showImport);
       orderManualFields?.forEach(el => { if (el) el.style.display = orderSource === 'manual' ? '' : 'none'; });
       orderCatalogFields?.forEach(el => { if (el) el.style.display = orderSource === 'catalog' ? '' : 'none'; });
-      if (orderImportFields) orderImportFields.style.display = orderSource === 'import' ? 'block' : 'none';
-      if (orderStandardFields) orderStandardFields.style.display = orderSource === 'import' ? 'none' : 'contents';
-      if (orderSubmitBar) orderSubmitBar.style.display = orderSource === 'import' ? 'none' : 'flex';
-      if (vendorImportActions) vendorImportActions.style.display = (orderSource === 'import' && vendorImportEntries.length) ? 'flex' : 'none';
-      if (orderForm) orderForm.noValidate = orderSource === 'import';
+      if (orderImportFields) orderImportFields.style.display = showImport ? 'block' : 'none';
+      if (orderStandardFields) orderStandardFields.style.display = showImport ? 'none' : 'contents';
+      if (orderSubmitBar) orderSubmitBar.style.display = showImport ? 'none' : 'flex';
+      if (vendorImportActions) vendorImportActions.style.display = (showImport && vendorImportEntries.length) ? 'flex' : 'none';
+      if (orderForm) orderForm.noValidate = showImport;
       if (orderSource === 'manual') {
         resetCatalogLookup();
         scheduleCatalogPresenceCheck();
       } else if (orderSource === 'catalog') {
         if (catalogLookupInput) catalogLookupInput.focus();
-      } else if (orderSource === 'import') {
+      } else if (showImport) {
         if (vendorImportSelect && !vendorImportSelect.value) {
           vendorImportSelect.focus();
         }
@@ -1875,7 +1965,13 @@
 
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
-    orderSourceImport?.addEventListener('click', () => setOrderSource('import'));
+    orderSourceImport?.addEventListener('click', () => {
+      if (!canUseVendorImport()) {
+        showBoardMessage('Bulk vendor import is disabled for this account.', 'error', 2500);
+        return;
+      }
+      setOrderSource('import');
+    });
 
     const statuses = [
       { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
@@ -1982,6 +2078,8 @@
     orderSourceManual?.addEventListener('click', () => setOrderSource('manual'));
     orderSourceCatalog?.addEventListener('click', () => setOrderSource('catalog'));
     setOrderSource('manual');
+    syncOrderNotesRequirement();
+    syncVendorImportVisibility();
 
     function updateSearchPlaceholder() {
       if (!globalSearch) return;
@@ -3149,6 +3247,30 @@
         }
       }
       confirmModal.style.display = 'flex';
+    }
+
+    function openVendorExportModal(config = {}) {
+      vendorExportData = config;
+      if (vendorExportTitle) vendorExportTitle.textContent = config.vendorName ? `Export to ${config.vendorName}` : 'Vendor export';
+      if (vendorExportDescription) vendorExportDescription.textContent = config.description || 'Copy the list or download the CSV for the vendor quick order form.';
+      if (vendorExportText) vendorExportText.value = config.text || '';
+      if (vendorExportMessage) {
+        const message = config.message !== undefined
+          ? config.message
+          : (config.text ? 'Copy the lines into the vendor quick order form.' : '');
+        vendorExportMessage.textContent = message;
+        vendorExportMessage.className = config.messageType ? `small ${config.messageType}` : 'small';
+      }
+      if (vendorExportModal) vendorExportModal.style.display = 'flex';
+    }
+
+    function closeVendorExportModal() {
+      vendorExportData = null;
+      if (vendorExportMessage) {
+        vendorExportMessage.textContent = '';
+        vendorExportMessage.className = 'small';
+      }
+      if (vendorExportModal) vendorExportModal.style.display = 'none';
     }
 
     function renderStockGrid() {
@@ -4350,6 +4472,7 @@
       const vendorKey = (config.key || config.slug || '').toLowerCase();
       const vendorName = (config.vendor || '').toLowerCase();
       const isDigikey = vendorKey === 'digikey' || vendorName.includes('digi-key') || vendorName.includes('digikey');
+      const isMouser = vendorKey === 'mouser' || vendorName.includes('mouser');
       const normalized = /^https?:\/\//i.test(link) ? link : `https://${link}`;
       if (isDigikey) {
         try {
@@ -4362,6 +4485,27 @@
           }
         } catch (err) {
           // ignore parse issues; fall through to returning null
+        }
+        return null;
+      }
+      if (isMouser) {
+        try {
+          const urlObj = new URL(normalized);
+          const segments = urlObj.pathname.split('/').filter(Boolean);
+          const detailIdx = segments.findIndex(p => p.toLowerCase() === 'productdetail');
+          if (detailIdx !== -1) {
+            if (segments.length > detailIdx + 2) {
+              const partSegment = segments[detailIdx + 2];
+              if (partSegment) return decodeURIComponent(partSegment);
+            } else if (segments.length > detailIdx + 1) {
+              const partSegment = segments[detailIdx + 1];
+              if (partSegment) return decodeURIComponent(partSegment);
+            }
+          }
+          const partParam = urlObj.searchParams.get('partnumber') || urlObj.searchParams.get('partnumberlist');
+          if (partParam) return partParam;
+        } catch (err) {
+          // ignore parse issues
         }
         return null;
       }
@@ -4414,6 +4558,57 @@
       return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
     }
 
+    function copyTextToClipboard(text) {
+      if (!text) return Promise.resolve();
+      if (navigator.clipboard?.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise((resolve, reject) => {
+        try {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          temp.style.position = 'fixed';
+          temp.style.opacity = '0';
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function ensureXlsxLibrary() {
+      if (window.XLSX) return Promise.resolve(window.XLSX);
+      if (!xlsxLoaderPromise) {
+        xlsxLoaderPromise = new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+          script.onload = () => {
+            if (window.XLSX) resolve(window.XLSX);
+            else {
+              xlsxLoaderPromise = null;
+              reject(new Error('Failed to load XLSX parser'));
+            }
+          };
+          script.onerror = () => {
+            xlsxLoaderPromise = null;
+            reject(new Error('Failed to load XLSX parser'));
+          };
+          document.head.appendChild(script);
+        });
+      }
+      return xlsxLoaderPromise;
+    }
+
+    async function readWorkbookFromFile(file) {
+      const XLSX = await ensureXlsxLibrary();
+      const buffer = await file.arrayBuffer();
+      return XLSX.read(buffer, { type: 'array' });
+    }
+
     function resetVendorImportState(clearVendor = false) {
       vendorImportEntries = [];
       if (clearVendor && vendorImportSelect) {
@@ -4435,18 +4630,24 @@
       if (!vendorImportEntries.length) {
         vendorImportPreview.innerHTML = '<div class="empty">No vendor items parsed yet.</div>';
       } else {
-        vendorImportPreview.innerHTML = vendorImportEntries.map((entry) => `
+        vendorImportPreview.innerHTML = vendorImportEntries.map((entry) => {
+          const vendorTags = [];
+          if (entry.digiKeyPartNumber) vendorTags.push(`Digi-Key: ${escapeHtml(entry.digiKeyPartNumber)}`);
+          if (entry.mouserPartNumber) vendorTags.push(`Mouser: ${escapeHtml(entry.mouserPartNumber)}`);
+          if (entry.manufacturerPartNumber) vendorTags.push(`MPN: ${escapeHtml(entry.manufacturerPartNumber)}`);
+          return `
           <div class="card" data-import-id="${entry.id}" style="margin-bottom:8px; padding:10px;">
             <div class="flex-between" style="gap:8px; flex-wrap:wrap; align-items:flex-start;">
               <div style="flex:1; min-width:160px;">
-                <div style="font-weight:600;">${escapeHtml(entry.description || entry.manufacturerPartNumber || entry.digiKeyPartNumber || 'Part')}</div>
-                <div class="small">Qty: ${entry.quantity || 1}${entry.digiKeyPartNumber ? ` · Digi-Key: ${escapeHtml(entry.digiKeyPartNumber)}` : ''}${entry.manufacturerPartNumber ? ` · MPN: ${escapeHtml(entry.manufacturerPartNumber)}` : ''}</div>
+                <div style="font-weight:600;">${escapeHtml(entry.description || entry.manufacturerPartNumber || entry.digiKeyPartNumber || entry.mouserPartNumber || 'Part')}</div>
+                <div class="small">Qty: ${entry.quantity || 1}${vendorTags.length ? ' · ' + vendorTags.join(' · ') : ''}</div>
                 ${entry.customerReference ? `<div class="small">Ref: ${escapeHtml(entry.customerReference)}</div>` : ''}
               </div>
               <button class="btn ghost" data-action="remove-import-entry" data-index="${entry.id}" style="padding:4px 8px; color:var(--danger);">Remove</button>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
       if (vendorImportSummary) {
         vendorImportSummary.textContent = vendorImportEntries.length
@@ -4454,7 +4655,7 @@
           : '';
       }
       if (vendorImportActions) {
-        vendorImportActions.style.display = (orderSource === 'import' && vendorImportEntries.length) ? 'flex' : 'none';
+        vendorImportActions.style.display = (orderSource === 'import' && canUseVendorImport() && vendorImportEntries.length) ? 'flex' : 'none';
       }
     }
 
@@ -4471,17 +4672,30 @@
       return isDigikeyVendorName(vendor.vendor || vendor.supplier || '');
     }
 
+    function isMouserVendorName(name = '') {
+      const lower = (name || '').toLowerCase();
+      return lower.includes('mouser');
+    }
+
+    function isMouserVendor(vendor) {
+      if (!vendor) return false;
+      if (typeof vendor === 'string') return isMouserVendorName(vendor);
+      const key = (vendor.key || vendor.slug || '').toLowerCase();
+      if (key === 'mouser') return true;
+      return isMouserVendorName(vendor.vendor || vendor.supplier || '');
+    }
+
     function supportsVendorExport(order) {
       if (!order) return false;
       const vendorName = order.vendor || order.supplier || '';
-      if (isDigikeyVendorName(vendorName)) return true;
+      if (isDigikeyVendorName(vendorName) || isMouserVendorName(vendorName)) return true;
       const config = findVendorConfig(vendorName);
       return Boolean(config?.capabilities?.quickOrderExport);
     }
 
     function supportsVendorExportByName(name) {
       if (!name) return false;
-      if (isDigikeyVendorName(name)) return true;
+      if (isDigikeyVendorName(name) || isMouserVendorName(name)) return true;
       const config = findVendorConfig(name);
       return Boolean(config?.capabilities?.quickOrderExport);
     }
@@ -4489,12 +4703,14 @@
     function parseVendorCsv(vendor, text) {
       if (!text) return [];
       if (isDigikeyVendor(vendor)) return parseDigikeyCartCsv(text);
+      if (isMouserVendor(vendor)) return parseMouserCartCsv(text);
       throw new Error(`CSV import is not implemented for ${vendor.vendor || 'this vendor'}.`);
     }
 
     function parseVendorQuickText(vendor, text) {
       if (!text) return [];
       if (isDigikeyVendor(vendor)) return parseDigikeyQuickText(text);
+      if (isMouserVendor(vendor)) return parseMouserQuickText(text);
       throw new Error(`Quick entry import is not implemented for ${vendor.vendor || 'this vendor'}.`);
     }
 
@@ -4628,9 +4844,197 @@
         .filter(Boolean);
     }
 
+    function parseVendorWorkbook(vendor, workbook) {
+      if (!vendor || !workbook) return [];
+      if (isMouserVendor(vendor)) return parseMouserWorkbook(workbook);
+      throw new Error(`Excel import is not implemented for ${vendor.vendor || 'this vendor'}.`);
+    }
+
+    function parseMouserWorkbook(workbook) {
+      if (!workbook?.SheetNames?.length || !window.XLSX) {
+        throw new Error('Unable to read the spreadsheet file.');
+      }
+      const XLSX = window.XLSX;
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) {
+        throw new Error('The spreadsheet does not contain any sheets.');
+      }
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+      if (!rows.length) {
+        throw new Error('The spreadsheet is empty.');
+      }
+      const { header, data } = splitMouserHeader(rows);
+      if (!header) {
+        throw new Error('Unable to locate the Mouser header row.');
+      }
+      const normalizedHeader = header.map((cell, idx) => {
+        return (cell || `Column${idx}`).toString().replace(/\ufeff/g, '').trim();
+      });
+      const entries = data
+        .map(row => {
+          if (!row || !row.length) return null;
+          const record = {};
+          normalizedHeader.forEach((key, idx) => {
+            record[key] = row[idx];
+          });
+          return buildMouserEntryFromRecord(record, 'xls');
+        })
+        .filter(Boolean);
+      if (!entries.length) throw new Error('No items found in the Mouser spreadsheet.');
+      return entries;
+    }
+
+    function splitMouserHeader(rows) {
+      const clone = [...rows];
+      while (clone.length) {
+        const candidate = (clone.shift() || []).map(cell => cell ?? '');
+        if (rowLooksLikeMouserHeader(candidate)) {
+          return { header: candidate, data: clone };
+        }
+      }
+      return { header: null, data: [] };
+    }
+
+    function rowLooksLikeMouserHeader(row) {
+      if (!Array.isArray(row)) return false;
+      const normalized = row.map(cell => String(cell || '').toLowerCase());
+      const joined = normalized.join(' ');
+      return (joined.includes('mouser') || joined.includes('manufacturer') || joined.includes('mfr')) && joined.includes('qty');
+    }
+
+    function normalizeRecordKey(key) {
+      return String(key || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function cleanRecordValue(value) {
+      if (value === undefined || value === null) return '';
+      return String(value).trim();
+    }
+
+    function getRecordValue(record, candidates = []) {
+      const normalizedTargets = candidates.map(c => c.toLowerCase());
+      for (const key of Object.keys(record || {})) {
+        const slug = normalizeRecordKey(key);
+        if (!slug) continue;
+        if (normalizedTargets.some(target => slug.includes(target))) {
+          const val = record[key];
+          if (val !== undefined && val !== null && String(val).toString().trim() !== '') {
+            return val;
+          }
+        }
+      }
+      return undefined;
+    }
+
+    function buildMouserEntryFromRecord(record, source = 'csv') {
+      if (!record) return null;
+      const qtyRaw = getRecordValue(record, ['orderqty', 'qty', 'quantity']);
+      const mouserPart = cleanRecordValue(getRecordValue(record, ['mouserpart', 'mousernumber', 'mouser']));
+      const manufacturerPart = cleanRecordValue(getRecordValue(record, ['manufacturerpart', 'mfrpart', 'mfrnumber']));
+      const description = cleanRecordValue(getRecordValue(record, ['description']));
+      const priceRaw = getRecordValue(record, ['priceusd', 'price']);
+      const customerRef = cleanRecordValue(getRecordValue(record, ['customerreference', 'customerref', 'custref', 'customer']));
+      const qtyNumber = Number(String(qtyRaw || '').replace(/[^0-9.]/g, ''));
+      const quantity = Number.isFinite(qtyNumber) ? Math.max(1, Math.round(qtyNumber)) : 0;
+      if (!quantity || (!mouserPart && !manufacturerPart)) return null;
+      return {
+        id: generateId('import'),
+        vendorKey: 'mouser',
+        quantity,
+        mouserPartNumber: mouserPart || undefined,
+        manufacturerPartNumber: manufacturerPart || mouserPart || undefined,
+        description: description || manufacturerPart || mouserPart || '',
+        customerReference: customerRef || '',
+        unitPrice: priceRaw ? parsePriceNumber(priceRaw) : undefined,
+        productUrl: buildMouserSearchUrl(mouserPart || manufacturerPart),
+        source
+      };
+    }
+
+    function parseMouserCartCsv(text) {
+      const rows = parseCsvText(text);
+      if (!rows.length) return [];
+      const working = [...rows];
+      let header = null;
+      while (working.length && !header) {
+        const candidate = working.shift().map(cell => cell ?? '');
+        if (rowLooksLikeMouserHeader(candidate)) {
+          header = candidate;
+        }
+      }
+      if (!header) throw new Error('Unable to locate the header row in the Mouser CSV.');
+      const headerMap = header.map((cell, idx) => (cell || `Column${idx}`)).map(cell => cell.replace(/\ufeff/g, '').trim());
+      const entries = working
+        .map(row => {
+          if (!row || !row.length || !row.some(cell => (cell || '').toString().trim().length)) return null;
+          const record = {};
+          headerMap.forEach((key, idx) => {
+            record[key] = row[idx];
+          });
+          return buildMouserEntryFromRecord(record, 'csv');
+        })
+        .filter(Boolean);
+      if (!entries.length) throw new Error('No items found in the CSV file.');
+      return entries;
+    }
+
+    function parseMouserQuickText(text) {
+      return text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+          const tokens = line.split(/[\s,;\t]+/).filter(Boolean);
+          if (!tokens.length) return null;
+          const firstIsQty = /^[0-9]+$/.test(tokens[0]);
+          const lastIsQty = /^[0-9]+$/.test(tokens[tokens.length - 1]);
+          let quantity = 1;
+          let partNumber = '';
+          if (firstIsQty && tokens.length > 1) {
+            quantity = Number(tokens[0]) || 1;
+            partNumber = tokens.slice(1).join(' ');
+          } else if (lastIsQty && tokens.length > 1) {
+            quantity = Number(tokens[tokens.length - 1]) || 1;
+            partNumber = tokens.slice(0, -1).join(' ');
+          } else if (tokens.length >= 2) {
+            partNumber = tokens[0];
+            quantity = Number(tokens[1]) || 1;
+          } else {
+            partNumber = tokens[0];
+          }
+          partNumber = partNumber.trim();
+          if (!partNumber) return null;
+          return {
+            id: generateId('import'),
+            vendorKey: 'mouser',
+            quantity: quantity || 1,
+            mouserPartNumber: partNumber,
+            manufacturerPartNumber: '',
+            description: '',
+            customerReference: '',
+            unitPrice: undefined,
+            productUrl: buildMouserSearchUrl(partNumber),
+            source: 'text'
+          };
+        })
+        .filter(Boolean);
+    }
+
     function buildDigikeySearchUrl(partNumber) {
       if (!partNumber) return undefined;
       return `https://www.digikey.com/en/products/search?keywords=${encodeURIComponent(partNumber)}`;
+    }
+
+    function buildMouserSearchUrl(partNumber) {
+      if (!partNumber) return undefined;
+      return `https://www.mouser.com/ProductDetail/${encodeURIComponent(partNumber)}`;
+    }
+
+    function buildVendorProductSearchUrl(vendorKey, partNumber) {
+      const key = (vendorKey || '').toLowerCase();
+      if (key === 'digikey') return buildDigikeySearchUrl(partNumber);
+      if (key === 'mouser') return buildMouserSearchUrl(partNumber);
+      return undefined;
     }
 
     function isDigikeySearchUrl(url) {
@@ -4647,20 +5051,49 @@
       }
     }
 
+    function isMouserSearchUrl(url) {
+      if (!url) return false;
+      try {
+        const parsed = new URL(url);
+        const host = (parsed.hostname || '').toLowerCase();
+        if (!host.includes('mouser')) return false;
+        const path = (parsed.pathname || '').toLowerCase();
+        return path.includes('/productdetail');
+      } catch (err) {
+        const lower = String(url).toLowerCase();
+        return lower.includes('mouser.com/productdetail');
+      }
+    }
+
+    function shouldReplaceVendorImportUrl(currentUrl, vendorKey) {
+      if (!currentUrl) return true;
+      const key = (vendorKey || '').toLowerCase();
+      if (key === 'digikey') return isDigikeySearchUrl(currentUrl);
+      if (key === 'mouser') return isMouserSearchUrl(currentUrl);
+      return false;
+    }
+
     function buildImportPayload(entry, vendor) {
       const vendorName = vendor?.vendor || vendor?.slug || vendor?.key || 'Vendor';
-      const manufacturerPart = entry.manufacturerPartNumber || entry.digiKeyPartNumber || '';
-      const digiKeyNumber = entry.digiKeyPartNumber || entry.productCode || '';
-      const partName = entry.description || manufacturerPart || digiKeyNumber || 'Imported Part';
-      const partLink = entry.productUrl || buildDigikeySearchUrl(digiKeyNumber || manufacturerPart);
+      const vendorKey = (vendor?.key || vendor?.slug || '').toLowerCase();
+      const vendorSku = entry.productCode || entry.digiKeyPartNumber || entry.mouserPartNumber || '';
+      const manufacturerPart = entry.manufacturerPartNumber || vendorSku || '';
+      const partName = entry.description || manufacturerPart || vendorSku || 'Imported Part';
+      const searchUrl = buildVendorProductSearchUrl(vendorKey, vendorSku || manufacturerPart);
+      const partLink = entry.productUrl || searchUrl;
       const noteParts = ['Vendor import'];
-      if (digiKeyNumber) noteParts.push(`Digi-Key #: ${digiKeyNumber}`);
+      if (vendorKey === 'digikey' && (entry.digiKeyPartNumber || vendorSku)) {
+        noteParts.push(`Digi-Key #: ${entry.digiKeyPartNumber || vendorSku}`);
+      }
+      if (vendorKey === 'mouser' && (entry.mouserPartNumber || vendorSku)) {
+        noteParts.push(`Mouser #: ${entry.mouserPartNumber || vendorSku}`);
+      }
       if (entry.customerReference) noteParts.push(`Ref: ${entry.customerReference}`);
       return {
         vendor: vendorName,
         supplier: vendorName,
-        vendorPartNumber: manufacturerPart || digiKeyNumber,
-        productCode: digiKeyNumber || undefined,
+        vendorPartNumber: manufacturerPart || vendorSku,
+        productCode: vendorSku || undefined,
         partName,
         quantityRequested: entry.quantity || 1,
         unitCost: entry.unitPrice !== undefined ? entry.unitPrice : undefined,
@@ -4700,17 +5133,17 @@
 
     async function enrichVendorImportEntries(entries) {
       if (!entries?.length || !vendorImportVendor) return;
-      const vendorKey = vendorImportVendor.key || vendorImportVendor.slug || vendorImportVendor.vendor;
-      if (!vendorKey) return;
-      if (!isDigikeyVendor(vendorImportVendor)) return; // Only supported for Digi-Key right now
+      const vendorKey = (vendorImportVendor.key || vendorImportVendor.slug || vendorImportVendor.vendor || '').toLowerCase();
+      if (!vendorKey || !['digikey', 'mouser'].includes(vendorKey)) return;
       for (const entry of entries) {
-        const candidatePart = entry.manufacturerPartNumber || entry.digiKeyPartNumber;
+        const candidatePart = entry.productCode || entry.digiKeyPartNumber || entry.mouserPartNumber || entry.manufacturerPartNumber;
         if (!candidatePart) continue;
         const details = await fetchVendorProductDetails(vendorKey, candidatePart);
         if (!details) continue;
         if (!entry.description && details.picks?.name) entry.description = details.picks.name;
-        const shouldReplaceUrl = !entry.productUrl || isDigikeySearchUrl(entry.productUrl);
-        if (details.productUrl && shouldReplaceUrl) entry.productUrl = details.productUrl;
+        if (details.productUrl && shouldReplaceVendorImportUrl(entry.productUrl, vendorKey)) {
+          entry.productUrl = details.productUrl;
+        }
         if (!entry.unitPrice) {
           const price = parsePriceNumber(details.picks?.price);
           if (price !== undefined) entry.unitPrice = price;
@@ -4718,13 +5151,26 @@
         if (!entry.manufacturerPartNumber && details.meta?.manufacturerPartNumber) {
           entry.manufacturerPartNumber = details.meta.manufacturerPartNumber;
         }
-        if (!entry.digiKeyPartNumber && details.meta?.digiKeyProductNumber) {
+        if (vendorKey === 'digikey' && !entry.digiKeyPartNumber && details.meta?.digiKeyProductNumber) {
           entry.digiKeyPartNumber = details.meta.digiKeyProductNumber;
+        }
+        if (vendorKey === 'mouser' && !entry.mouserPartNumber && details.meta?.mouserPartNumber) {
+          entry.mouserPartNumber = details.meta.mouserPartNumber;
+        }
+        if (!entry.productCode) {
+          entry.productCode = entry.digiKeyPartNumber || entry.mouserPartNumber || undefined;
         }
       }
     }
 
     async function handleVendorImportParse() {
+      if (!canUseVendorImport()) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'You do not have permission to import vendor orders.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
       if (!vendorImportVendor) {
         if (vendorImportMessage) {
           vendorImportMessage.textContent = 'Select a vendor before parsing.';
@@ -4744,8 +5190,14 @@
       try {
         let parsed = [];
         if (file) {
-          const text = await file.text();
-          parsed = parseVendorCsv(vendorImportVendor, text);
+          const ext = (file.name.split('.').pop() || '').toLowerCase();
+          if (ext === 'xls' || ext === 'xlsx') {
+            const workbook = await readWorkbookFromFile(file);
+            parsed = parseVendorWorkbook(vendorImportVendor, workbook);
+          } else {
+            const text = await file.text();
+            parsed = parseVendorCsv(vendorImportVendor, text);
+          }
         } else if (pasted) {
           parsed = parseVendorQuickText(vendorImportVendor, pasted);
         }
@@ -4773,6 +5225,13 @@
     }
 
     async function submitVendorImportEntries() {
+      if (!canUseVendorImport()) {
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'You do not have permission to import vendor orders.';
+          vendorImportMessage.className = 'small error';
+        }
+        return;
+      }
       if (!vendorImportVendor) {
         if (vendorImportMessage) {
           vendorImportMessage.textContent = 'Select a vendor to import from.';
@@ -4865,6 +5324,30 @@
       return '\ufeff' + lines.map(row => row.map(csvQuote).join(',')).join('\r\n');
     }
 
+    function buildMouserQuickOrderCsv(orders) {
+      const header = ['Order Qty','Mouser Part Number'];
+      const rows = [];
+      orders.forEach(order => {
+        const mouserNumber = order.productCode || order.vendorPartNumber || '';
+        if (!mouserNumber) return;
+        const quantity = Number(order.quantityRequested) || 1;
+        rows.push([quantity, mouserNumber]);
+      });
+      const lines = [header].concat(rows);
+      return '\ufeff' + lines.map(row => row.map(csvQuote).join(',')).join('\r\n');
+    }
+
+    function buildMouserQuickOrderLines(orders) {
+      return orders
+        .map(order => {
+          const quantity = Number(order.quantityRequested) || 1;
+          const mouserNumber = order.productCode || order.vendorPartNumber || '';
+          if (!mouserNumber) return null;
+          return `${quantity},${mouserNumber}`;
+        })
+        .filter(Boolean);
+    }
+
     function formatFilenameDate(date = new Date()) {
       const pad = (n) => String(n).padStart(2, '0');
       return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}`;
@@ -4892,6 +5375,23 @@
         const csv = buildDigikeyCartCsv(orderList);
         downloadTextFile(`digikey-cart-${formatFilenameDate()}.csv`, csv, 'text/csv;charset=utf-8;');
         showBoardMessage('Digi-Key cart CSV downloaded.', 'info', 2200);
+        return;
+      }
+      if (isMouserVendorName(vendorName)) {
+        const csv = buildMouserQuickOrderCsv(orderList);
+        const lines = buildMouserQuickOrderLines(orderList);
+        const skipped = orderList.length - lines.length;
+        openVendorExportModal({
+          vendorName: 'Mouser Electronics',
+          description: 'Download the CSV or copy the Qty,PartNumber list for Mouser’s quick order form.',
+          text: lines.join('\n'),
+          csv,
+          filename: `mouser-quick-order-${formatFilenameDate()}.csv`,
+          message: skipped
+            ? `${skipped} item(s) were skipped because they do not have Mouser part numbers.`
+            : undefined,
+          messageType: skipped ? 'error' : undefined
+        });
         return;
       }
       showBoardMessage('Export not available for this vendor yet.', 'error', 2500);
@@ -5416,6 +5916,15 @@
       payload.tracking = [];
       payload.trackingNumber = undefined;
       payload.tags = tagSelect ? Array.from(tagSelect.selectedOptions).map(o => o.value) : [];
+      const notesInput = orderForm.elements.notes;
+      const notesValue = (notesInput?.value || '').trim();
+      if (requiresOrderNotes() && !notesValue) {
+        orderMessage.textContent = 'Add notes/justification before submitting.';
+        orderMessage.className = 'error';
+        notesInput?.focus();
+        return;
+      }
+      payload.notes = notesValue || undefined;
       if (!payload.vendor) {
         const auto = detectVendor(payload.vendorPartNumber, payload.partLink);
         if (auto?.vendor) {
@@ -6619,8 +7128,45 @@
         vendorMessage.className = 'error';
       }
     });
+    vendorExportCopy?.addEventListener('click', async () => {
+      if (!vendorExportData?.text) {
+        if (vendorExportMessage) {
+          vendorExportMessage.textContent = 'Nothing to copy yet.';
+          vendorExportMessage.className = 'small error';
+        }
+        return;
+      }
+      try {
+        await copyTextToClipboard(vendorExportData.text);
+        if (vendorExportMessage) {
+          vendorExportMessage.textContent = 'Copied to clipboard.';
+          vendorExportMessage.className = 'small success';
+        }
+      } catch (err) {
+        if (vendorExportMessage) {
+          vendorExportMessage.textContent = 'Copy failed. Select the text and copy manually.';
+          vendorExportMessage.className = 'small error';
+        }
+      }
+    });
+    vendorExportDownload?.addEventListener('click', () => {
+      if (!vendorExportData?.csv) {
+        if (vendorExportMessage) {
+          vendorExportMessage.textContent = 'No CSV content available.';
+          vendorExportMessage.className = 'small error';
+        }
+        return;
+      }
+      downloadTextFile(vendorExportData.filename || 'vendor-export.csv', vendorExportData.csv, 'text/csv;charset=utf-8;');
+      if (vendorExportMessage) {
+        vendorExportMessage.textContent = 'CSV downloaded.';
+        vendorExportMessage.className = 'small success';
+      }
+    });
+    closeVendorExport?.addEventListener('click', () => closeVendorExportModal());
 
     vendorImportSelect?.addEventListener('change', () => {
+      if (!canUseVendorImport()) return;
       const value = (vendorImportSelect.value || '').toLowerCase();
       vendorImportVendor = vendorConfigs.find(v => vendorOptionValue(v) === value) || null;
       if (vendorImportMessage) {
@@ -6874,6 +7420,8 @@
       syncCatalogSaveUI();
       updateCatalogEditVisibility();
       syncTagEditUI();
+      syncVendorImportVisibility();
+      syncOrderNotesRequirement();
     }
 
     async function loadUsers() {
@@ -6941,9 +7489,9 @@
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true },
-          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false }
+          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true },
+          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false },
+          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
@@ -6971,6 +7519,8 @@
               ${renderToggle(role, 'canManageVendors', 'Manage Vendors')}
               ${renderToggle(role, 'canManageUsers', 'Manage Users')}
               ${renderToggle(role, 'canEditTrackingSettings', 'Edit Tracking Settings')}
+              ${renderToggle(role, 'notesNotRequired', 'Notes/Justification Not Required')}
+              ${renderToggle(role, 'canImportBulkOrders', 'Can Import Bulk Orders')}
             </div>
             ${role === 'admin'
               ? `<div class="small" style="margin-top:8px;">Admin permissions are fixed and cannot be changed.</div>`

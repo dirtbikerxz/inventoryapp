@@ -35,6 +35,35 @@ const builtinVendors = [
         placeholder: '********************'
       }
     ]
+  },
+  {
+    key: 'mouser',
+    slug: 'mouser',
+    vendor: 'Mouser Electronics',
+    baseUrl: 'https://www.mouser.com',
+    productUrlTemplate: 'https://www.mouser.com/ProductDetail/{partNumber}',
+    partNumberPattern: '^[A-Za-z0-9][A-Za-z0-9\\-_.\\/]+$',
+    description: 'Official Mouser Electronics integration using the Mouser Search API.',
+    capabilities: {
+      productLookup: 'api',
+      quickOrderExport: true,
+      quickOrderImport: true,
+      cartSyncPlanned: false
+    },
+    detectionHints: {
+      vendorNames: ['mouser', 'mouser electronics'],
+      domains: ['mouser.com', 'mou.sr']
+    },
+    integrationFields: [
+      {
+        key: 'apiKey',
+        label: 'API Key',
+        required: true,
+        secret: true,
+        type: 'password',
+        placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+      }
+    ]
   }
 ];
 
