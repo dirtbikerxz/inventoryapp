@@ -496,7 +496,7 @@
       </header>
       <form id="login-form" class="login-form">
         <label class="login-field">
-          <span>Username</span>
+          <span>Username</span>a
           <input name="username" type="text" autocomplete="username" required />
         </label>
         <label class="login-field">
@@ -643,6 +643,13 @@
           </div>
         </div>
         <div id="order-standard-fields" style="display:contents;">
+        <div class="order-manual-fields" style="grid-column: span 2;">
+          <label class="small">Vendor source</label>
+          <select id="manual-vendor-select" class="input">
+            <option value="">Other / manual entry</option>
+          </select>
+          <div class="small" id="manual-vendor-hint">Select a configured vendor to force API fetching, or leave as Other to auto-detect.</div>
+        </div>
         <div class="order-manual-fields" style="grid-column: span 2;">
           <label class="small">Product Number</label>
             <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
@@ -1773,6 +1780,8 @@
     const catalogItemModal = document.getElementById('catalog-item-modal');
     const orderNotesLabel = document.getElementById('order-notes-label');
     const catalogItemModalHint = document.getElementById('catalog-item-modal-hint');
+    const manualVendorSelect = document.getElementById('manual-vendor-select');
+    const manualVendorHint = document.getElementById('manual-vendor-hint');
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
       admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true },
@@ -1805,6 +1814,7 @@
     let vendorImportEntries = [];
     let vendorImportVendor = null;
     let orderSource = 'manual';
+    let manualVendorOverride = null;
     let vendorExportData = null;
     let xlsxLoaderPromise = null;
     renderVendorImportPreview();
@@ -1844,6 +1854,35 @@
 
     function vendorOptionValue(v) {
       return (v?.key || v?.slug || v?.vendor || v?._id || '').toString().toLowerCase();
+    }
+
+    function updateManualVendorHint() {
+      if (!manualVendorHint) return;
+      if (manualVendorOverride) {
+        const label = manualVendorOverride.vendor || manualVendorOverride.slug || manualVendorOverride.key || 'Vendor';
+        manualVendorHint.textContent = `Using ${label} for vendor-specific fetching.`;
+      } else {
+        manualVendorHint.textContent = 'Select a configured vendor to force API fetching, or leave as Other to auto-detect.';
+      }
+    }
+
+    function resetManualVendorOverride() {
+      manualVendorOverride = null;
+      if (manualVendorSelect) manualVendorSelect.value = '';
+      updateManualVendorHint();
+    }
+
+    function renderManualVendorOptions() {
+      if (!manualVendorSelect) return;
+      const previous = manualVendorSelect.value;
+      const options = vendorConfigs.slice().sort((a, b) => (a.vendor || '').localeCompare(b.vendor || ''));
+      manualVendorSelect.innerHTML = ['<option value="">Other / manual entry</option>']
+        .concat(options.map(v => `<option value="${vendorOptionValue(v)}">${escapeHtml(v.vendor || v.slug || v.key || 'Vendor')}</option>`))
+        .join('');
+      const match = vendorConfigs.find(v => vendorOptionValue(v) === previous);
+      manualVendorSelect.value = match ? previous : '';
+      manualVendorOverride = match || null;
+      updateManualVendorHint();
     }
 
     function renderVendorImportOptions() {
@@ -1954,6 +1993,7 @@
       if (orderSource === 'manual') {
         resetCatalogLookup();
         scheduleCatalogPresenceCheck();
+        updateManualVendorHint();
       } else if (orderSource === 'catalog') {
         if (catalogLookupInput) catalogLookupInput.focus();
       } else if (showImport) {
@@ -2080,6 +2120,7 @@
     setOrderSource('manual');
     syncOrderNotesRequirement();
     syncVendorImportVisibility();
+    updateManualVendorHint();
 
     function updateSearchPlaceholder() {
       if (!globalSearch) return;
@@ -2653,6 +2694,12 @@
       orderForm.elements.unitCost.value = order.unitCost || order.fetchedPrice || '';
       orderForm.elements.quantityRequested.value = order.quantityRequested || 1;
       orderForm.elements.priority.value = order.priority || 'Medium';
+      if (manualVendorSelect) {
+        const configMatch = findVendorConfig(order.vendor || order.supplier);
+        manualVendorSelect.value = configMatch ? vendorOptionValue(configMatch) : '';
+        manualVendorOverride = configMatch || null;
+        updateManualVendorHint();
+      }
       setOrderSource('manual');
       scheduleCatalogPresenceCheck();
       if (currentUser?.permissions?.canEditInventoryCatalog && catalogSaveCategory) {
@@ -4249,6 +4296,7 @@
       editingOrderId = null;
       orderForm.reset();
       orderForm.elements.quantityRequested.value = 1;
+      resetManualVendorOverride();
       renderTagOptions([]);
       renderPriorityOptions();
       resetCatalogLookup();
@@ -4262,7 +4310,7 @@
       if (orderTrackingList) orderTrackingList.style.display = 'none';
       modal.style.display = 'flex';
     });
-    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); resetVendorImportState(false); updateVendorImportInstructions(); setOrderSource('manual'); });
+    cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); resetVendorImportState(false); updateVendorImportInstructions(); resetManualVendorOverride(); setOrderSource('manual'); });
     const resetGroupModal = () => {
       groupModal.style.display = 'none';
       groupForm.reset();
@@ -5286,6 +5334,7 @@
       modal.style.display = 'none';
       orderForm.reset();
       if (orderForm.elements.quantityRequested) orderForm.elements.quantityRequested.value = 1;
+      resetManualVendorOverride();
       resetCatalogLookup();
       resetCatalogSavePanel();
       editingOrderId = null;
@@ -5559,7 +5608,8 @@
         let partNum = (formData.get('vendorPartNumber') || '').toString().trim();
         const link = (formData.get('partLink') || '').toString().trim();
         const vendorName = (formData.get('vendor') || '').toString().trim();
-        let config = configHint || findVendorConfig(vendorName) || detectVendor(partNum, link);
+        const vendorOverride = manualVendorOverride;
+        let config = configHint || vendorOverride || findVendorConfig(vendorName) || detectVendor(partNum, link);
         if (!config && vendorName) config = findVendorConfig(vendorName);
         if (!partNum && config && link) {
           const extracted = extractPartNumberFromUrl(config, link);
@@ -5578,7 +5628,9 @@
             linkInput.value = resolved.productUrl;
           }
         }
-        if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
+        if (config?.vendor && vendorInput && (!vendorInput.value || vendorOverride === config)) {
+          vendorInput.value = config.vendor;
+        }
         const isBuiltin = config?.source === 'builtin';
         if (isBuiltin && !partNum) {
           orderMessage.textContent = `Enter a part number to fetch from ${config.vendor}.`;
@@ -5983,6 +6035,7 @@
         orderMessage.className = 'success';
         modal.style.display = 'none';
         orderForm.reset();
+        resetManualVendorOverride();
         resetCatalogLookup();
         resetCatalogSavePanel();
         editingOrderId = null;
@@ -6137,6 +6190,7 @@
         customVendorConfigs = (data.custom || data.vendors || []).map(v => ({ ...v, source: 'custom' }));
         builtinVendorConfigsState = (data.builtin || []).map(v => ({ ...v, source: 'builtin' }));
         vendorConfigs = customVendorConfigs.concat(builtinVendorConfigsState);
+        renderManualVendorOptions();
         renderVendorOptions();
         renderVendorImportOptions();
         const builtinCards = builtinVendorConfigsState.length
@@ -7189,6 +7243,14 @@
       const id = btn.dataset.index;
       vendorImportEntries = vendorImportEntries.filter(entry => String(entry.id) !== String(id));
       renderVendorImportPreview();
+    });
+    manualVendorSelect?.addEventListener('change', () => {
+      const value = (manualVendorSelect.value || '').toLowerCase();
+      manualVendorOverride = value ? (vendorConfigs.find(v => vendorOptionValue(v) === value) || null) : null;
+      if (manualVendorOverride && orderForm?.elements?.vendor) {
+        orderForm.elements.vendor.value = manualVendorOverride.vendor || manualVendorOverride.slug || manualVendorOverride.key || '';
+      }
+      updateManualVendorHint();
     });
 
     userForm.addEventListener('submit', async (e) => {
