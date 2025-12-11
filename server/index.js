@@ -9,6 +9,8 @@ const path = require('path');
 const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
 const { TrackingService, buildTrackingUrl } = require('./trackingService');
+const { DigiKeyService } = require('./digikeyService');
+const { builtinVendors, getBuiltinVendor } = require('./builtinVendors');
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 dotenv.config();
@@ -35,6 +37,7 @@ if (!config.convexUrl) {
 const client = new ConvexHttpClient(config.convexUrl);
 const app = express();
 const trackingService = new TrackingService({ client, logger });
+const digikeyService = new DigiKeyService({ logger });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -996,8 +999,48 @@ app.get('/api/vendors/configs', async (req, res) => {
   const user = await requireAuth(req, res, null);
   if (!user) return;
   try {
-    const vendors = await client.query('vendors:list', {});
-    res.json({ vendors });
+    const [customConfigs, integrationSettings] = await Promise.all([
+      client.query('vendors:list', {}),
+      client.query('vendorIntegrations:list', {})
+    ]);
+    const canManage = Boolean(user.permissions?.canManageVendors);
+    const integrationMap = new Map((integrationSettings || []).map(entry => [entry.vendorKey, entry]));
+    const builtin = builtinVendors.map(def => {
+      const record = integrationMap.get(def.key) || null;
+      const settings = record?.settings || {};
+      const fields = (def.integrationFields || []).map(field => {
+        const stored = settings[field.key] || '';
+        return {
+          key: field.key,
+          label: field.label,
+          required: Boolean(field.required),
+          secret: Boolean(field.secret),
+          type: field.type || 'text',
+          placeholder: field.placeholder,
+          value: canManage ? stored : '',
+          hasValue: Boolean(stored)
+        };
+      });
+      return {
+        key: def.key,
+        vendor: def.vendor,
+        slug: def.slug,
+        description: def.description,
+        baseUrl: def.baseUrl,
+        productUrlTemplate: def.productUrlTemplate,
+        partNumberPattern: def.partNumberPattern,
+        capabilities: def.capabilities,
+        detectionHints: def.detectionHints,
+        integrationFields: fields,
+        requiresCredentials: fields.length > 0,
+        hasCredentialsConfigured: fields.length ? fields.every(f => f.hasValue || !f.required) : true,
+        settings: canManage ? settings : undefined,
+        createdAt: record?.createdAt,
+        updatedAt: record?.updatedAt,
+        source: 'builtin'
+      };
+    });
+    res.json({ vendors: customConfigs, custom: customConfigs, builtin });
   } catch (error) {
     logger.error(error, 'Failed to load vendor configs');
     res.status(500).json({ error: 'Unable to load vendor configs' });
@@ -1142,6 +1185,66 @@ app.delete('/api/vendors/configs/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to delete vendor config');
     res.status(500).json({ error: 'Unable to delete vendor config' });
+  }
+});
+
+app.patch('/api/vendors/integrations/:key', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageVendors');
+  if (!user) return;
+  const def = getBuiltinVendor(req.params.key);
+  if (!def) {
+    return res.status(404).json({ error: 'Unknown vendor integration' });
+  }
+  const provided = req.body?.settings;
+  if (provided && typeof provided !== 'object') {
+    return res.status(400).json({ error: 'settings must be an object' });
+  }
+  const settings = {};
+  const missing = [];
+  (def.integrationFields || []).forEach(field => {
+    const raw = provided ? provided[field.key] : undefined;
+    const val = typeof raw === 'string' ? raw.trim() : raw;
+    if (val === undefined || val === null || val === '') {
+      if (field.required) missing.push(field.label || field.key);
+      return;
+    }
+    settings[field.key] = String(val);
+  });
+  if (missing.length) {
+    return res.status(400).json({ error: `Missing required field(s): ${missing.join(', ')}` });
+  }
+  try {
+    await client.mutation('vendorIntegrations:save', {
+      vendorKey: def.key,
+      settings,
+      userId: user._id?.toString()
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, `Failed to save ${def.key} integration`);
+    res.status(500).json({ error: 'Unable to save vendor integration' });
+  }
+});
+
+app.post('/api/vendors/resolve', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const vendorKey = String(req.body?.vendorKey || '').toLowerCase();
+  const url = req.body?.url;
+  if (!vendorKey || !url) {
+    return res.status(400).json({ error: 'vendorKey and url are required' });
+  }
+  const def = getBuiltinVendor(vendorKey);
+  if (!def) return res.status(404).json({ error: 'Unknown vendor integration' });
+  try {
+    if (def.key === 'digikey') {
+      const result = await digikeyService.resolveProductUrl(url);
+      return res.json(result);
+    }
+    return res.status(501).json({ error: `Resolver not implemented for ${def.vendor}` });
+  } catch (error) {
+    logger.error(error, 'Vendor URL resolve failed');
+    res.status(500).json({ error: error.message || 'Failed to resolve vendor url' });
   }
 });
 
@@ -1300,7 +1403,31 @@ async function getShopifyVariantPrice(targetUrl) {
 app.post('/api/vendors/extract', async (req, res) => {
   const user = await requireAuth(req, res, null);
   if (!user) return;
-  const { url, selectors = {}, headers = {} } = req.body || {};
+  const { url, selectors = {}, headers = {}, vendorKey, partNumber } = req.body || {};
+  const builtinKey = typeof vendorKey === 'string' ? vendorKey.toLowerCase() : null;
+  if (builtinKey) {
+    const def = getBuiltinVendor(builtinKey);
+    if (!def) return res.status(404).json({ error: 'Unknown vendor integration' });
+    try {
+      const settingsRecord = await client.query('vendorIntegrations:get', { vendorKey: def.key });
+      const settings = settingsRecord?.settings || {};
+      if (def.key === 'digikey') {
+        if (!partNumber) {
+          return res.status(400).json({ error: 'partNumber is required for Digi-Key lookup' });
+        }
+        const result = await digikeyService.lookupPart(partNumber, settings);
+        return res.json({
+          ...result,
+          vendor: def.vendor,
+          vendorKey: def.key
+        });
+      }
+      return res.status(501).json({ error: `Integration for ${def.vendor} is not implemented yet.` });
+    } catch (error) {
+      logger.error(error, `Failed built-in vendor lookup ${builtinKey}`);
+      return res.status(500).json({ error: error.message || 'Vendor integration failed' });
+    }
+  }
   if (!url) return res.status(400).json({ error: 'url is required' });
   try {
     const resp = await fetch(url, { headers });

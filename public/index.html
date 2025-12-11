@@ -911,71 +911,79 @@
       </div>
       <form id="vendor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-top:10px;">
         <input type="hidden" name="id" />
-        <div>
-          <label class="small">Vendor name</label>
-          <input name="vendor" class="input" placeholder="e.g., WCP" required />
+        <input type="hidden" name="integrationKey" />
+        <div id="vendor-builtin-panel" style="display:none; grid-column: span 2;">
+          <div id="builtin-vendor-description" class="small" style="margin-bottom:6px;"></div>
+          <div id="builtin-vendor-capabilities" class="small" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+          <div id="builtin-fields" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px;"></div>
         </div>
-        <div>
-          <label class="small">Base URL</label>
-          <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
-        </div>
-        <div>
-          <label class="small">Product URL template</label>
-          <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
-          <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
-        </div>
-        <div>
-          <label class="small">Part # example</label>
-          <input name="partNumberExample" class="input" placeholder="WCP-0921" />
-        </div>
-        <div>
-          <label class="small">Part # regex</label>
-          <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
-          <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
-        </div>
-        <div>
-          <label class="small">Name selector</label>
-          <input name="nameSelector" class="input" placeholder=".product-title" />
-        </div>
-        <div>
-          <label class="small">Price selector</label>
-          <input name="priceSelector" class="input" placeholder=".price" />
-        </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Paste copied selector or JS path</label>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
-            <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
-            <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
-              <select id="selector-target" class="input">
-                <option value="nameSelector">Apply to Name</option>
-                <option value="priceSelector">Apply to Price</option>
-              </select>
-              <button type="button" class="btn ghost" id="apply-selector">Apply</button>
-            </div>
+        <div id="vendor-custom-panel" style="display:contents;">
+          <div>
+            <label class="small">Vendor name</label>
+            <input name="vendor" class="input" placeholder="e.g., WCP" />
           </div>
-          <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
-        </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Notes / headers JSON (optional)</label>
-          <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
-        </div>
-        <div style="grid-column: span 2;">
-          <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
-            <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
-            <button type="button" class="btn primary" id="test-extract">Test</button>
+          <div>
+            <label class="small">Base URL</label>
+            <input name="baseUrl" class="input" placeholder="https://wcproducts.com" />
           </div>
-          <div id="extract-results" class="small" style="margin-top:8px;"></div>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
-            <div>
-              <label class="small">Pick name</label>
-              <select id="pick-name" class="input"></select>
-              <div id="preview-name" class="small"></div>
+          <div>
+            <label class="small">Product URL template</label>
+            <input name="productUrlTemplate" class="input" placeholder="https://wcproducts.com/products/{partNumber}" />
+            <div class="small">Use {partNumber} where the SKU goes, e.g. https://vendor.com/products/{partNumber}</div>
+          </div>
+          <div>
+            <label class="small">Part # example</label>
+            <input name="partNumberExample" class="input" placeholder="WCP-0921" />
+          </div>
+          <div>
+            <label class="small">Part # regex</label>
+            <input name="partNumberPattern" class="input" placeholder="^WCP-\\d+$" />
+            <div class="small">Auto-filled from example; edit to tighten/loosen validation.</div>
+          </div>
+          <div>
+            <label class="small">Name selector</label>
+            <input name="nameSelector" class="input" placeholder=".product-title" />
+          </div>
+          <div>
+            <label class="small">Price selector</label>
+            <input name="priceSelector" class="input" placeholder=".price" />
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="small">Paste copied selector or JS path</label>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+              <textarea id="selector-snippet" class="input" rows="2" placeholder="Right-click → Copy selector or Copy JS path"></textarea>
+              <div class="grid" style="grid-template-columns: 1fr 1fr; gap:6px;">
+                <select id="selector-target" class="input">
+                  <option value="nameSelector">Apply to Name</option>
+                  <option value="priceSelector">Apply to Price</option>
+                </select>
+                <button type="button" class="btn ghost" id="apply-selector">Apply</button>
+              </div>
             </div>
-            <div>
-              <label class="small">Pick price</label>
-              <select id="pick-price" class="input"></select>
-              <div id="preview-price" class="small"></div>
+            <div class="small">Tip: Use “Copy selector” or “Copy JS path” from DevTools.</div>
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="small">Notes / headers JSON (optional)</label>
+            <textarea name="notes" class="input" rows="2" placeholder="Headers: {\"User-Agent\":\"...\"}"></textarea>
+          </div>
+          <div style="grid-column: span 2;">
+            <div class="small" style="margin-bottom:6px;">Test extraction (paste a product URL)</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+              <input id="test-url" class="input" placeholder="https://vendor.com/product/123" />
+              <button type="button" class="btn primary" id="test-extract">Test</button>
+            </div>
+            <div id="extract-results" class="small" style="margin-top:8px;"></div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px;">
+              <div>
+                <label class="small">Pick name</label>
+                <select id="pick-name" class="input"></select>
+                <div id="preview-name" class="small"></div>
+              </div>
+              <div>
+                <label class="small">Pick price</label>
+                <select id="pick-price" class="input"></select>
+                <div id="preview-price" class="small"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1481,6 +1489,12 @@
     const vendorList = document.getElementById('vendor-list');
     const testUrl = document.getElementById('test-url');
     const vendorModal = document.getElementById('vendor-modal');
+    const vendorCustomPanel = document.getElementById('vendor-custom-panel');
+    const vendorBuiltinPanel = document.getElementById('vendor-builtin-panel');
+    const builtinFieldsContainer = document.getElementById('builtin-fields');
+    const builtinVendorDescription = document.getElementById('builtin-vendor-description');
+    const builtinVendorCapabilities = document.getElementById('builtin-vendor-capabilities');
+    const vendorSaveBtn = vendorForm?.querySelector('button[type="submit"]');
     const newVendorBtn = document.getElementById('new-vendor-btn');
     const closeVendorModalBtn = document.getElementById('close-vendor-modal');
     const cancelVendorBtn = document.getElementById('cancel-vendor');
@@ -1696,15 +1710,38 @@
       Object.keys(provided).forEach(k => { merged[k] = provided[k]; });
       return merged;
     }
+    const BUILTIN_CAPABILITY_LABELS = {
+      productLookup: 'API autofill',
+      quickOrderImport: 'Quick order import',
+      quickOrderExport: 'Quick order export',
+      cartSyncPlanned: 'Cart sync (planned)'
+    };
+    const VENDOR_CUSTOM_DISPLAY = 'contents';
     let vendorConfigs = [];
+    let customVendorConfigs = [];
+    let builtinVendorConfigsState = [];
     let currentUser = null;
+    let vendorFormMode = 'custom';
+    let builtinFieldInputs = [];
+    let activeBuiltinVendor = null;
     function detectVendor(partNum, link) {
       if (!vendorConfigs?.length) return null;
+      const normalizedLink = (link || '').toLowerCase();
       const candidates = vendorConfigs.filter(v => {
-        const regex = v.partNumberPattern ? new RegExp(v.partNumberPattern, 'i') : null;
-        const baseMatch = v.baseUrl && link && link.toLowerCase().includes(v.baseUrl.toLowerCase());
+        let regex = null;
+        if (v.partNumberPattern) {
+          try {
+            regex = new RegExp(v.partNumberPattern, 'i');
+          } catch (e) {
+            regex = null;
+          }
+        }
+        const baseMatch = v.baseUrl && normalizedLink && normalizedLink.includes(v.baseUrl.toLowerCase());
         const patternMatch = regex && partNum && regex.test(partNum);
-        return baseMatch || patternMatch;
+        const domainMatch = Array.isArray(v.detectionHints?.domains) && normalizedLink
+          ? v.detectionHints.domains.some(domain => normalizedLink.includes(domain.toLowerCase()))
+          : false;
+        return baseMatch || patternMatch || domainMatch;
       });
       if (candidates.length === 1) return candidates[0];
       return null;
@@ -4029,13 +4066,84 @@
     closeUserModalBtn?.addEventListener('click', closeUserModal);
     cancelUserBtn?.addEventListener('click', closeUserModal);
 
+    function setVendorFormMode(mode) {
+      vendorFormMode = mode === 'builtin' ? 'builtin' : 'custom';
+      if (vendorForm) vendorForm.dataset.mode = vendorFormMode;
+      if (vendorCustomPanel) vendorCustomPanel.style.display = vendorFormMode === 'custom' ? VENDOR_CUSTOM_DISPLAY : 'none';
+      if (vendorBuiltinPanel) vendorBuiltinPanel.style.display = vendorFormMode === 'builtin' ? 'block' : 'none';
+      if (vendorSaveBtn) vendorSaveBtn.textContent = vendorFormMode === 'builtin' ? 'Save settings' : 'Save vendor';
+    }
+
+    function renderBuiltinCapabilities(vendor) {
+      if (!builtinVendorCapabilities) return;
+      const caps = Object.entries(vendor?.capabilities || {}).filter(([, enabled]) => enabled);
+      if (!caps.length) {
+        builtinVendorCapabilities.innerHTML = '';
+        return;
+      }
+      builtinVendorCapabilities.innerHTML = caps
+        .map(([key]) => `<span style="padding:2px 8px; border-radius:999px; background:var(--border); font-size:12px;">${BUILTIN_CAPABILITY_LABELS[key] || key}</span>`)
+        .join('');
+    }
+
+    function renderBuiltinFields(vendor) {
+      builtinFieldInputs = [];
+      if (!builtinFieldsContainer) return;
+      const fields = vendor?.integrationFields || [];
+      if (!fields.length) {
+        builtinFieldsContainer.innerHTML = '<div class="small">No configuration required for this vendor.</div>';
+        return;
+      }
+      builtinFieldsContainer.innerHTML = '';
+      fields.forEach(field => {
+        const labelText = field.label || field.key;
+        const wrapper = document.createElement('div');
+        const label = document.createElement('label');
+        label.className = 'small';
+        label.textContent = labelText;
+        const input = document.createElement('input');
+        input.className = 'input';
+        input.type = field.type === 'password' ? 'password' : 'text';
+        input.placeholder = field.placeholder || '';
+        if (field.value) input.value = field.value;
+        input.required = Boolean(field.required);
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        builtinFieldsContainer.appendChild(wrapper);
+        builtinFieldInputs.push({ key: field.key, input, required: Boolean(field.required), label: labelText });
+      });
+    }
+
+    function populateBuiltinVendor(vendor) {
+      activeBuiltinVendor = vendor || null;
+      if (!vendorForm?.elements?.integrationKey) return;
+      vendorForm.elements.integrationKey.value = vendor?.key || vendor?.slug || '';
+      if (!vendor) return;
+      setVendorFormMode('builtin');
+      if (builtinVendorDescription) {
+        const status = vendor.requiresCredentials
+          ? (vendor.hasCredentialsConfigured ? 'Configured' : 'Missing credentials')
+          : 'No configuration required';
+        builtinVendorDescription.textContent = `${vendor.description || ''} ${status ? `(${status})` : ''}`.trim();
+      }
+      renderBuiltinCapabilities(vendor);
+      renderBuiltinFields(vendor);
+    }
+
     function resetVendorForm() {
       vendorForm?.reset();
       if (vendorForm?.elements?.id) vendorForm.elements.id.value = '';
+      if (vendorForm?.elements?.integrationKey) vendorForm.elements.integrationKey.value = '';
       if (vendorMessage) {
         vendorMessage.textContent = '';
         vendorMessage.className = 'small';
       }
+      builtinFieldInputs = [];
+      activeBuiltinVendor = null;
+      setVendorFormMode('custom');
+      if (builtinFieldsContainer) builtinFieldsContainer.innerHTML = '';
+      if (builtinVendorDescription) builtinVendorDescription.textContent = '';
+      if (builtinVendorCapabilities) builtinVendorCapabilities.innerHTML = '';
       const resultsEl = document.getElementById('extract-results');
       if (resultsEl) resultsEl.textContent = '';
       const previewNameEl = document.getElementById('preview-name');
@@ -4058,7 +4166,10 @@
 
     function openVendorModal(vendor) {
       resetVendorForm();
-      if (vendor) {
+      if (vendor?.source === 'builtin') {
+        populateBuiltinVendor(vendor);
+      } else if (vendor) {
+        setVendorFormMode('custom');
         if (vendorForm?.elements?.id) vendorForm.elements.id.value = vendor._id || '';
         vendorForm.elements.vendor.value = vendor.vendor || '';
         vendorForm.elements.baseUrl.value = vendor.baseUrl || '';
@@ -4068,6 +4179,8 @@
         vendorForm.elements.nameSelector.value = vendor.nameSelector || '';
         vendorForm.elements.priceSelector.value = vendor.priceSelector || '';
         vendorForm.elements.notes.value = vendor.notes || '';
+      } else {
+        setVendorFormMode('custom');
       }
       if (vendorModal) vendorModal.style.display = 'flex';
     }
@@ -4096,7 +4209,11 @@
     function findVendorConfig(name) {
       if (!name) return null;
       const lower = name.toLowerCase();
-      return vendorConfigs.find(v => (v.vendor || '').toLowerCase() === lower) || null;
+      return vendorConfigs.find(v => {
+        return (v.vendor || '').toLowerCase() === lower
+          || (v.slug || '').toLowerCase() === lower
+          || (v.key || '').toLowerCase() === lower;
+      }) || null;
     }
 
     function deriveUrl(config, partNum, link) {
@@ -4113,7 +4230,25 @@
 
     function extractPartNumberFromUrl(config, link) {
       if (!config || !link) return null;
-      const cleanLink = link.replace(/\/+$/, '');
+      const vendorKey = (config.key || config.slug || '').toLowerCase();
+      const vendorName = (config.vendor || '').toLowerCase();
+      const isDigikey = vendorKey === 'digikey' || vendorName.includes('digi-key') || vendorName.includes('digikey');
+      const normalized = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+      if (isDigikey) {
+        try {
+          const urlObj = new URL(normalized);
+          const segments = urlObj.pathname.split('/').filter(Boolean);
+          const detailIdx = segments.findIndex(p => p.toLowerCase() === 'detail');
+          if (detailIdx !== -1 && segments.length > detailIdx + 2) {
+            const partSegment = segments[detailIdx + 2];
+            if (partSegment) return decodeURIComponent(partSegment);
+          }
+        } catch (err) {
+          // ignore parse issues; fall through to returning null
+        }
+        return null;
+      }
+      const cleanLink = normalized.replace(/\/+$/, '');
       if (config.productUrlTemplate && config.productUrlTemplate.includes('{partNumber}')) {
         // Escape the template and swap the placeholder with a capture group.
         const pattern = config.productUrlTemplate
@@ -4131,6 +4266,25 @@
       }
       const parts = cleanLink.split('/').filter(Boolean);
       return parts[parts.length - 1] || null;
+    }
+
+    async function resolveBuiltinVendorPart(config, link) {
+      if (!config || config.source !== 'builtin' || !link) return null;
+      const vendorKey = config.key || config.slug || config.vendor;
+      if (!vendorKey) return null;
+      try {
+        const res = await fetch('/api/vendors/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendorKey, url: link })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to resolve vendor link');
+        return data;
+      } catch (err) {
+        console.warn('Failed to resolve vendor link', err);
+        return null;
+      }
     }
 
     function parsePrice(text) {
@@ -4157,45 +4311,76 @@
           partNumber = extracted;
         }
       }
+      if (!partNumber && config?.source === 'builtin' && link) {
+        const resolved = await resolveBuiltinVendorPart(config, link);
+        if (resolved?.partNumber && partInput) {
+          partInput.value = resolved.partNumber;
+          partNumber = resolved.partNumber;
+        }
+        if (resolved?.productUrl && linkInput && !linkInput.value) {
+          linkInput.value = resolved.productUrl;
+        }
+      }
       if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
-      const url = deriveUrl(config, partNumber, link) || link;
+      const isBuiltin = config?.source === 'builtin';
+      if (isBuiltin && !partNumber) {
+        catalogItemMessage.textContent = `Enter a part number to fetch from ${config.vendor}.`;
+        catalogItemMessage.className = 'error';
+        return;
+      }
+      const url = isBuiltin ? null : (deriveUrl(config, partNumber, link) || link);
       catalogItemMessage.textContent = 'Fetching...';
       catalogItemMessage.className = 'small';
-      if (!url) {
+      if (!isBuiltin && !url) {
         catalogItemMessage.textContent = 'Provide a vendor link or part number first.';
         catalogItemMessage.className = 'error';
         return;
       }
+      if (!config && !url) {
+        catalogItemMessage.textContent = 'Provide a link or pick a supported vendor.';
+        catalogItemMessage.className = 'error';
+        return;
+      }
+      const body = isBuiltin
+        ? { vendorKey: config.key, partNumber }
+        : {
+            url,
+            selectors: {
+              nameSelector: config?.nameSelector,
+              priceSelector: config?.priceSelector
+            }
+          };
       try {
         const res = await fetch('/api/vendors/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            selectors: {
-              nameSelector: config?.nameSelector,
-              priceSelector: config?.priceSelector,
-            }
-          })
+          body: JSON.stringify(body)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Fetch failed');
 
         const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
         const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
+        if (data.message && !pickName && (pickPrice === undefined || pickPrice === null)) {
+          throw new Error(data.message);
+        }
 
         if (pickName && nameInput && !nameInput.value) nameInput.value = pickName;
         const priceNum = parsePrice(pickPrice);
         if (priceNum !== undefined && priceInput) {
           priceInput.value = priceNum;
         }
-        if (linkInput && !linkInput.value) linkInput.value = url;
+        if (isBuiltin && data.productUrl && linkInput && !linkInput.value) {
+          linkInput.value = data.productUrl;
+        } else if (!isBuiltin && linkInput && !linkInput.value) {
+          linkInput.value = url;
+        }
         if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
 
         catalogItemMessage.textContent = 'Fetched. Verify fields before saving.';
         catalogItemMessage.className = 'success';
       } catch (err) {
-        catalogItemMessage.textContent = 'Fetch failed. Fill manually.';
+        catalogItemMessage.textContent = err.message || 'Fetch failed. Fill manually.';
         catalogItemMessage.className = 'error';
       }
     }
@@ -4279,44 +4464,70 @@
             partNum = extracted;
           }
         }
+        if (!partNum && config?.source === 'builtin' && link) {
+          const resolved = await resolveBuiltinVendorPart(config, link);
+          if (resolved?.partNumber && partInput) {
+            partInput.value = resolved.partNumber;
+            partNum = resolved.partNumber;
+          }
+          if (resolved?.productUrl && linkInput && !linkInput.value) {
+            linkInput.value = resolved.productUrl;
+          }
+        }
         if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
-        const url = deriveUrl(config, partNum, link) || link;
-        if (!url) {
+        const isBuiltin = config?.source === 'builtin';
+        if (isBuiltin && !partNum) {
+          orderMessage.textContent = `Enter a part number to fetch from ${config.vendor}.`;
+          orderMessage.className = 'error';
+          return;
+        }
+        const url = isBuiltin ? null : (deriveUrl(config, partNum, link) || link);
+        if (!isBuiltin && !url) {
           orderMessage.textContent = 'Provide a link or part number (for vendors with part number templates).';
           orderMessage.className = 'error';
           return;
         }
-        if (config && !config.productUrlTemplate && !link) {
+        if (!isBuiltin && config && !config.productUrlTemplate && !link) {
           orderMessage.textContent = 'This vendor needs a link to fetch details.';
           orderMessage.className = 'error';
           return;
         }
         orderMessage.textContent = 'Fetching...';
         orderMessage.className = 'small';
+        const body = isBuiltin
+          ? { vendorKey: config.key, partNumber: partNum }
+          : {
+              url,
+              selectors: {
+                nameSelector: config?.nameSelector,
+                priceSelector: config?.priceSelector
+              }
+            };
         try {
           const res = await fetch('/api/vendors/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url,
-              selectors: {
-                nameSelector: config?.nameSelector,
-                priceSelector: config?.priceSelector,
-              }
-            })
+            body: JSON.stringify(body)
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Fetch failed');
 
           const pickName = data.picks?.name || data.candidates?.titles?.[0]?.text;
           const pickPrice = data.picks?.price || data.candidates?.prices?.[0]?.text;
+          if (data.message && !pickName && (pickPrice === undefined || pickPrice === null)) {
+            throw new Error(data.message);
+          }
 
           if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
           const priceNum = parsePrice(pickPrice);
           if (priceNum !== undefined) {
             orderForm.elements.unitCost.value = priceNum;
           }
-          if (!orderForm.elements.partLink.value) orderForm.elements.partLink.value = url;
+          if (isBuiltin && data.productUrl && !orderForm.elements.partLink.value) {
+            orderForm.elements.partLink.value = data.productUrl;
+          } else if (!orderForm.elements.partLink.value && url) {
+            orderForm.elements.partLink.value = url;
+          }
           if (config?.vendor && orderForm.elements.vendor && !orderForm.elements.vendor.value) {
             orderForm.elements.vendor.value = config.vendor;
           }
@@ -4325,7 +4536,7 @@
           orderMessage.className = 'success';
           await checkCatalogPresence();
         } catch (err) {
-          orderMessage.textContent = 'Fetch failed. Fill manually.';
+          orderMessage.textContent = err.message || 'Fetch failed. Fill manually.';
           orderMessage.className = 'error';
         }
       };
@@ -4758,40 +4969,88 @@
       }
     });
 
+    function renderCustomVendorCard(v) {
+      return `
+        <div class="card" data-id="${v._id}" data-source="custom" style="margin-bottom:8px;">
+          <div class="flex-between">
+            <div>
+              <h4 style="margin:0 0 4px;">${escapeHtml(v.vendor || '')}</h4>
+              <div class="small">${escapeHtml(v.baseUrl || '')}</div>
+              <div class="small">Template: ${escapeHtml(v.productUrlTemplate || '')}</div>
+              <div class="small">Selectors: ${escapeHtml(v.nameSelector || '-')} | ${escapeHtml(v.priceSelector || '-')}</div>
+            </div>
+            <div class="flex-between" style="gap:8px;">
+              <button class="btn ghost" data-action="edit">Edit</button>
+              <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderBuiltinVendorCard(v) {
+      const status = v.requiresCredentials
+        ? (v.hasCredentialsConfigured ? 'Configured' : 'Needs credentials')
+        : 'Ready';
+      return `
+        <div class="card" data-key="${v.key}" data-source="builtin" style="margin-bottom:8px;">
+          <div class="flex-between" style="gap:8px;">
+            <div>
+              <h4 style="margin:0 0 4px;">${escapeHtml(v.vendor || '')}</h4>
+              <div class="small">${escapeHtml(v.description || '')}</div>
+              <div class="small">Status: ${status}</div>
+            </div>
+            <div class="flex-between" style="gap:8px;">
+              <button class="btn ghost" data-action="configure">Configure</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     async function loadVendors() {
       if (!currentUser) return;
       vendorList.textContent = 'Loading...';
       try {
         const res = await fetch('/api/vendors/configs');
         const data = await res.json();
-        vendorConfigs = data.vendors || [];
+        customVendorConfigs = (data.custom || data.vendors || []).map(v => ({ ...v, source: 'custom' }));
+        builtinVendorConfigsState = (data.builtin || []).map(v => ({ ...v, source: 'builtin' }));
+        vendorConfigs = customVendorConfigs.concat(builtinVendorConfigsState);
         renderVendorOptions();
-        if (!vendorConfigs.length) {
-          vendorList.innerHTML = '<div class="empty">No vendor configs yet. Click "New vendor" to add one.</div>';
-          return;
-        }
-        vendorList.innerHTML = vendorConfigs.map(v => `
-          <div class="card" data-id="${v._id}" style="margin-bottom:8px;">
-            <div class="flex-between">
-              <div>
-                <h4 style="margin:0 0 4px;">${v.vendor}</h4>
-                <div class="small">${v.baseUrl || ''}</div>
-                <div class="small">Template: ${v.productUrlTemplate || ''}</div>
-                <div class="small">Selectors: ${v.nameSelector || '-'} | ${v.priceSelector || '-'}</div>
-              </div>
-              <div class="flex-between" style="gap:8px;">
-                <button class="btn ghost" data-action="edit">Edit</button>
-                <button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>
-              </div>
-            </div>
+        const builtinCards = builtinVendorConfigsState.length
+          ? builtinVendorConfigsState.map(renderBuiltinVendorCard).join('')
+          : '<div class="small">No built-in integrations available yet.</div>';
+        const customCards = customVendorConfigs.length
+          ? customVendorConfigs.map(renderCustomVendorCard).join('')
+          : '<div class="empty">No custom vendor configs yet. Click "New vendor" to add one.</div>';
+        vendorList.innerHTML = `
+          <div style="margin-bottom:12px;">
+            <div class="small" style="text-transform:uppercase; font-weight:700; margin-bottom:4px;">Built-in integrations</div>
+            ${builtinCards}
           </div>
-        `).join('');
+          <div>
+            <div class="small" style="text-transform:uppercase; font-weight:700; margin-bottom:4px;">Custom scrapers</div>
+            ${customCards}
+          </div>
+        `;
+
+        vendorList.querySelectorAll('button[data-action="configure"]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const card = e.target.closest('.card');
+            const key = card?.dataset?.key;
+            if (!key) return;
+            const v = builtinVendorConfigsState.find(x => x.key === key);
+            if (!v) return;
+            openVendorModal(v);
+          });
+        });
 
         vendorList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
           btn.addEventListener('click', (e) => {
             const card = e.target.closest('.card');
             const id = card.dataset.id;
-            const v = vendorConfigs.find(x => x._id === id);
+            const v = customVendorConfigs.find(x => x._id === id);
             if (!v) return;
             openVendorModal(v);
           });
@@ -5665,6 +5924,42 @@
     cancelCatalogRequest?.addEventListener('click', () => { pendingCatalogRequest = null; catalogRequestModal.style.display = 'none'; });
     vendorForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const mode = vendorForm.dataset.mode || 'custom';
+      if (mode === 'builtin') {
+        const integrationKey = vendorForm.elements.integrationKey?.value || activeBuiltinVendor?.key;
+        if (!integrationKey) {
+          vendorMessage.textContent = 'Missing integration key.';
+          vendorMessage.className = 'error';
+          return;
+        }
+        const settings = {};
+        for (const field of builtinFieldInputs) {
+          const value = field.input.value.trim();
+          if (field.required && !value) {
+            vendorMessage.textContent = `Enter ${field.label || field.key}`;
+            vendorMessage.className = 'error';
+            return;
+          }
+          if (value) settings[field.key] = value;
+        }
+        vendorMessage.textContent = 'Saving...';
+        vendorMessage.className = 'small';
+        try {
+          await fetch(`/api/vendors/integrations/${integrationKey}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings })
+          });
+          vendorMessage.textContent = 'Integration saved.';
+          vendorMessage.className = 'success';
+          loadVendors();
+          closeVendorModal();
+        } catch (err) {
+          vendorMessage.textContent = 'Failed to save integration';
+          vendorMessage.className = 'error';
+        }
+        return;
+      }
       const data = Object.fromEntries(new FormData(vendorForm).entries());
       const id = data.id || undefined;
       if (!data.vendor) {
@@ -5678,7 +5973,7 @@
       if (data.notes) {
         try {
           headersObj = JSON.parse(data.notes);
-        } catch (e) {
+        } catch (err) {
           vendorMessage.textContent = 'Notes/headers not valid JSON.';
           vendorMessage.className = 'error';
           return;
@@ -5767,6 +6062,11 @@
     });
 
     async function testExtraction() {
+      if ((vendorForm?.dataset?.mode || 'custom') === 'builtin') {
+        vendorMessage.textContent = 'Built-in vendors use their APIs directly.';
+        vendorMessage.className = 'small';
+        return;
+      }
       const url = testUrl.value.trim();
       if (!url) {
         vendorMessage.textContent = 'Provide a URL to test.';

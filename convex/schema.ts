@@ -92,6 +92,15 @@ export default defineSchema({
     updatedAt: v.number()
   }).index("by_vendor", ["vendor"]),
 
+  vendorIntegrations: defineTable({
+    vendorKey: v.string(),
+    settings: v.optional(v.record(v.string(), v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.id("users")),
+    updatedBy: v.optional(v.id("users"))
+  }).index("by_vendorKey", ["vendorKey"]),
+
   rolePolicies: defineTable({
     role: v.string(),
     permissions: v.record(v.string(), v.boolean()),
