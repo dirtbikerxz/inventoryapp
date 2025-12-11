@@ -4633,6 +4633,20 @@
       return `https://www.digikey.com/en/products/search?keywords=${encodeURIComponent(partNumber)}`;
     }
 
+    function isDigikeySearchUrl(url) {
+      if (!url) return false;
+      try {
+        const parsed = new URL(url);
+        const host = (parsed.hostname || '').toLowerCase();
+        const path = (parsed.pathname || '').toLowerCase();
+        if (!host.includes('digikey')) return false;
+        return path.includes('/products/search') || path.startsWith('/short/');
+      } catch (err) {
+        const lower = String(url).toLowerCase();
+        return lower.includes('digikey.com/en/products/search') || lower.includes('digikey.com/short/');
+      }
+    }
+
     function buildImportPayload(entry, vendor) {
       const vendorName = vendor?.vendor || vendor?.slug || vendor?.key || 'Vendor';
       const manufacturerPart = entry.manufacturerPartNumber || entry.digiKeyPartNumber || '';
@@ -4655,6 +4669,59 @@
         notes: noteParts.join(' · '),
         partLink
       };
+    }
+
+    async function fetchVendorProductDetails(vendorKey, partNumber) {
+      if (!vendorKey || !partNumber) return null;
+      const body = {
+        vendorKey,
+        partNumber: partNumber.trim()
+      };
+      try {
+        const res = await fetch('/api/vendors/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Vendor lookup failed');
+        return data;
+      } catch (err) {
+        console.warn('Vendor lookup failed', err);
+        return null;
+      }
+    }
+
+    function parsePriceNumber(text) {
+      if (!text) return undefined;
+      const num = parseFloat(String(text).replace(/[^0-9\\.]+/g, ''));
+      return Number.isFinite(num) ? num : undefined;
+    }
+
+    async function enrichVendorImportEntries(entries) {
+      if (!entries?.length || !vendorImportVendor) return;
+      const vendorKey = vendorImportVendor.key || vendorImportVendor.slug || vendorImportVendor.vendor;
+      if (!vendorKey) return;
+      if (!isDigikeyVendor(vendorImportVendor)) return; // Only supported for Digi-Key right now
+      for (const entry of entries) {
+        const candidatePart = entry.manufacturerPartNumber || entry.digiKeyPartNumber;
+        if (!candidatePart) continue;
+        const details = await fetchVendorProductDetails(vendorKey, candidatePart);
+        if (!details) continue;
+        if (!entry.description && details.picks?.name) entry.description = details.picks.name;
+        const shouldReplaceUrl = !entry.productUrl || isDigikeySearchUrl(entry.productUrl);
+        if (details.productUrl && shouldReplaceUrl) entry.productUrl = details.productUrl;
+        if (!entry.unitPrice) {
+          const price = parsePriceNumber(details.picks?.price);
+          if (price !== undefined) entry.unitPrice = price;
+        }
+        if (!entry.manufacturerPartNumber && details.meta?.manufacturerPartNumber) {
+          entry.manufacturerPartNumber = details.meta.manufacturerPartNumber;
+        }
+        if (!entry.digiKeyPartNumber && details.meta?.digiKeyProductNumber) {
+          entry.digiKeyPartNumber = details.meta.digiKeyProductNumber;
+        }
+      }
     }
 
     async function handleVendorImportParse() {
@@ -4684,6 +4751,11 @@
         }
         vendorImportEntries = parsed;
         if (!parsed.length) throw new Error('No valid items were found.');
+        if (vendorImportMessage) {
+          vendorImportMessage.textContent = 'Parsed items. Looking up product details...';
+          vendorImportMessage.className = 'small';
+        }
+        await enrichVendorImportEntries(vendorImportEntries);
         if (vendorImportMessage) {
           vendorImportMessage.textContent = `Parsed ${parsed.length} item(s).`;
           vendorImportMessage.className = 'small success';
