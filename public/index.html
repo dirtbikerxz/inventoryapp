@@ -6251,12 +6251,14 @@
 
     loginBtn.addEventListener('click', () => {
       if (loginMessage) { loginMessage.textContent = ''; loginMessage.style.display = 'none'; }
+      if (loginForm) loginForm.reset();
       setAuthenticated(false);
     });
     logoutBtn.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       currentUser = null;
       setAuthenticated(false);
+      if (loginForm) loginForm.reset();
       updateUserUI();
       resetCatalogSavePanel();
       resetCatalogLookup();
@@ -6293,6 +6295,7 @@
       currentUser.permissions = computePerms(currentUser);
       loginMessage.textContent = '';
       loginMessage.style.display = 'none';
+      if (loginForm) loginForm.reset();
       setAuthenticated(true);
       updateUserUI();
       syncCatalogSaveUI();
