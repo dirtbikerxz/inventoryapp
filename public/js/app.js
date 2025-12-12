@@ -627,17 +627,28 @@ function fetchOrderDetails(configHint) {
         const formData = new FormData(orderForm);
         const partInput = orderForm.elements.vendorPartNumber;
         const linkInput = orderForm.elements.partLink;
+        const fetchPartInput = document.getElementById('order-fetch-part-number') || partInput;
+        const fetchLinkInput = document.getElementById('order-fetch-link') || linkInput;
         const vendorInput = orderForm.elements.vendor;
-        let partNum = (formData.get('vendorPartNumber') || '').toString().trim();
-        const link = (formData.get('partLink') || '').toString().trim();
+        const fetchPN = (fetchPartInput?.value || '').toString().trim();
+        const fetchLink = (fetchLinkInput?.value || '').toString().trim();
+        const savedPN = (formData.get('vendorPartNumber') || '').toString().trim();
+        const savedLink = (formData.get('partLink') || '').toString().trim();
+        const partProvided = Boolean(fetchPN);
+        const linkProvided = Boolean(fetchLink);
+        // Prefer explicit fetch fields; only fall back to saved values if both fetch inputs are empty.
+        let partNum = fetchPN || (linkProvided ? '' : savedPN);
+        const link = fetchLink || (partProvided ? '' : savedLink);
         const vendorName = (formData.get('vendor') || '').toString().trim();
         const vendorOverride = manualVendorOverride;
-        let config = configHint || vendorOverride || findVendorConfig(vendorName) || detectVendor(partNum, link);
+        // Prefer an explicit override, otherwise detect from current fetch inputs, and only then fall back to saved vendor.
+        let config = configHint || vendorOverride || detectVendor(partNum, link) || findVendorConfig(vendorName);
         if (!config && vendorName) config = findVendorConfig(vendorName);
         const vendorKey = (config?.key || config?.slug || config?.vendor || '').toLowerCase();
         if (!partNum && config && link) {
           const extracted = extractPartNumberFromUrl(config, link);
           if (extracted && partInput) {
+            if (fetchPartInput && !linkProvided) fetchPartInput.value = extracted;
             partInput.value = extracted;
             partNum = extracted;
           }
@@ -645,14 +656,16 @@ function fetchOrderDetails(configHint) {
         if (!partNum && config?.source === 'builtin' && link) {
           const resolved = await resolveBuiltinVendorPart(config, link);
           if (resolved?.partNumber && partInput) {
+            if (fetchPartInput && !linkProvided) fetchPartInput.value = resolved.partNumber;
             partInput.value = resolved.partNumber;
             partNum = resolved.partNumber;
           }
-          if (resolved?.productUrl && linkInput && !linkInput.value) {
-            linkInput.value = resolved.productUrl;
+          if (resolved?.productUrl) {
+            if (linkInput) linkInput.value = resolved.productUrl;
+            if (fetchLinkInput && !partProvided) fetchLinkInput.value = resolved.productUrl;
           }
         }
-        if (config?.vendor && vendorInput && (!vendorInput.value || vendorOverride === config)) {
+        if (config?.vendor && vendorInput) {
           vendorInput.value = config.vendor;
         }
         const isBuiltin = config?.source === 'builtin';
@@ -698,27 +711,34 @@ function fetchOrderDetails(configHint) {
             throw new Error(data.message);
           }
 
-          if (pickName && !orderForm.elements.partName.value) orderForm.elements.partName.value = pickName;
+          if (pickName && orderForm.elements.partName) orderForm.elements.partName.value = pickName;
           const priceNum = parsePrice(pickPrice);
-          if (priceNum !== undefined) {
+          if (priceNum !== undefined && orderForm.elements.unitCost) {
             orderForm.elements.unitCost.value = priceNum;
           }
-          if (isBuiltin && data.productUrl && !orderForm.elements.partLink.value) {
-            orderForm.elements.partLink.value = data.productUrl;
-          } else if (!orderForm.elements.partLink.value && url) {
-            orderForm.elements.partLink.value = url;
-          }
-          if (config?.vendor && orderForm.elements.vendor && !orderForm.elements.vendor.value) {
-            orderForm.elements.vendor.value = config.vendor;
-          }
           const meta = data.meta || {};
-          if (meta.manufacturerPartNumber && orderForm.elements.vendorPartNumber) {
-            orderForm.elements.vendorPartNumber.value = meta.manufacturerPartNumber;
+          const resolvedPN =
+            meta.manufacturerPartNumber ||
+            meta.digiKeyProductNumber ||
+            meta.partNumber ||
+            partNum;
+          if (resolvedPN && orderForm.elements.vendorPartNumber) {
+            orderForm.elements.vendorPartNumber.value = resolvedPN;
+          }
+          if (isBuiltin && data.productUrl && orderForm.elements.partLink) {
+            orderForm.elements.partLink.value = data.productUrl;
+            if (fetchLinkInput && !partProvided) fetchLinkInput.value = data.productUrl;
+          } else if (!isBuiltin && orderForm.elements.partLink) {
+            orderForm.elements.partLink.value = url;
+            if (fetchLinkInput && !partProvided) fetchLinkInput.value = url;
+          }
+          if (config?.vendor && orderForm.elements.vendor) {
+            orderForm.elements.vendor.value = config.vendor;
           }
           const productCodeInput = orderForm.elements.productCode;
           if (productCodeInput) {
             if (vendorKey === 'digikey') {
-              productCodeInput.value = meta.digiKeyProductNumber || '';
+              productCodeInput.value = meta.digiKeyProductNumber || resolvedPN || '';
             } else {
               productCodeInput.value = '';
             }
@@ -852,7 +872,8 @@ function fetchOrderDetails(configHint) {
 
     function syncCatalogSaveUI() {
       const canEdit = currentUser?.permissions?.canEditInventoryCatalog;
-      const showToggle = canEdit && !catalogAlreadySaved;
+      // Hide the save-to-catalog toggle when using the catalog tab because the item is already in the catalog.
+      const showToggle = canEdit && !catalogAlreadySaved && orderSource !== 'catalog';
       if (catalogSaveContainer) catalogSaveContainer.style.display = showToggle ? 'block' : 'none';
       if (catalogSaveStatus) {
         if (catalogAlreadySaved) {

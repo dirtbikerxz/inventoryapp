@@ -163,107 +163,125 @@
           </div>
         </div>
         <div id="order-standard-fields" style="display:contents;">
-        <div class="order-manual-fields" style="grid-column: span 2;">
-          <label class="small">Vendor source</label>
-          <select id="manual-vendor-select" class="input">
-            <option value="">Other / manual entry</option>
-          </select>
-          <div class="small" id="manual-vendor-hint">Select a configured vendor to force API fetching, or leave as Other to auto-detect.</div>
-        </div>
-        <div class="order-manual-fields" style="grid-column: span 2;">
-          <label class="small">Product Number</label>
-            <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
-            <input type="hidden" name="productCode" id="order-product-code" />
-        </div>
-        <div class="order-manual-fields" style="grid-column: span 2;">
-          <label class="small">Supplier Link</label>
-          <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
-          <div style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn primary" id="fetch-product" style="padding:6px 10px;">Fetch Details</button>
-            <span class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</span>
-          </div>
-        </div>
-        <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
-          <label class="small">Saved catalog</label>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
-            <input id="catalog-lookup" class="input" placeholder="Search saved parts..." />
-            <div id="catalog-lookup-selected" class="small"></div>
-          </div>
-          <div id="catalog-lookup-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:180px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:6px;"></div>
-        </div>
-        <div>
-          <label class="small">Vendor</label>
-          <input name="vendor" class="input" placeholder="Vendor" />
-        </div>
-        <div>
-          <label class="small">Part Name</label>
-          <input name="partName" class="input" required />
-        </div>
-        <div>
-          <label class="small">Unit Cost</label>
-          <input name="unitCost" class="input" type="number" min="0" step="0.01" />
-        </div>
-        <div>
-          <label class="small">Quantity</label>
-          <input name="quantityRequested" class="input" type="number" min="1" value="1" required />
-        </div>
-        <div>
-          <label class="small">Priority</label>
-          <select name="priority" class="input">
-            <option>Low</option>
-            <option selected>Medium</option>
-            <option>High</option>
-            <option>Urgent</option>
-          </select>
-        </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Tags</label>
-          <select id="order-tags" name="tags" class="input" multiple size="4" style="min-height:90px; display:none;"></select>
-          <div class="tag-picker" id="tag-picker">
-            <div id="tag-picker-display" class="tag-picker-display">Select tags</div>
-            <div id="tag-picker-panel" class="tag-picker-panel" style="display:none;">
-              <input id="tag-picker-search" class="input tag-picker-search" placeholder="Search tags..." />
-              <div id="tag-picker-options" class="tag-picker-options"></div>
+          <div class="order-manual-fields" style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
+            <div style="font-weight:700; margin-bottom:6px;">Auto-fetch (not saved)</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+              <div>
+                <label class="small">Vendor source</label>
+                <select id="manual-vendor-select" class="input">
+                  <option value="">Other / manual entry</option>
+                </select>
+                <div class="small" id="manual-vendor-hint">Select a configured vendor to force API fetching, or leave as Other to auto-detect.</div>
+              </div>
+              <div>
+                <label class="small">Product Number (fetch only)</label>
+                <input id="order-fetch-part-number" class="input" placeholder="e.g., WCP-0921" />
+              </div>
+              <div>
+                <label class="small">Supplier Link (fetch only)</label>
+                <input id="order-fetch-link" class="input" placeholder="https://vendor.com/product/..." />
+              </div>
+            </div>
+            <div style="margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn primary" id="fetch-product" style="padding:6px 10px;">Fetch Details</button>
+              <span class="small" id="fetch-supported">Supported vendors will auto-detect from link or part number.</span>
             </div>
           </div>
-          <div class="small" style="margin-top:8px;">Tags categorize requests. Open the Tags panel to view or manage them.</div>
-        </div>
-        <!-- Tracking managed at group level; no tracking fields for individual parts -->
-        <div style="grid-column: span 2;">
-          <label class="small" id="order-notes-label">Notes</label>
-          <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
-        </div>
-        <div id="catalog-save-container" style="grid-column: span 2; display:none;">
-          <div class="flex-between" style="align-items:center; gap:6px; flex-wrap:wrap;">
-            <label class="small" style="display:flex; align-items:center; gap:6px;">
-              <input type="checkbox" id="save-to-catalog-toggle" class="checkbox" />
-              Save this part to the inventory catalog
-            </label>
-          </div>
-          <div id="catalog-save-fields" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px; display:none;">
-            <div>
-              <label class="small">Category path</label>
-              <select id="catalog-save-category" class="input"></select>
+          <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
+            <label class="small">Saved catalog</label>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
+              <input id="catalog-lookup" class="input" placeholder="Search saved parts..." />
+              <div id="catalog-lookup-selected" class="small"></div>
             </div>
-            <div>
-              <label class="small">Subteam</label>
-              <input id="catalog-save-subteam" class="input" placeholder="Electrical" />
+            <div id="catalog-lookup-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:180px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:6px;"></div>
+          </div>
+          <div class="order-manual-fields" style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:8px;">
+            <div style="font-weight:700; margin-bottom:6px;">Saved details</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
+              <div>
+                <label class="small">Vendor</label>
+                <input name="vendor" class="input" placeholder="Vendor" />
+              </div>
+              <div>
+                <label class="small">Product Number</label>
+                <input name="vendorPartNumber" class="input" placeholder="e.g., WCP-0921" />
+                <input type="hidden" name="productCode" id="order-product-code" />
+              </div>
+              <div>
+                <label class="small">Supplier Link</label>
+                <input name="partLink" class="input" placeholder="https://vendor.com/product/..." />
+              </div>
+              <div>
+                <label class="small">Part Name</label>
+                <input name="partName" class="input" required />
+              </div>
+              <div>
+                <label class="small">Unit Cost</label>
+                <input name="unitCost" class="input" type="number" min="0" step="0.01" />
+              </div>
+              <div>
+                <label class="small">Quantity</label>
+                <input name="quantityRequested" class="input" type="number" min="1" value="1" required />
+              </div>
+              <div>
+                <label class="small">Priority</label>
+                <select name="priority" class="input">
+                  <option>Low</option>
+                  <option selected>Medium</option>
+                  <option>High</option>
+                  <option>Urgent</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label class="small">Type</label>
-              <input id="catalog-save-type" class="input" placeholder="Connector" />
+            <div style="margin-top:10px;">
+              <label class="small">Tags</label>
+              <select id="order-tags" name="tags" class="input" multiple size="4" style="min-height:90px; display:none;"></select>
+              <div class="tag-picker" id="tag-picker">
+                <div id="tag-picker-display" class="tag-picker-display">Select tags</div>
+                <div id="tag-picker-panel" class="tag-picker-panel" style="display:none;">
+                  <input id="tag-picker-search" class="input tag-picker-search" placeholder="Search tags..." />
+                  <div id="tag-picker-options" class="tag-picker-options"></div>
+                </div>
+              </div>
+              <div class="small" style="margin-top:8px;">Tags categorize requests. Open the Tags panel to view or manage them.</div>
+            </div>
+            <!-- Tracking managed at group level; no tracking fields for individual parts -->
+            <div style="margin-top:10px;">
+              <label class="small" id="order-notes-label">Notes</label>
+              <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
             </div>
           </div>
-          <div id="catalog-save-message" class="small" style="margin-top:6px;"></div>
-        </div>
-        <div id="catalog-save-status" class="small" style="grid-column: span 2;"></div>
-        <div class="flex-between" id="order-submit-bar" style="grid-column: span 2; margin-top:6px;">
-          <div id="order-message" class="small"></div>
-          <div class="flex-between" style="gap:8px;">
-            <button type="button" class="btn ghost" id="cancel-order">Cancel</button>
-            <button type="submit" class="btn primary">Submit order</button>
+          <div id="catalog-save-container" style="grid-column: span 2; display:none;">
+            <div class="flex-between" style="align-items:center; gap:6px; flex-wrap:wrap;">
+              <label class="small" style="display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="save-to-catalog-toggle" class="checkbox" />
+                Save this part to the inventory catalog
+              </label>
+            </div>
+            <div id="catalog-save-fields" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:8px; display:none;">
+              <div>
+                <label class="small">Category path</label>
+                <select id="catalog-save-category" class="input"></select>
+              </div>
+              <div>
+                <label class="small">Subteam</label>
+                <input id="catalog-save-subteam" class="input" placeholder="Electrical" />
+              </div>
+              <div>
+                <label class="small">Type</label>
+                <input id="catalog-save-type" class="input" placeholder="Connector" />
+              </div>
+            </div>
+            <div id="catalog-save-message" class="small" style="margin-top:6px;"></div>
           </div>
-        </div>
+          <div id="catalog-save-status" class="small" style="grid-column: span 2;"></div>
+          <div class="flex-between" id="order-submit-bar" style="grid-column: span 2; margin-top:6px;">
+            <div id="order-message" class="small"></div>
+            <div class="flex-between" style="gap:8px;">
+              <button type="button" class="btn ghost" id="cancel-order">Cancel</button>
+              <button type="submit" class="btn primary">Submit order</button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -354,58 +372,74 @@
       </div>
       <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px;">
         <input type="hidden" name="id" />
-        <div>
-          <label class="small">Vendor source</label>
-          <select id="catalog-vendor-select" class="input">
-            <option value="">Other / manual entry</option>
-          </select>
-          <div class="small" id="catalog-vendor-hint">Select a configured vendor for API autofill, or leave as Other.</div>
-        </div>
-        <div>
-          <label class="small">Product Number</label>
-          <input name="vendorPartNumber" class="input" placeholder="SKU" />
-        </div>
-        <div>
-          <label class="small">Supplier Link</label>
-          <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
-        </div>
-        <div style="grid-column: span 2;">
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
+        <div style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
+          <div style="font-weight:700; margin-bottom:6px;">Auto-fetch (not saved)</div>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">
+            <div>
+              <label class="small">Vendor source</label>
+              <select id="catalog-vendor-select" class="input">
+                <option value="">Other / manual entry</option>
+              </select>
+              <div class="small" id="catalog-vendor-hint">Select a configured vendor for API autofill, or leave as Other.</div>
+            </div>
+            <div>
+              <label class="small">Product Number (fetch only)</label>
+              <input id="fetch-catalog-part-number" class="input" placeholder="SKU for lookup" />
+            </div>
+            <div>
+              <label class="small">Supplier Link (fetch only)</label>
+              <input id="fetch-catalog-link" class="input" placeholder="https://vendor.com/part" />
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;">
             <button type="button" class="btn primary" id="fetch-catalog-product" style="padding:6px 10px;">Fetch Details</button>
             <span class="small" id="fetch-supported-catalog">Supported vendors will auto-detect from link or part number.</span>
           </div>
         </div>
-        <div>
-          <label class="small">Vendor</label>
-          <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
-        </div>
-        <div>
-          <label class="small">Part Name</label>
-          <input name="name" class="input" required />
-        </div>
-        <div>
-          <label class="small">Category Path</label>
-          <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
-        </div>
-        <div>
-          <label class="small">Unit Cost</label>
-          <input name="unitCost" class="input" type="number" step="0.01" />
-        </div>
-        <div>
-          <label class="small">Default Quantity</label>
-          <input name="defaultQuantity" class="input" type="number" min="1" placeholder="1" />
-        </div>
-        <div>
-          <label class="small">Subteam</label>
-          <input name="subteam" class="input" placeholder="Electrical" />
-        </div>
-        <div>
-          <label class="small">Type</label>
-          <input name="type" class="input" placeholder="Connector" />
-        </div>
-        <div style="grid-column: span 2;">
-          <label class="small">Aliases (comma separated)</label>
-          <input name="aliases" class="input" placeholder="crimp, molex, male" />
+        <div style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px;">
+          <div style="font-weight:700; margin-bottom:6px;">Saved details</div>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">
+            <div>
+              <label class="small">Vendor</label>
+              <input name="vendor" class="input" placeholder="WCP, DigiKey..." />
+            </div>
+            <div>
+              <label class="small">Product Number</label>
+              <input name="vendorPartNumber" class="input" placeholder="SKU" />
+            </div>
+            <div>
+              <label class="small">Supplier Link</label>
+              <input name="supplierLink" class="input" placeholder="https://vendor.com/part" />
+            </div>
+            <div>
+              <label class="small">Part Name</label>
+              <input name="name" class="input" required />
+            </div>
+            <div>
+              <label class="small">Category Path</label>
+              <input name="categoryPath" class="input" placeholder="Electrical/Connectors/Molex" />
+            </div>
+            <div>
+              <label class="small">Unit Cost</label>
+              <input name="unitCost" class="input" type="number" step="0.01" />
+            </div>
+            <div>
+              <label class="small">Default Quantity</label>
+              <input name="defaultQuantity" class="input" type="number" min="1" placeholder="1" />
+            </div>
+            <div>
+              <label class="small">Subteam</label>
+              <input name="subteam" class="input" placeholder="Electrical" />
+            </div>
+            <div>
+              <label class="small">Type</label>
+              <input name="type" class="input" placeholder="Connector" />
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="small">Aliases (comma separated)</label>
+              <input name="aliases" class="input" placeholder="crimp, molex, male" />
+            </div>
+          </div>
         </div>
         <div class="flex-between" style="grid-column: span 2; gap:8px; flex-wrap:wrap; margin-top:6px;">
           <div id="catalog-item-message" class="small"></div>

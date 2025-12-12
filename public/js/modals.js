@@ -248,27 +248,37 @@ async function fetchCatalogDetails() {
   const vendorInput = catalogItemForm?.elements?.vendor;
   const partInput = catalogItemForm?.elements?.vendorPartNumber;
   const linkInput = catalogItemForm?.elements?.supplierLink;
+  const fetchPartInput =
+    document.getElementById("fetch-catalog-part-number") || partInput;
+  const fetchLinkInput =
+    document.getElementById("fetch-catalog-link") || linkInput;
   const nameInput = catalogItemForm?.elements?.name;
   const priceInput = catalogItemForm?.elements?.unitCost;
   const vendor = vendorInput?.value?.trim();
-  let partNumber = partInput?.value?.trim();
-  const link = linkInput?.value?.trim();
+  const partProvided = Boolean(fetchPartInput?.value?.trim());
+  const linkProvided = Boolean(fetchLinkInput?.value?.trim());
+  let partNumber = fetchPartInput?.value?.trim() || "";
+  const link = fetchLinkInput?.value?.trim();
   const config = detectVendor(partNumber, link) || findVendorConfig(vendor);
   if (!partNumber && config && link) {
     const extracted = extractPartNumberFromUrl(config, link);
-    if (extracted && partInput) {
-      partInput.value = extracted;
+    if (extracted) {
+      if (fetchPartInput && !linkProvided) fetchPartInput.value = extracted;
+      if (partInput) partInput.value = extracted;
       partNumber = extracted;
     }
   }
   if (!partNumber && config?.source === "builtin" && link) {
     const resolved = await resolveBuiltinVendorPart(config, link);
-    if (resolved?.partNumber && partInput) {
-      partInput.value = resolved.partNumber;
+    if (resolved?.partNumber) {
+      if (fetchPartInput && !linkProvided) fetchPartInput.value = resolved.partNumber;
+      if (partInput) partInput.value = resolved.partNumber;
       partNumber = resolved.partNumber;
     }
-    if (resolved?.productUrl && linkInput && !linkInput.value) {
-      linkInput.value = resolved.productUrl;
+    if (resolved?.productUrl) {
+      if (fetchLinkInput && !partProvided && !fetchLinkInput.value)
+        fetchLinkInput.value = resolved.productUrl;
+      if (linkInput && !linkInput.value) linkInput.value = resolved.productUrl;
     }
   }
   if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
@@ -321,15 +331,32 @@ async function fetchCatalogDetails() {
       throw new Error(data.message);
     }
 
-    if (pickName && nameInput && !nameInput.value) nameInput.value = pickName;
+    if (pickName && nameInput) nameInput.value = pickName;
     const priceNum = parsePrice(pickPrice);
     if (priceNum !== undefined && priceInput) {
       priceInput.value = priceNum;
     }
-    if (isBuiltin && data.productUrl && linkInput && !linkInput.value) {
+    const meta = data.meta || {};
+    if (meta.manufacturerPartNumber && partInput) {
+      partInput.value = meta.manufacturerPartNumber;
+    } else if (partNumber && partInput) {
+      partInput.value = partNumber;
+    }
+    if (meta.manufacturerPartNumber && fetchPartInput && !linkProvided) {
+      fetchPartInput.value = meta.manufacturerPartNumber;
+    } else if (partNumber && fetchPartInput && !linkProvided) {
+      fetchPartInput.value = partNumber;
+    }
+    if (isBuiltin && data.productUrl && linkInput) {
       linkInput.value = data.productUrl;
-    } else if (!isBuiltin && linkInput && !linkInput.value) {
+      if (fetchLinkInput && !partProvided) {
+        fetchLinkInput.value = data.productUrl;
+      }
+    } else if (!isBuiltin && linkInput) {
       linkInput.value = url;
+      if (fetchLinkInput && !partProvided) {
+        fetchLinkInput.value = url;
+      }
     }
     if (config?.vendor && vendorInput) vendorInput.value = config.vendor;
 

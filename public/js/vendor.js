@@ -253,6 +253,9 @@ function setOrderSource(source) {
       vendorImportSelect.focus();
     }
   }
+  if (typeof syncCatalogSaveUI === "function") {
+    syncCatalogSaveUI();
+  }
 }
 
 orderSourceManual?.addEventListener("click", () => setOrderSource("manual"));
