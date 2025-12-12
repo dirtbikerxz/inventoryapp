@@ -302,6 +302,12 @@
           <label class="small">Group title</label>
           <input name="title" class="input" placeholder="Vendor - mm/dd/yy" />
         </div>
+        <div>
+          <label class="small">Status tag</label>
+          <select name="statusTag" id="group-status-tag" class="input">
+            <option value="">No status tag</option>
+          </select>
+        </div>
         <div style="grid-column: span 2;">
           <label class="small">Tracking numbers</label>
           <div id="group-modal-tracking-list" class="tracking-list"></div>
@@ -675,15 +681,16 @@
         </div>
         <button class="btn ghost" id="close-tags">Close</button>
       </div>
-      <div class="flex-between" style="margin-top:10px; gap:8px;">
-        <div class="flex-between" style="gap:6px; flex-wrap:wrap;">
-          <button class="btn ghost" id="tags-tab-tags">Organization tags</button>
-          <button class="btn ghost" id="tags-tab-priorities">Priority tags</button>
+        <div class="flex-between" style="margin-top:10px; gap:8px;">
+          <div class="flex-between" style="gap:6px; flex-wrap:wrap;">
+            <button class="btn ghost" id="tags-tab-tags">Organization tags</button>
+            <button class="btn ghost" id="tags-tab-priorities">Priority tags</button>
+            <button class="btn ghost" id="tags-tab-status">Status tags</button>
+          </div>
         </div>
-      </div>
-      <div id="tags-section" class="card" style="background:var(--panel-2); margin-top:10px;">
-        <div class="flex-between" style="align-items:flex-start;">
-          <div>
+        <div id="tags-section" class="card" style="background:var(--panel-2); margin-top:10px;">
+          <div class="flex-between" style="align-items:flex-start;">
+            <div>
             <div class="page-title" style="font-size:18px;">Organization tags</div>
             <div class="subtitle" style="margin-bottom:12px;">Manage tags used to categorize requests.</div>
           </div>
@@ -717,6 +724,25 @@
         </form>
         <div id="priorities-message" class="small" style="margin-top:6px;"></div>
         <div id="priorities-list" class="tag-manager-list" style="margin-top:10px;"></div>
+      </div>
+      <div id="statuses-section" class="card" style="background:var(--panel-2); margin-top:10px; display:none;">
+        <div class="flex-between" style="align-items:flex-start;">
+          <div>
+            <div class="page-title" style="font-size:18px;">Status tags</div>
+            <div class="subtitle" style="margin-bottom:12px;">Custom statuses for grouped orders.</div>
+          </div>
+          <div class="flex-between" style="gap:8px;">
+            <button class="btn ghost" id="refresh-statuses">Refresh</button>
+          </div>
+        </div>
+        <form id="create-status-form" class="admin-inline-form" style="margin-top:10px;">
+          <input id="status-color-input" class="inline-color" type="color" value="#5aa0ff" />
+          <input id="status-label-input" class="input" placeholder="Status name (e.g., PO Placed)" required style="flex:1; min-width:180px;" />
+          <input id="status-sort-input" class="input" type="number" placeholder="Sort" style="width:80px;" />
+          <button type="submit" class="btn primary">New status</button>
+        </form>
+        <div id="statuses-message" class="small" style="margin-top:6px;"></div>
+        <div id="statuses-list" class="tag-manager-list" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>

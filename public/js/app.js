@@ -86,6 +86,7 @@
     const redoStack = [];
     let tagList = [];
     let priorityList = [];
+    let statusTagList = [];
     let catalogCategories = [];
     let catalogTree = [];
     let catalogItems = [];
@@ -279,7 +280,9 @@
           title: step.payload.title,
               supplier: step.payload.supplier,
               requestedDisplayAt: step.payload.requestedDisplayAt,
-              orderIds: step.payload.orderIds
+              orderIds: step.payload.orderIds,
+              status: step.payload.status,
+              statusTag: step.payload.statusTag
             })
           });
           const data = await res.json();
@@ -290,11 +293,11 @@
               await assignGroup(oid, newGroupId);
             }
           }
-          if (step.payload.notes || (step.payload.tracking && step.payload.tracking.length)) {
+          if (step.payload.notes || (step.payload.tracking && step.payload.tracking.length) || step.payload.statusTag) {
             await fetch(`/api/order-groups/${newGroupId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ notes: step.payload.notes, tracking: step.payload.tracking })
+              body: JSON.stringify({ notes: step.payload.notes, tracking: step.payload.tracking, statusTag: step.payload.statusTag })
             });
           }
           if (counterpart && counterpart.type === 'deleteGroup') {
@@ -318,6 +321,7 @@
                     supplier: g.supplier,
                     requestedDisplayAt: g.requestedDisplayAt,
                     status: g.status || 'Ordered',
+                    statusTag: g.statusTag,
                     tracking: g.tracking || [],
                     notes: g.notes || ''
                   })
@@ -1138,10 +1142,12 @@ function fetchOrderDetails(configHint) {
       syncTagEditUI();
       loadTags();
       loadPriorityTags();
+      loadStatusTags();
       showTagsModalTab('tags');
     });
     tagsTabTags?.addEventListener('click', () => showTagsModalTab('tags'));
     tagsTabPriorities?.addEventListener('click', () => showTagsModalTab('priorities'));
+    tagsTabStatus?.addEventListener('click', () => showTagsModalTab('status'));
     closeTags?.addEventListener('click', () => { tagsModal.style.display = 'none'; });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; resetCatalogItemForm(); closeVendorModal(); });
     function updateCatalogEditVisibility() {
@@ -1177,6 +1183,8 @@ function fetchOrderDetails(configHint) {
       editingGroupId = data?.id || null;
       groupForm.elements.id.value = data?.id || '';
       groupForm.elements.title.value = data?.title || '';
+      renderStatusTagOptions(data?.statusTag || '');
+      if (groupForm.elements.statusTag) groupForm.elements.statusTag.value = data?.statusTag || '';
       const parts = orders.filter(o => o.groupId === data?.id || o.group?._id === data?.id).map(o => ({ id: o._id, label: o.partName || o.vendorPartNumber || o.productCode || o._id }));
       setTrackingRows(groupModalTrackingList, data?.tracking?.length ? data.tracking : (data?.trackingNumber ? [{ carrier: 'unknown', trackingNumber: data.trackingNumber }] : []), parts);
       groupForm.elements.notes.value = data?.notes || '';
@@ -1200,7 +1208,8 @@ function fetchOrderDetails(configHint) {
             title: payload.title || undefined,
             trackingNumber: tracking[0]?.trackingNumber || undefined,
             tracking: tracking.length ? tracking : [],
-            notes: payload.notes || undefined
+            notes: payload.notes || undefined,
+            statusTag: payload.statusTag || undefined
           })
         });
         groupMessage.textContent = 'Saved.';
@@ -1761,6 +1770,23 @@ function fetchOrderDetails(configHint) {
       renderCatalogSaveCategoryOptions();
   }
 
+    async function loadStatusTags() {
+      try {
+        const res = await fetch('/api/status-tags');
+        const data = await res.json();
+        statusTagList = data.statuses || [];
+        if (statusesMessage) { statusesMessage.textContent = ''; statusesMessage.className = 'small'; }
+        renderStatusTagOptions();
+        renderStatusManager();
+        renderBoard();
+      } catch (e) {
+        console.warn('Failed to load status tags', e);
+        statusTagList = [];
+        renderStatusTagOptions();
+        renderStatusManager();
+      }
+    }
+
     function renderTagOptions(selected = []) {
       if (!tagSelect) return;
       const selSet = new Set(selected.map(String));
@@ -1825,14 +1851,18 @@ function fetchOrderDetails(configHint) {
       const canManage = currentUser?.permissions?.canManageTags;
       if (createTagForm) createTagForm.style.display = canManage ? 'flex' : 'none';
       if (createPriorityForm) createPriorityForm.style.display = canManage ? 'flex' : 'none';
+      if (createStatusForm) createStatusForm.style.display = canManage ? 'flex' : 'none';
     }
 
     function showTagsModalTab(which) {
-      activeTagsTab = which === 'priorities' ? 'priorities' : 'tags';
+      const allowed = ['tags', 'priorities', 'status'];
+      activeTagsTab = allowed.includes(which) ? which : 'tags';
       if (tagsTabTags) tagsTabTags.classList.toggle('primary', activeTagsTab === 'tags');
       if (tagsTabPriorities) tagsTabPriorities.classList.toggle('primary', activeTagsTab === 'priorities');
+      if (tagsTabStatus) tagsTabStatus.classList.toggle('primary', activeTagsTab === 'status');
       if (tagsSection) tagsSection.style.display = activeTagsTab === 'tags' ? 'block' : 'none';
       if (prioritiesSection) prioritiesSection.style.display = activeTagsTab === 'priorities' ? 'block' : 'none';
+      if (statusesSection) statusesSection.style.display = activeTagsTab === 'status' ? 'block' : 'none';
     }
     function getCatalogRequestTagIds() {
       if (!catalogRequestTags) return [];
@@ -1983,6 +2013,19 @@ function fetchOrderDetails(configHint) {
       renderCatalogRequestPriorityOptions();
     }
 
+    function renderStatusTagOptions(current) {
+      if (!groupStatusTagSelect) return;
+      const list = statusTagList && statusTagList.length ? statusTagList : [];
+      const currentVal = current !== undefined ? current : groupStatusTagSelect.value;
+      const opts = ['<option value="">No status tag</option>'].concat(
+        list.map(s => `<option value="${escapeHtml(s.label || '')}">${escapeHtml(s.label || '')}</option>`)
+      );
+      groupStatusTagSelect.innerHTML = opts.join('');
+      if (currentVal) {
+        groupStatusTagSelect.value = currentVal;
+      }
+    }
+
     function renderCatalogRequestPriorityOptions() {
       if (!catalogRequestPriority) return;
       const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
@@ -2048,6 +2091,65 @@ function fetchOrderDetails(configHint) {
             openConfirm('Delete this priority?', async () => {
               await fetch(`/api/priority-tags/${id}`, { method: 'DELETE' });
               await loadPriorityTags();
+            });
+          });
+        });
+      }
+    }
+
+    function renderStatusManager() {
+      if (!statusesList) return;
+      syncTagEditUI();
+      if (!statusTagList.length) {
+        statusesList.innerHTML = '<div class="empty">No status tags yet.</div>';
+        return;
+      }
+      statusesList.innerHTML = statusTagList.map(s => {
+        const id = s._id || s.id || s.label;
+        const color = s.color || '#fdd023';
+        const sort = s.sortOrder ?? '';
+        return `<div class="tag-manager-item" data-id="${id}">
+          <div class="tag-manager-meta" style="gap:12px;">
+            <input type="color" class="status-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+            <div style="min-width:160px;">${escapeHtml(s.label || '')}</div>
+            <input type="number" class="status-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          </div>
+          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-status" style="color: var(--danger);">Delete</button>` : ''}
+        </div>`;
+      }).join('');
+      if (currentUser?.permissions?.canManageTags) {
+        statusesList.querySelectorAll('.status-color-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            await fetch(`/api/status-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ color: e.target.value })
+            });
+            await loadStatusTags();
+          });
+        });
+        statusesList.querySelectorAll('.status-sort-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            const sort = Number(e.target.value);
+            await fetch(`/api/status-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+            });
+            await loadStatusTags();
+          });
+        });
+        statusesList.querySelectorAll('button[data-action="delete-status"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.target.closest('.tag-manager-item')?.dataset.id;
+            if (!id) return;
+            openConfirm('Delete this status tag?', async () => {
+              await fetch(`/api/status-tags/${id}`, { method: 'DELETE' });
+              await loadStatusTags();
             });
           });
         });
@@ -2139,6 +2241,7 @@ function fetchOrderDetails(configHint) {
     }
 
     refreshPrioritiesBtn?.addEventListener('click', () => loadPriorityTags());
+    refreshStatusesBtn?.addEventListener('click', () => loadStatusTags());
     createPriorityForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!currentUser?.permissions?.canManageTags) return;
@@ -2164,6 +2267,33 @@ function fetchOrderDetails(configHint) {
       } catch (err) {
         prioritiesMessage.textContent = err.message || 'Failed to create priority';
         prioritiesMessage.className = 'error';
+      }
+    });
+    createStatusForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentUser?.permissions?.canManageTags) return;
+      const label = (statusLabelInput?.value || '').trim();
+      const color = statusColorInput?.value || '#fdd023';
+      const sortOrder = Number(statusSortInput?.value);
+      if (!label) return;
+      statusesMessage.textContent = 'Saving...';
+      statusesMessage.className = 'small';
+      try {
+        const res = await fetch('/api/status-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, color, sortOrder: Number.isFinite(sortOrder) ? sortOrder : undefined })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create status');
+        statusLabelInput.value = '';
+        statusSortInput.value = '';
+        statusesMessage.textContent = 'Status created';
+        statusesMessage.className = 'success';
+        await loadStatusTags();
+      } catch (err) {
+        statusesMessage.textContent = err.message || 'Failed to create status';
+        statusesMessage.className = 'error';
       }
     });
     confirmCatalogRequest?.addEventListener('click', submitCatalogRequest);
@@ -2860,6 +2990,7 @@ function fetchOrderDetails(configHint) {
         await syncTrackingAutoRefreshFromServer();
         await loadTags();
         await loadPriorityTags();
+        await loadStatusTags();
         fetchOrders();
         await loadStock();
         await loadSubteams();
@@ -2894,6 +3025,9 @@ function fetchOrderDetails(configHint) {
       orders = [];
       renderBoard();
       renderTable();
+      statusTagList = [];
+      renderStatusTagOptions();
+      renderStatusManager();
       stockItems = [];
       renderStockGrid();
       stockSubteams = [];
@@ -2931,6 +3065,7 @@ function fetchOrderDetails(configHint) {
       syncTrackingAutoRefreshFromServer();
       await loadTags();
       await loadPriorityTags();
+      await loadStatusTags();
       fetchOrders();
       await loadStock();
       await loadSubteams();

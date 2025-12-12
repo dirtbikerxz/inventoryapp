@@ -71,6 +71,7 @@ export default defineSchema({
     trackingNumber: v.optional(v.string()),
     tracking: v.optional(v.array(trackingEntry)),
     notes: v.optional(v.string()),
+    statusTag: v.optional(v.string()),
     expectedDate: v.optional(v.number()),
     requestedDisplayAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -114,6 +115,13 @@ export default defineSchema({
   }).index("by_label", ["label"]),
 
   priorityTags: defineTable({
+    label: v.string(),
+    color: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
+    createdAt: v.number()
+  }).index("by_label", ["label"]),
+
+  statusTags: defineTable({
     label: v.string(),
     color: v.optional(v.string()),
     sortOrder: v.optional(v.number()),

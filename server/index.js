@@ -1165,6 +1165,57 @@ app.delete('/api/priority-tags/:id', async (req, res) => {
   }
 });
 
+app.get('/api/status-tags', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const items = await client.query('statusTags:list', {});
+    res.json({ statuses: items });
+  } catch (error) {
+    logger.error(error, 'Failed to list status tags');
+    res.status(500).json({ error: 'Unable to load status tags' });
+  }
+});
+
+app.post('/api/status-tags', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  if (!label) return res.status(400).json({ error: 'label required' });
+  try {
+    const result = await client.mutation('statusTags:create', { label, color, sortOrder });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create status');
+    res.status(500).json({ error: 'Unable to create status' });
+  }
+});
+
+app.patch('/api/status-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  try {
+    await client.mutation('statusTags:update', { id: req.params.id, label, color, sortOrder });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update status');
+    res.status(500).json({ error: 'Unable to update status' });
+  }
+});
+
+app.delete('/api/status-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  try {
+    const result = await client.mutation('statusTags:remove', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete status');
+    res.status(500).json({ error: 'Unable to delete status' });
+  }
+});
+
 app.post('/api/vendors/configs', async (req, res) => {
   const user = await requireAuth(req, res, 'canManageVendors');
   if (!user) return;

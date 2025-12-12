@@ -50,6 +50,7 @@ export const create = mutation({
     title: v.optional(v.string()),
     supplier: v.optional(v.string()),
     status: v.optional(v.string()),
+    statusTag: v.optional(v.string()),
     trackingNumber: v.optional(v.string()),
     tracking: v.optional(v.array(trackingArg)),
     notes: v.optional(v.string()),
@@ -65,6 +66,7 @@ export const create = mutation({
       title: args.title,
       supplier: args.supplier,
       status: args.status || "Pending",
+      statusTag: args.statusTag,
       trackingNumber: tracking[0]?.trackingNumber || args.trackingNumber,
       tracking,
       notes: args.notes,
@@ -105,6 +107,7 @@ export const update = mutation({
     title: v.optional(v.string()),
     supplier: v.optional(v.string()),
     status: v.optional(v.string()),
+    statusTag: v.optional(v.string()),
     trackingNumber: v.optional(v.string()),
     tracking: v.optional(v.array(trackingArg)),
     notes: v.optional(v.string()),
@@ -120,7 +123,7 @@ export const update = mutation({
       updatedAt: Date.now()
     };
 
-    ["title", "supplier", "status", "trackingNumber", "notes", "expectedDate", "requestedDisplayAt"].forEach(key => {
+    ["title", "supplier", "status", "statusTag", "trackingNumber", "notes", "expectedDate", "requestedDisplayAt"].forEach(key => {
       const value = (args as any)[key];
       if (value !== undefined) updates[key] = value;
     });

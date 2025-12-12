@@ -57,6 +57,13 @@ function getPriorityColor(label) {
   );
   return p ? p.color || "#fdd023" : "#fdd023";
 }
+function getStatusTagColor(label) {
+  if (!label) return "#fdd023";
+  const match = (statusTagList || []).find(
+    (s) => (s.label || "").toLowerCase() === (label || "").toLowerCase(),
+  );
+  return match ? match.color || "#fdd023" : "#fdd023";
+}
 function renderTagChips(ids = []) {
   if (!ids || !ids.length) return "";
   return ids
@@ -796,6 +803,8 @@ function renderBoard() {
       ).toLowerCase();
       const vendor = first.supplier || first.vendor || "";
       const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
+      const statusTagLabel = first.group?.statusTag || "";
+      const statusTagColor = statusTagLabel ? getStatusTagColor(statusTagLabel) : null;
       const trackingList =
         first.group?.tracking && first.group.tracking.length
           ? first.group.tracking
@@ -826,7 +835,10 @@ function renderBoard() {
     </div>
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
       <div style="display:flex; flex-direction:column; gap:6px;">
-        <div>${vendor ? `<span class="tag supplier">${vendor}</span>` : ""}</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+          ${vendor ? `<span class="tag supplier">${vendor}</span>` : ""}
+          ${statusTagLabel ? `<span class="tag" style="background:${statusTagColor || "var(--panel)"}22; border-color:${statusTagColor || "var(--border)"}; color:${statusTagColor || "var(--text)"};">${escapeHtml(statusTagLabel)}</span>` : ""}
+        </div>
         ${renderTrackingBadges(trackingList)}
       </div>
       <div class="muted" style="min-width:80px; text-align:right; align-self:flex-end;">${total ? "$" + total.toFixed(2) : ""}</div>
@@ -856,6 +868,8 @@ function renderBoard() {
             title: groupTitle,
             vendor,
             status,
+            statusTag: statusTagLabel,
+            statusTagColor,
             tracking: trackingList,
             notes: first.group?.notes || "",
             total,
@@ -882,6 +896,7 @@ function renderBoard() {
               title: first.group?.title || groupTitle,
               tracking: trackingList,
               notes: first.group?.notes || "",
+              statusTag: statusTagLabel || "",
             });
           });
         });
@@ -905,19 +920,20 @@ function renderBoard() {
                   const snapshots = orderIds
                     .map((id) => snapshotOrder(id))
                     .filter(Boolean);
-                  const groupSnapshot = {
-                    title: groupTitle,
-                    supplier: vendor || undefined,
-                    requestedDisplayAt:
-                      first.group?.requestedDisplayAt || first.group?.createdAt,
-                    status: originalStatus,
-                    tracking: originalTracking,
-                    notes: originalNotes,
-                  };
-                  await Promise.all(
-                    orderIds.map((oid) =>
-                      fetch(`/api/orders/${oid}`, { method: "DELETE" }),
-                    ),
+                const groupSnapshot = {
+                  title: groupTitle,
+                  supplier: vendor || undefined,
+                  requestedDisplayAt:
+                    first.group?.requestedDisplayAt || first.group?.createdAt,
+                  status: originalStatus,
+                  tracking: originalTracking,
+                  notes: originalNotes,
+                  statusTag: statusTagLabel || "",
+                };
+                await Promise.all(
+                  orderIds.map((oid) =>
+                    fetch(`/api/orders/${oid}`, { method: "DELETE" }),
+                  ),
                   );
                   await fetch(`/api/order-groups/${gid}`, { method: "DELETE" });
                   recordAction({
@@ -941,18 +957,19 @@ function renderBoard() {
                 recordAction({
                   undo: {
                     type: "createGroup",
-                    payload: {
-                      title: groupTitle,
-                      supplier: vendor || undefined,
-                      requestedDisplayAt:
-                        first.group?.requestedDisplayAt ||
-                        first.group?.createdAt,
-                      orderIds,
-                      status: originalStatus,
-                      tracking: originalTracking,
-                      notes: originalNotes,
-                    },
+                  payload: {
+                    title: groupTitle,
+                    supplier: vendor || undefined,
+                    requestedDisplayAt:
+                      first.group?.requestedDisplayAt ||
+                      first.group?.createdAt,
+                    orderIds,
+                    status: originalStatus,
+                    tracking: originalTracking,
+                    notes: originalNotes,
+                    statusTag: statusTagLabel || "",
                   },
+                },
                   redo: {
                     type: "deleteGroup",
                     payload: { groupId: gid, orderIds, status: originalStatus },
@@ -2175,9 +2192,12 @@ function openGroupDetailModal(groupInfo, items) {
   if (!groupDetailModal) return;
   const gid = groupInfo?.id;
   if (groupDetailTitle) groupDetailTitle.textContent = groupInfo?.title || "Grouped order";
+  const statusTagLabel = groupInfo?.statusTag || "";
+  const statusTagColor = statusTagLabel ? getStatusTagColor(statusTagLabel) : null;
   if (groupDetailMeta) {
     const chips = [];
     if (groupInfo?.vendor) chips.push(`<span class="group-detail-chip">${escapeHtml(groupInfo.vendor)}</span>`);
+    if (statusTagLabel) chips.push(`<span class="group-detail-chip" style="border-color:${statusTagColor || "var(--border)"}; color:${statusTagColor || "var(--text)"}; background:${statusTagColor ? `${statusTagColor}22` : "var(--panel-2)"};">${escapeHtml(statusTagLabel)}</span>`);
     chips.push(`<span class="group-detail-chip">${items.length} part${items.length === 1 ? "" : "s"}</span>`);
     if (groupInfo?.total) chips.push(`<span class="group-detail-chip">$${groupInfo.total.toFixed(2)}</span>`);
     groupDetailMeta.innerHTML = chips.join("");

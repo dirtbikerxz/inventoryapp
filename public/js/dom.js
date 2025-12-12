@@ -90,6 +90,15 @@ const tagsMessage = document.getElementById("tags-message");
 const tagLabelInput = document.getElementById("tag-label-input");
 const tagColorInput = document.getElementById("tag-color-input");
 const createTagForm = document.getElementById("create-tag-form");
+const tagsTabStatus = document.getElementById("tags-tab-status");
+const statusesSection = document.getElementById("statuses-section");
+const refreshStatusesBtn = document.getElementById("refresh-statuses");
+const statusesList = document.getElementById("statuses-list");
+const statusesMessage = document.getElementById("statuses-message");
+const statusLabelInput = document.getElementById("status-label-input");
+const statusColorInput = document.getElementById("status-color-input");
+const statusSortInput = document.getElementById("status-sort-input");
+const createStatusForm = document.getElementById("create-status-form");
 const adminBtn = document.getElementById("admin-btn");
 const adminModal = document.getElementById("admin-modal");
 const closeAdmin = document.getElementById("close-admin");
@@ -105,6 +114,7 @@ const groupModalTrackingList = document.getElementById(
 const addGroupModalTracking = document.getElementById(
   "add-group-modal-tracking",
 );
+const groupStatusTagSelect = document.getElementById("group-status-tag");
 const groupMessage = document.getElementById("group-message");
 const vendorForm = document.getElementById("vendor-form");
 const vendorMessage = document.getElementById("vendor-message");
