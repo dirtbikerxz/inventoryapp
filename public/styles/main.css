@@ -478,3 +478,7 @@
     .login-button:hover { transform: translateY(-1px); }
     .login-error { color: var(--danger); margin: 0; font-weight: 600; text-align: center; }
     .login-status { color: var(--muted); }
+    .group-detail-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .group-detail-header { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+    .group-detail-parts { margin-top:12px; border-top:1px solid var(--border); padding-top:10px; max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+    .group-detail-chip { background: #1b2440; color: var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:10px; font-size:12px; font-weight:700; display:inline-flex; gap:6px; align-items:center; }

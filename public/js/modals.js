@@ -198,6 +198,12 @@ attachBackdropClose(modal, () => {
   modal.style.display = "none";
 });
 attachBackdropClose(groupModal, resetGroupModal);
+attachBackdropClose(groupDetailModal, () => {
+  if (groupDetailModal) groupDetailModal.style.display = "none";
+});
+closeGroupDetail?.addEventListener("click", () => {
+  if (groupDetailModal) groupDetailModal.style.display = "none";
+});
 attachBackdropClose(accountModal, () => {
   accountModal.style.display = "none";
 });

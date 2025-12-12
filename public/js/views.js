@@ -831,28 +831,6 @@ function renderBoard() {
       </div>
       <div class="muted" style="min-width:80px; text-align:right; align-self:flex-end;">${total ? "$" + total.toFixed(2) : ""}</div>
     </div>
-    <div class="group-items-container" style="margin-top:6px; display:${expandedGroups.has(gid) ? "block" : "none"};">
-      ${items
-        .map(
-          (o) => `
-        <div class="small group-item" data-id="${o._id}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; margin-top:4px; flex-wrap:wrap;">
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
-            <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ""}</span>
-            <span style="font-weight:700;">${o.partName || ""}</span>
-            ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
-            ${renderTagChips(o.tags || [])}
-          </div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
-            ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
-            ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ""}
-            ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ""}
-            ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ""}
-          </div>
-        </div>
-      `,
-        )
-        .join("")}
-    </div>
   `;
       applyAddTargetStyles(card, vendor.toLowerCase(), false, true);
 
@@ -872,11 +850,18 @@ function renderBoard() {
           );
           return;
         }
-        if (expandedGroups.has(gid)) expandedGroups.delete(gid);
-        else expandedGroups.add(gid);
-        const container = card.querySelector(".group-items-container");
-        if (container)
-          container.style.display = expandedGroups.has(gid) ? "block" : "none";
+        openGroupDetailModal(
+          {
+            id: gid,
+            title: groupTitle,
+            vendor,
+            status,
+            tracking: trackingList,
+            notes: first.group?.notes || "",
+            total,
+          },
+          items,
+        );
       });
       card
         .querySelectorAll('button[data-action="export-group"]')
@@ -2182,6 +2167,192 @@ async function removePartFromGroup(orderId, fromGroupId, fromStatus) {
   await fetchOrders();
 }
 
+function hideGroupDetailModal() {
+  if (groupDetailModal) groupDetailModal.style.display = "none";
+}
+
+function openGroupDetailModal(groupInfo, items) {
+  if (!groupDetailModal) return;
+  const gid = groupInfo?.id;
+  if (groupDetailTitle) groupDetailTitle.textContent = groupInfo?.title || "Grouped order";
+  if (groupDetailMeta) {
+    const chips = [];
+    if (groupInfo?.vendor) chips.push(`<span class="group-detail-chip">${escapeHtml(groupInfo.vendor)}</span>`);
+    chips.push(`<span class="group-detail-chip">${items.length} part${items.length === 1 ? "" : "s"}</span>`);
+    if (groupInfo?.total) chips.push(`<span class="group-detail-chip">$${groupInfo.total.toFixed(2)}</span>`);
+    groupDetailMeta.innerHTML = chips.join("");
+  }
+  if (groupDetailActions) {
+    groupDetailActions.innerHTML = `
+      ${supportsVendorExportByName(groupInfo?.vendor || "") ? `<button class="btn ghost" data-action="export-group" style="padding:6px 10px;">Export</button>` : ""}
+      ${currentUser?.permissions?.canManageOrders && groupInfo?.status === "Ordered" ? `<button class="btn ghost" data-action="advance-group" style="padding:6px 10px;">Advance</button>` : ""}
+      ${currentUser?.permissions?.canManageOrders && groupInfo?.status === "Received" ? `<button class="btn ghost" data-action="revert-group" style="padding:6px 10px;">Revert</button>` : ""}
+      ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:6px 10px;">Edit</button>` : ""}
+      ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-group" style="padding:6px 10px; color:var(--danger);">Delete</button>` : ""}
+    `;
+  }
+  if (groupDetailTracking) {
+    groupDetailTracking.innerHTML = renderTrackingBadges(groupInfo?.tracking || []);
+  }
+  if (groupDetailParts) {
+    groupDetailParts.innerHTML = items
+      .map(
+        (o) => `
+      <div class="small group-item" data-id="${o._id}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
+          <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ""}</span>
+          <span style="font-weight:700;">${o.partName || ""}</span>
+          ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
+          ${renderTagChips(o.tags || [])}
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
+          ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
+          ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ""}
+          ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ""}
+          ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ""}
+        </div>
+      </div>
+    `,
+      )
+      .join("");
+  }
+  if (groupDetailModal) groupDetailModal.style.display = "flex";
+
+  groupDetailActions
+    ?.querySelectorAll("button[data-action]")
+    .forEach((btn) => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === "export-group") {
+          exportOrdersForVendor(items, groupInfo.vendor);
+        } else if (action === "advance-group") {
+          await updateGroupStatus(gid, "Received");
+        } else if (action === "revert-group") {
+          await updateGroupStatus(gid, "Ordered");
+        } else if (action === "edit-group") {
+          hideGroupDetailModal();
+          openGroupModal({
+            id: gid,
+            title: groupInfo.title,
+            tracking: groupInfo.tracking || [],
+            notes: groupInfo.notes || "",
+          });
+        } else if (action === "delete-group") {
+          if (actionBusy) return;
+          const orderIds = items.map((o) => o._id);
+          openConfirm(
+            "Delete this group?",
+            async (extra) => {
+              setActionBusy(true, "Deleting order…");
+              const deleteParts = extra?.deleteParts;
+              const originalStatus = groupInfo.status || "Ordered";
+              const originalTracking = groupInfo.tracking || [];
+              const originalNotes = groupInfo.notes || "";
+              if (deleteParts) {
+                const snapshots = orderIds
+                  .map((id) => snapshotOrder(id))
+                  .filter(Boolean);
+                const groupSnapshot = {
+                  title: groupInfo.title,
+                  supplier: groupInfo.vendor || undefined,
+                  requestedDisplayAt: items[0]?.group?.requestedDisplayAt || items[0]?.group?.createdAt,
+                  status: originalStatus,
+                  tracking: originalTracking,
+                  notes: originalNotes,
+                };
+                await Promise.all(
+                  orderIds.map((oid) =>
+                    fetch(`/api/orders/${oid}`, { method: "DELETE" }),
+                  ),
+                );
+                await fetch(`/api/order-groups/${gid}`, { method: "DELETE" });
+                recordAction({
+                  undo: {
+                    type: "restoreOrders",
+                    payload: { orders: snapshots, group: groupSnapshot },
+                  },
+                  redo: { type: "deleteOrders", payload: { orderIds } },
+                });
+                fetchOrders();
+                setActionBusy(false);
+                if (groupDetailModal) groupDetailModal.style.display = "none";
+                return;
+              }
+              await Promise.all(
+                orderIds.map(async (oid) => {
+                  await assignGroup(oid, undefined);
+                  await patchStatusOnly(oid, "Requested");
+                }),
+              );
+              await fetch(`/api/order-groups/${gid}`, { method: "DELETE" });
+              recordAction({
+                undo: {
+                  type: "createGroup",
+                  payload: {
+                    title: groupInfo.title,
+                    supplier: groupInfo.vendor || undefined,
+                    requestedDisplayAt:
+                      items[0]?.group?.requestedDisplayAt ||
+                      items[0]?.group?.createdAt,
+                    orderIds,
+                    status: originalStatus,
+                    tracking: originalTracking,
+                    notes: originalNotes,
+                  },
+                },
+                redo: {
+                  type: "deleteGroup",
+                  payload: { groupId: gid, orderIds, status: originalStatus },
+                },
+              });
+              fetchOrders();
+              setActionBusy(false);
+              if (groupDetailModal) groupDetailModal.style.display = "none";
+            },
+            () => {
+              const checkboxId = `confirm-delete-orders-${gid}`;
+              return {
+                content: `<label class="small" style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="${checkboxId}"> Delete part requests instead of ungrouping</label>`,
+                getValue: () => ({
+                  deleteParts: document.getElementById(checkboxId)?.checked,
+                }),
+              };
+            },
+          );
+        }
+      };
+    });
+
+  groupDetailParts
+    ?.querySelectorAll("button[data-action],a[data-action]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const row = btn.closest(".group-item");
+        const oid = row?.dataset?.id;
+        const action = btn.dataset.action;
+        if (!oid || !action) return;
+        if (action === "edit-part") {
+          const order = orders.find((o) => o._id === oid);
+          if (order) {
+            openEdit(order);
+          }
+        } else if (action === "remove-part") {
+          openConfirm("Remove this part from the order?", async () => {
+            await removePartFromGroup(oid, gid, groupInfo.status);
+            hideGroupDetailModal();
+          });
+        } else if (action === "delete-part") {
+          openConfirm("Delete this order?", async () => {
+            await fetch(`/api/orders/${oid}`, { method: "DELETE" });
+            fetchOrders();
+            hideGroupDetailModal();
+          });
+        }
+      });
+    });
+}
 function selectSameVendorRequested() {
   const current = orders.find((o) => selected.has(o._id));
   if (!current) return;
