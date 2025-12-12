@@ -68,25 +68,37 @@ function resetManualVendorOverride() {
 }
 
 function renderManualVendorOptions() {
-  if (!manualVendorSelect) return;
-  const previous = manualVendorSelect.value;
   const options = vendorConfigs
     .slice()
     .sort((a, b) => (a.vendor || "").localeCompare(b.vendor || ""));
-  manualVendorSelect.innerHTML = [
-    '<option value="">Other / manual entry</option>',
-  ]
+  const optionHtml = ['<option value="">Other / manual entry</option>']
     .concat(
       options.map(
         (v) =>
-          `<option value="${vendorOptionValue(v)}">${escapeHtml(v.vendor || v.slug || v.key || "Vendor")}</option>`,
+          `<option value="${vendorOptionValue(v)}">${escapeHtml(
+            v.vendor || v.slug || v.key || "Vendor",
+          )}</option>`,
       ),
     )
     .join("");
-  const match = vendorConfigs.find((v) => vendorOptionValue(v) === previous);
-  manualVendorSelect.value = match ? previous : "";
-  manualVendorOverride = match || null;
-  updateManualVendorHint();
+  if (manualVendorSelect) {
+    const previous = manualVendorSelect.value;
+    manualVendorSelect.innerHTML = optionHtml;
+    const match = vendorConfigs.find(
+      (v) => vendorOptionValue(v) === previous,
+    );
+    manualVendorSelect.value = match ? previous : "";
+    manualVendorOverride = match || null;
+    updateManualVendorHint();
+  }
+  if (catalogVendorSelect) {
+    const previous = catalogVendorSelect.value;
+    catalogVendorSelect.innerHTML = optionHtml;
+    const match = vendorConfigs.find(
+      (v) => vendorOptionValue(v) === previous,
+    );
+    catalogVendorSelect.value = match ? previous : "";
+  }
 }
 
 function renderVendorImportOptions() {
@@ -1243,38 +1255,16 @@ function csvQuote(value) {
 }
 
 function buildDigikeyCartCsv(orders) {
-  const header = [
-    "Index",
-    "Quantity",
-    "Part Number",
-    "Manufacturer Part Number",
-    "Description",
-    "Customer Reference",
-    "Available",
-    "Backorder",
-    "Unit Price",
-    "Extended Price USD",
-  ];
+  const header = ["Quantity", "Part Number", "Manufacturer Part Number"];
   const lines = [header].concat(
-    orders.map((order, idx) => {
+    orders.map((order) => {
       const quantity = Number(order.quantityRequested) || 1;
-      const unitPrice = Number(order.unitCost ?? order.fetchedPrice);
-      const extended = Number.isFinite(unitPrice)
-        ? unitPrice * quantity
-        : undefined;
       const digiKeyNumber = order.productCode || order.digiKeyPartNumber || "";
       const manufacturerPart = order.vendorPartNumber || "";
       return [
-        idx + 1,
         quantity,
         digiKeyNumber || manufacturerPart,
         manufacturerPart || digiKeyNumber,
-        order.partName || "",
-        "",
-        "",
-        "",
-        Number.isFinite(unitPrice) ? unitPrice.toFixed(5) : "",
-        Number.isFinite(extended) ? extended.toFixed(2) : "",
       ];
     }),
   );

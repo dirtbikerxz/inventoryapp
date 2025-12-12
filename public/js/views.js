@@ -506,7 +506,6 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
   <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
     ${currentUser?.permissions?.canManagePartRequests ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === "approved" ? "Unapprove" : "Approve"}</button>` : ""}
     ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
-    ${supportsVendorExport(order) ? `<button class="btn ghost" data-action="export-order" style="padding:4px 8px;">Export</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ""}
   </div>
@@ -540,13 +539,6 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
       fetchOrders();
     });
   });
-  card.querySelectorAll('button[data-action="export-order"]').forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      exportOrdersForVendor([order]);
-    });
-  });
-
   card.querySelectorAll('button[data-action="delete"]').forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();

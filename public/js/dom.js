@@ -31,7 +31,7 @@ selectAllBtn.textContent = "Select all";
 const selectSameVendorBtn = document.createElement("button");
 selectSameVendorBtn.id = "select-same-vendor-btn";
 selectSameVendorBtn.className = "btn ghost";
-selectSameVendorBtn.textContent = "Select same vendor";
+selectSameVendorBtn.textContent = "Select Vendor";
 const unselectAllBtn = document.createElement("button");
 unselectAllBtn.id = "unselect-all-btn";
 unselectAllBtn.className = "btn ghost";
@@ -290,6 +290,8 @@ const catalogRequestMessage = document.getElementById(
 const catalogRequestSubtitle = document.getElementById(
   "catalog-request-subtitle",
 );
+const catalogVendorSelect = document.getElementById("catalog-vendor-select");
+const catalogVendorHint = document.getElementById("catalog-vendor-hint");
 const stockModal = document.getElementById("stock-modal");
 const stockForm = document.getElementById("stock-form");
 const stockCatalogSearch = document.getElementById("stock-catalog-search");

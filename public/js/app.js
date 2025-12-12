@@ -809,6 +809,10 @@ function fetchOrderDetails(configHint) {
       syncCatalogSaveUI();
       scheduleCatalogPresenceCheck();
       renderCatalogRequestTagOptions(getCatalogRequestTagIds());
+      const configMatch = match.vendor ? findVendorConfig(match.vendor) : null;
+      if (catalogVendorSelect) {
+        catalogVendorSelect.value = configMatch ? vendorOptionValue(configMatch) : '';
+      }
     }
 
     function resetCatalogLookup() {
@@ -822,6 +826,7 @@ function fetchOrderDetails(configHint) {
       }
       if (catalogLookupSelected) catalogLookupSelected.textContent = '';
       if (catalogLookupInput) catalogLookupInput.value = '';
+      if (catalogVendorSelect) catalogVendorSelect.value = '';
       syncCatalogSaveUI();
     }
 
@@ -2296,6 +2301,15 @@ function fetchOrderDetails(configHint) {
         orderForm.elements.vendor.value = manualVendorOverride.vendor || manualVendorOverride.slug || manualVendorOverride.key || '';
       }
       updateManualVendorHint();
+    });
+    catalogVendorSelect?.addEventListener('change', () => {
+      const value = (catalogVendorSelect.value || '').toLowerCase();
+      const selectedConfig = value ? vendorConfigs.find(v => vendorOptionValue(v) === value) : null;
+      if (catalogItemForm?.elements?.vendor) {
+        catalogItemForm.elements.vendor.value = selectedConfig
+          ? selectedConfig.vendor || selectedConfig.slug || selectedConfig.key || ''
+          : '';
+      }
     });
 
     userForm.addEventListener('submit', async (e) => {

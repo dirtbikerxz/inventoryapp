@@ -76,7 +76,7 @@
       </div>
       <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-left:auto;">
         <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
-        <button class="btn primary" id="new-order-btn">New Order</button>
+        <button class="btn primary" id="new-order-btn">Request Part</button>
       </div>
     </div>
 
@@ -120,7 +120,7 @@
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto;">
       <div class="flex-between" style="align-items:flex-start;">
         <div>
-          <div class="page-title" style="font-size:22px;">New Order</div>
+          <div class="page-title" style="font-size:22px;">Request Part</div>
           <div class="subtitle" style="margin-bottom:12px;">Provide a link or PN to fetch details from supported vendors; otherwise enter manually.</div>
         </div>
       </div>
@@ -354,6 +354,13 @@
       </div>
       <form id="catalog-item-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:4px;">
         <input type="hidden" name="id" />
+        <div>
+          <label class="small">Vendor source</label>
+          <select id="catalog-vendor-select" class="input">
+            <option value="">Other / manual entry</option>
+          </select>
+          <div class="small" id="catalog-vendor-hint">Select a configured vendor for API autofill, or leave as Other.</div>
+        </div>
         <div>
           <label class="small">Product Number</label>
           <input name="vendorPartNumber" class="input" placeholder="SKU" />
