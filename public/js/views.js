@@ -2120,14 +2120,19 @@ async function addSelectedToGroup(groupId, targetStatus) {
   }
   if (!selected.size) return;
   const ids = Array.from(selected);
-  for (const id of ids) {
-    await assignGroup(id, groupId);
-    if (targetStatus) await patchStatusOnly(id, targetStatus);
+  setActionBusy(true, "Adding to order…");
+  try {
+    for (const id of ids) {
+      await assignGroup(id, groupId);
+      if (targetStatus) await patchStatusOnly(id, targetStatus);
+    }
+    selected.clear();
+    updateSelectionBar();
+    resetAddToOrderMode();
+    await fetchOrders();
+  } finally {
+    setActionBusy(false);
   }
-  selected.clear();
-  updateSelectionBar();
-  resetAddToOrderMode();
-  await fetchOrders();
 }
 
 async function addSelectedToOrder(order) {
@@ -2148,26 +2153,36 @@ async function addSelectedToOrder(order) {
     const title = `${order.supplier || order.vendor || "Order"} - ${formatShortDate(now)} ${formatTimeShort(now)}`;
     const payloadIds = [order._id, ...Array.from(selected)];
     const defaultStatusTag = defaultStatusTagLabel();
-    const res = await fetch("/api/order-groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        supplier: order.supplier || order.vendor || undefined,
-        requestedDisplayAt: now.getTime(),
-        orderIds: payloadIds,
-        statusTag: defaultStatusTag || undefined,
-      }),
-    });
-    const data = await res.json();
-    groupId = data.groupId || data._id;
-    for (const id of Array.from(selected)) {
-      if (targetStatus) await patchStatusOnly(id, targetStatus);
+    setActionBusy(true, "Adding to order…");
+    try {
+      const res = await fetch("/api/order-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          supplier: order.supplier || order.vendor || undefined,
+          requestedDisplayAt: now.getTime(),
+          orderIds: payloadIds,
+          statusTag: defaultStatusTag || undefined,
+        }),
+      });
+      const data = await res.json();
+      groupId = data.groupId || data._id;
+      for (const id of Array.from(selected)) {
+        if (targetStatus) await patchStatusOnly(id, targetStatus);
+      }
+    } finally {
+      setActionBusy(false);
     }
   } else {
-    for (const id of Array.from(selected)) {
-      await assignGroup(id, groupId);
-      if (targetStatus) await patchStatusOnly(id, targetStatus);
+    setActionBusy(true, "Adding to order…");
+    try {
+      for (const id of Array.from(selected)) {
+        await assignGroup(id, groupId);
+        if (targetStatus) await patchStatusOnly(id, targetStatus);
+      }
+    } finally {
+      setActionBusy(false);
     }
   }
   selected.clear();

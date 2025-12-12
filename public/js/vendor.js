@@ -1135,6 +1135,7 @@ async function handleVendorImportParse() {
     }
     return;
   }
+  setActionBusy(true, "Parsing import…");
   try {
     let parsed = [];
     if (file) {
@@ -1171,6 +1172,7 @@ async function handleVendorImportParse() {
       vendorImportMessage.className = "small error";
     }
   }
+  setActionBusy(false);
   renderVendorImportPreview();
 }
 
@@ -1197,6 +1199,7 @@ async function submitVendorImportEntries() {
     }
     return;
   }
+  setActionBusy(true, "Adding imported parts…");
   if (vendorImportMessage) {
     vendorImportMessage.textContent = "Adding items...";
     vendorImportMessage.className = "small";
@@ -1226,6 +1229,7 @@ async function submitVendorImportEntries() {
     }
     renderVendorImportPreview();
     fetchOrders();
+    setActionBusy(false);
     return;
   }
   vendorImportEntries = [];
@@ -1250,6 +1254,7 @@ async function submitVendorImportEntries() {
     "success",
     2500,
   );
+  setActionBusy(false);
 }
 
 function csvQuote(value) {

@@ -530,18 +530,23 @@ deleteSelectedBtn?.addEventListener('click', async () => {
   }
   if (!selected.size) return;
   openConfirm(`Delete ${selected.size} selected item(s)?`, async () => {
-    for (const id of Array.from(selected)) {
-      const snapshot = snapshotOrder(id);
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      if (snapshot) {
-        recordAction({
-          undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
-          redo: { type: 'deleteOrder', payload: { orderId: id } }
-        });
+    setActionBusy(true, 'Deleting selected part requests…');
+    try {
+      for (const id of Array.from(selected)) {
+        const snapshot = snapshotOrder(id);
+        await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (snapshot) {
+          recordAction({
+            undo: { type: 'restoreOrder', payload: { order: snapshot, groupId: snapshot.groupId || snapshot.group?._id } },
+            redo: { type: 'deleteOrder', payload: { orderId: id } }
+          });
+        }
       }
+      selected.clear();
+      await fetchOrders();
+    } finally {
+      setActionBusy(false);
     }
-    selected.clear();
-    await fetchOrders();
   });
 });
 document.getElementById('new-order-btn').addEventListener('click', () => {
