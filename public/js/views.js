@@ -2244,11 +2244,6 @@ function openGroupDetailModal(groupInfo, items) {
             ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
             ${o.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(o.priority)}; color:${getPriorityColor(o.priority)};">${o.priority}</span>` : ""}
             ${renderTagChips(o.tags || [])}
-            ${
-              o.approvalStatus === "approved"
-                ? `<span class="tag" style="background:rgba(74,210,143,0.16); color:var(--success);">Approved${o.approvedBy ? " · " + o.approvedBy : ""}</span>`
-                : `<span class="tag" style="background:rgba(253,208,35,0.16); color:var(--gold);">Pending approval</span>`
-            }
           </div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
