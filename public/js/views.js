@@ -64,6 +64,16 @@ function getStatusTagColor(label) {
   );
   return match ? match.color || "#fdd023" : "#fdd023";
 }
+function defaultStatusTagLabel() {
+  if (!statusTagList || !statusTagList.length) return "";
+  const sorted = [...statusTagList].sort((a, b) => {
+    const sa = a.sortOrder ?? 0;
+    const sb = b.sortOrder ?? 0;
+    if (sa !== sb) return sa - sb;
+    return (a.label || "").localeCompare(b.label || "");
+  });
+  return sorted[0]?.label || "";
+}
 function renderTagChips(ids = []) {
   if (!ids || !ids.length) return "";
   return ids
@@ -2029,6 +2039,7 @@ async function createGroup() {
   const fallbackTitle = baseVendor
     ? `${baseVendor} - ${formatShortDate(now)} ${formatTimeShort(now)}`
     : `Group - ${formatShortDate(now)} ${formatTimeShort(now)}`;
+  const defaultStatusTag = defaultStatusTagLabel();
   setActionBusy(true, "Creating order…");
   try {
     const res = await fetch("/api/order-groups", {
@@ -2038,6 +2049,7 @@ async function createGroup() {
         title: fallbackTitle,
         supplier: baseVendor || undefined,
         requestedDisplayAt: now.getTime(),
+        statusTag: defaultStatusTag || undefined,
         orderIds: Array.from(selected),
       }),
     });
@@ -2055,6 +2067,7 @@ async function createGroup() {
           supplier: baseVendor || undefined,
           requestedDisplayAt: now.getTime(),
           orderIds: Array.from(selected),
+          statusTag: defaultStatusTag || undefined,
         },
       },
     });
@@ -2134,6 +2147,7 @@ async function addSelectedToOrder(order) {
     const now = new Date();
     const title = `${order.supplier || order.vendor || "Order"} - ${formatShortDate(now)} ${formatTimeShort(now)}`;
     const payloadIds = [order._id, ...Array.from(selected)];
+    const defaultStatusTag = defaultStatusTagLabel();
     const res = await fetch("/api/order-groups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2142,6 +2156,7 @@ async function addSelectedToOrder(order) {
         supplier: order.supplier || order.vendor || undefined,
         requestedDisplayAt: now.getTime(),
         orderIds: payloadIds,
+        statusTag: defaultStatusTag || undefined,
       }),
     });
     const data = await res.json();
@@ -2219,11 +2234,22 @@ function openGroupDetailModal(groupInfo, items) {
       .map(
         (o) => `
       <div class="small group-item" data-id="${o._id}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; flex-wrap:wrap;">
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1;">
-          <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ""}</span>
-          <span style="font-weight:700;">${o.partName || ""}</span>
-          ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
-          ${renderTagChips(o.tags || [])}
+        <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:260px;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ""}</span>
+            <span style="font-weight:700;">${o.partName || ""}</span>
+            ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ""}
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
+            ${o.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(o.priority)}; color:${getPriorityColor(o.priority)};">${o.priority}</span>` : ""}
+            ${renderTagChips(o.tags || [])}
+            ${
+              o.approvalStatus === "approved"
+                ? `<span class="tag" style="background:rgba(74,210,143,0.16); color:var(--success);">Approved${o.approvedBy ? " · " + o.approvedBy : ""}</span>`
+                : `<span class="tag" style="background:rgba(253,208,35,0.16); color:var(--gold);">Pending approval</span>`
+            }
+          </div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
           ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}

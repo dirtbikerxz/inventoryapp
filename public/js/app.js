@@ -35,9 +35,9 @@
     let xlsxLoaderPromise = null;
     renderVendorImportPreview();
     const statuses = [
-      { label: 'To order', status: 'Requested', hint: 'Parts requests - awaiting purchase' },
-      { label: 'Ordered', status: 'Ordered', hint: 'Placed orders - awaiting arrival' },
-      { label: 'Arrived', status: 'Received', hint: 'Items received' }
+      { label: 'Part Requests', status: 'Requested', hint: 'Parts awaiting purchase or grouping' },
+      { label: 'Pending Orders', status: 'Ordered', hint: 'Grouped/placed orders before delivery' },
+      { label: 'Arrived', status: 'Received', hint: 'Orders delivered' }
     ];
     const getOrderTimestamp = (order) => {
       if (!order) return 0;
