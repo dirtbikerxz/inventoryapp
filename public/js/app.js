@@ -409,22 +409,42 @@
     
 
 const switchToBoard = () => {
-  if (activePrimaryView !== 'orders') showOrdersView();
+  activePrimaryView = 'orders';
+  reimbursementsViewBtn?.classList.remove('active');
   boardBtn.classList.add('active'); tableBtn.classList.remove('active');
   boardSection.style.display = 'flex'; tableSection.style.display = 'none';
+  if (reimbursementsSection) reimbursementsSection.style.display = 'none';
+  if (selectionBar) selectionBar.style.display = '';
   refreshBoardSelectionUI();
   resizeColumns();
   setTimeout(resizeColumns, 30);
 };
 const switchToTable = () => {
-  if (activePrimaryView !== 'orders') showOrdersView();
+  activePrimaryView = 'orders';
+  reimbursementsViewBtn?.classList.remove('active');
   tableBtn.classList.add('active'); boardBtn.classList.remove('active');
   boardSection.style.display = 'none'; tableSection.style.display = 'flex';
+  if (reimbursementsSection) reimbursementsSection.style.display = 'none';
+  if (selectionBar) selectionBar.style.display = '';
+  resizeColumns();
+  setTimeout(resizeColumns, 30);
+};
+const switchToReimbursements = () => {
+  resetAddToOrderMode();
+  activePrimaryView = 'reimbursements';
+  reimbursementsViewBtn?.classList.add('active');
+  boardBtn.classList.remove('active'); tableBtn.classList.remove('active');
+  boardSection.style.display = 'none'; tableSection.style.display = 'none';
+  if (reimbursementsSection) reimbursementsSection.style.display = 'flex';
+  if (selectionBar) selectionBar.style.display = 'none';
+  updateSearchPlaceholder();
+  renderReimbursementsTable();
+  loadReimbursements();
   resizeColumns();
   setTimeout(resizeColumns, 30);
 };
 ordersViewBtn?.addEventListener('click', showOrdersView);
-reimbursementsViewBtn?.addEventListener('click', showReimbursementsView);
+reimbursementsViewBtn?.addEventListener('click', switchToReimbursements);
 stockViewBtn?.addEventListener('click', showStockView);
 boardBtn.addEventListener('click', switchToBoard);
 tableBtn.addEventListener('click', switchToTable);

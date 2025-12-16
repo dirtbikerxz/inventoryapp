@@ -658,6 +658,10 @@ function renderReimbursementsTable() {
     ${rows
       .map((inv) => {
         const amt = invoiceDisplayAmount(inv);
+        const selectDisabled = canManage ? "" : "disabled";
+        const selectStyle = canManage
+          ? ""
+          : 'style="opacity:0.6; pointer-events:none;" title="You do not have permission to change reimbursement status"';
         return `<div class="table-row" data-id="${inv._id}" style="display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px; border-bottom:1px solid var(--border);">
           <div>
             <div class="small">${escapeHtml(inv.orderNumber || "")}</div>
@@ -666,7 +670,7 @@ function renderReimbursementsTable() {
           <div>${escapeHtml(inv.studentName || inv.requestedByName || "")}</div>
           <div>${amt !== undefined ? formatMoney(amt) : ""}</div>
           <div>
-            <select class="input reimbursement-status-select" data-id="${inv._id}" ${canManage ? "" : "disabled"}>
+            <select class="input reimbursement-status-select" data-id="${inv._id}" ${selectDisabled} ${selectStyle}>
               ${reimbursementStatusOptions
                 .map(
                   (opt) =>
@@ -964,8 +968,14 @@ function openInvoiceEditor(mode = "create", invoice = null) {
       .join("");
     if (!currentUser?.permissions?.canManageInvoices) {
       invoiceStatusSelect.disabled = true;
+      invoiceStatusSelect.style.opacity = "0.6";
+      invoiceStatusSelect.style.pointerEvents = "none";
+      invoiceStatusSelect.title = "You do not have permission to change reimbursement status";
     } else {
       invoiceStatusSelect.disabled = false;
+      invoiceStatusSelect.style.opacity = "";
+      invoiceStatusSelect.style.pointerEvents = "";
+      invoiceStatusSelect.title = "";
     }
   }
   if (invoiceEditorForm.elements.orderId) {
@@ -3005,21 +3015,24 @@ function selectSameVendorRequested() {
 
 // Event wiring
 function showOrdersView() {
-  activePrimaryView = "orders";
+  const layout =
+    reimbursementsViewBtn?.classList.contains("active")
+      ? "reimbursements"
+      : tableBtn.classList.contains("active")
+        ? "table"
+        : "board";
+  activePrimaryView = layout === "reimbursements" ? "reimbursements" : "orders";
   ordersViewBtn?.classList.add("active");
-  reimbursementsViewBtn?.classList.remove("active");
   stockViewBtn?.classList.remove("active");
   if (ordersLayoutRow) ordersLayoutRow.style.display = "flex";
   if (ordersLayoutToggle) ordersLayoutToggle.style.display = "inline-flex";
-  if (selectionBar) selectionBar.style.display = "";
+  if (selectionBar) selectionBar.style.display = layout === "reimbursements" ? "none" : "";
   if (stockSection) stockSection.style.display = "none";
-  if (reimbursementsSection) reimbursementsSection.style.display = "none";
-  boardSection.style.display = boardBtn.classList.contains("active")
-    ? "flex"
-    : "none";
-  tableSection.style.display = tableBtn.classList.contains("active")
-    ? "flex"
-    : "none";
+  if (reimbursementsSection)
+    reimbursementsSection.style.display =
+      layout === "reimbursements" ? "flex" : "none";
+  boardSection.style.display = layout === "board" ? "flex" : "none";
+  tableSection.style.display = layout === "table" ? "flex" : "none";
   if (primaryTitle) primaryTitle.textContent = "Orders";
   if (primarySubtitle)
     primarySubtitle.textContent = "Track parts from request to delivery.";
@@ -3052,25 +3065,7 @@ function showStockView() {
 }
 
 function showReimbursementsView() {
-  resetAddToOrderMode();
-  activePrimaryView = "reimbursements";
-  reimbursementsViewBtn?.classList.add("active");
-  ordersViewBtn?.classList.remove("active");
-  stockViewBtn?.classList.remove("active");
-  if (ordersLayoutRow) ordersLayoutRow.style.display = "none";
-  if (ordersLayoutToggle) ordersLayoutToggle.style.display = "none";
-  if (selectionBar) selectionBar.style.display = "none";
-  boardSection.style.display = "none";
-  tableSection.style.display = "none";
-  if (stockSection) stockSection.style.display = "none";
-  if (reimbursementsSection) reimbursementsSection.style.display = "flex";
-  if (primaryTitle) primaryTitle.textContent = "Reimbursements";
-  if (primarySubtitle)
-    primarySubtitle.textContent =
-      "Submit receipts and track reimbursement status.";
-  renderReimbursementsTable();
-  loadReimbursements();
-  updateSearchPlaceholder();
-  resizeColumns();
-  setTimeout(resizeColumns, 30);
+  if (typeof switchToReimbursements === "function") {
+    switchToReimbursements();
+  }
 }

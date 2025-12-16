@@ -65,7 +65,6 @@
       </div>
       <div class="view-toggle" id="primary-view-toggle">
         <button id="orders-view-btn" class="active">Orders</button>
-        <button id="reimbursements-view-btn">Reimbursements</button>
         <button id="stock-view-btn">Stock</button>
       </div>
     </div>
@@ -74,6 +73,7 @@
       <div class="view-toggle" id="orders-layout-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
+        <button id="reimbursements-view-btn">Reimbursements</button>
       </div>
       <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-left:auto;">
         <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
@@ -963,7 +963,7 @@
           <div class="subtitle" id="invoice-editor-subtitle"></div>
         </div>
       </div>
-      <form id="invoice-editor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px; border:1px solid var(--border); border-radius:10px; padding:10px;">
+      <form id="invoice-editor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; border:1px solid var(--border); border-radius:12px; padding:12px;">
         <input type="hidden" name="mode" value="create" />
         <input type="hidden" name="invoiceId" />
         <input type="hidden" name="orderId" />
@@ -975,7 +975,7 @@
           </div>
           <button type="button" class="btn ghost" id="process-invoice-btn" style="padding:6px 10px; align-self:flex-end;">Process invoice</button>
         </div>
-        <div>
+        <div style="grid-column: span 2;">
           <label class="small">Invoice total</label>
           <input name="amount" class="input" type="text" inputmode="decimal" placeholder="Auto-detected if left blank" />
         </div>
@@ -991,7 +991,7 @@
           <select name="reimbursementUser" class="input"></select>
           <div class="small">Choose who should be reimbursed for this invoice.</div>
         </div>
-        <div id="invoice-status-field" style="display:none;">
+        <div id="invoice-status-field" style="grid-column: span 2; display:none;">
           <label class="small">Reimbursement status</label>
           <select name="reimbursementStatus" class="input"></select>
         </div>
