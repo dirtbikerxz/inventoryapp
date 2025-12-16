@@ -10,14 +10,19 @@ function normalizePrivateKey(key) {
   return key.replace(/\\n/g, '\n');
 }
 
-function buildGoogleAuth(logger) {
-  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+function buildGoogleAuth(logger, override) {
+  const keyFile = override?.keyFile
+    || process.env.GOOGLE_APPLICATION_CREDENTIALS
+    || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   const clientEmail =
+    override?.clientEmail ||
     process.env.GOOGLE_DRIVE_CLIENT_EMAIL ||
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
     process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = normalizePrivateKey(
-    process.env.GOOGLE_DRIVE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+    override?.privateKey ||
+    process.env.GOOGLE_DRIVE_PRIVATE_KEY ||
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
   );
 
   if (keyFile) {
@@ -84,17 +89,28 @@ function parseTotal(text) {
 class InvoiceService {
   constructor({ logger }) {
     this.logger = logger;
-    this.folderId = process.env.GOOGLE_DRIVE_FOLDER_ID || null;
-    this.auth = buildGoogleAuth(logger);
+    this.envConfig = {
+      folderId: process.env.GOOGLE_DRIVE_FOLDER_ID || null,
+      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || null,
+      clientEmail:
+        process.env.GOOGLE_DRIVE_CLIENT_EMAIL ||
+        process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+        process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL,
+      privateKey: normalizePrivateKey(
+        process.env.GOOGLE_DRIVE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+      )
+    };
+    this.currentConfig = { ...this.envConfig };
+    this.applyCredentials(this.currentConfig);
+  }
+
+  applyCredentials(config = {}) {
+    this.folderId = config.folderId || null;
+    this.auth = buildGoogleAuth(this.logger, config);
     this.drive = this.auth ? google.drive({ version: 'v3', auth: this.auth }) : null;
-    const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    const clientEmail =
-      process.env.GOOGLE_DRIVE_CLIENT_EMAIL ||
-      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-      process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = normalizePrivateKey(
-      process.env.GOOGLE_DRIVE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
-    );
+    const keyFile = config.keyFile;
+    const clientEmail = config.clientEmail;
+    const privateKey = normalizePrivateKey(config.privateKey);
     const visionOptions = keyFile
       ? { keyFilename: keyFile }
       : clientEmail && privateKey
@@ -106,6 +122,13 @@ class InvoiceService {
       this.logger?.warn(err, 'Vision client unavailable; invoice OCR for images disabled.');
       this.vision = null;
     }
+  }
+
+  updateCredentials(config = {}) {
+    const merged = { ...this.envConfig, ...config };
+    this.currentConfig = merged;
+    this.applyCredentials(merged);
+    this.logger?.info('Google credentials updated for Drive uploads');
   }
 
   async uploadToDrive(file) {

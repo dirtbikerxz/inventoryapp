@@ -1038,6 +1038,7 @@
           <button class="btn ghost" id="admin-tab-roles" style="padding:6px 12px;">Roles</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
+          <button class="btn ghost" id="admin-tab-google" style="padding:6px 12px;">Google</button>
         </div>
       </div>
 
@@ -1110,6 +1111,32 @@
             <button class="btn primary" id="new-vendor-btn" style="padding:6px 10px;">New vendor</button>
           </div>
           <div id="vendor-list" class="small" style="margin-top:10px;">Loading vendors...</div>
+        </div>
+      </div>
+
+      <div id="admin-google-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="page-title" style="font-size:18px;">Google Drive Credentials</div>
+          <div class="subtitle">Upload service account JSON and set the Drive folder ID for receipts.</div>
+          <form id="google-credentials-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:10px;">
+            <div>
+              <label class="small">Drive Folder ID</label>
+              <input name="folderId" id="google-folder-id" class="input" placeholder="Folder ID from https://drive.google.com/drive/folders/..." />
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="small">Service Account JSON</label>
+              <input type="file" id="google-credentials-file" class="input" accept=".json,application/json" />
+              <div class="small">Upload the JSON file you downloaded for the service account. We store the private key securely in Convex.</div>
+            </div>
+            <div class="flex-between" style="grid-column: span 2; align-items:center; gap:8px; flex-wrap:wrap;">
+              <div id="google-credentials-message" class="small"></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn ghost" id="refresh-google-credentials">Refresh</button>
+                <button type="submit" class="btn primary">Save Google credentials</button>
+              </div>
+            </div>
+          </form>
+          <div id="google-credentials-summary" class="small" style="margin-top:10px;"></div>
         </div>
       </div>
 

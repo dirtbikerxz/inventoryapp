@@ -1,8 +1,8 @@
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
-      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
-      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false }
+      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: false },
+      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -123,6 +123,8 @@
     let pendingDeleteStockId = null;
     let pendingConfirmAction = null;
     let pendingConfirmExtraGetter = null;
+    let googleCredentials = null;
+    let googleCredentialsFileJson = null;
     let actionBusy = false;
 
     function setActionBusy(busy, text) {
@@ -585,6 +587,71 @@ invoiceForm?.addEventListener('submit', async (e) => {
 });
 closeInvoiceModalBtn?.addEventListener('click', closeInvoiceModal);
 resetInvoiceFormBtn?.addEventListener('click', () => resetInvoiceForm(true));
+
+googleCredentialsFile?.addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) {
+    resetGoogleFileState();
+    return;
+  }
+  try {
+    const text = await file.text();
+    googleCredentialsFileJson = JSON.parse(text);
+    if (googleCredentialsMessage) {
+      googleCredentialsMessage.textContent = `Loaded ${file.name}`;
+      googleCredentialsMessage.className = 'small';
+    }
+  } catch (err) {
+    resetGoogleFileState();
+    if (googleCredentialsMessage) {
+      googleCredentialsMessage.textContent = 'Invalid JSON file';
+      googleCredentialsMessage.className = 'error';
+    }
+  }
+});
+
+googleCredentialsForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!currentUser?.permissions?.canManageGoogleCredentials) return;
+  const folderId = googleFolderInput?.value.trim();
+  if (!folderId && !googleCredentialsFileJson) {
+    if (googleCredentialsMessage) {
+      googleCredentialsMessage.textContent = 'Add a folder ID or upload a service account JSON';
+      googleCredentialsMessage.className = 'error';
+    }
+    return;
+  }
+  if (googleCredentialsMessage) {
+    googleCredentialsMessage.textContent = 'Saving...';
+    googleCredentialsMessage.className = 'small';
+  }
+  try {
+    const res = await fetch('/api/google/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folderId: folderId || undefined,
+        serviceAccount: googleCredentialsFileJson || undefined
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save credentials');
+    googleCredentials = data.credentials || null;
+    resetGoogleFileState();
+    renderGoogleCredentials();
+    if (googleCredentialsMessage) {
+      googleCredentialsMessage.textContent = 'Saved Google credentials';
+      googleCredentialsMessage.className = 'success';
+    }
+  } catch (err) {
+    if (googleCredentialsMessage) {
+      googleCredentialsMessage.textContent = err.message || 'Failed to save credentials';
+      googleCredentialsMessage.className = 'error';
+    }
+  }
+});
+
+refreshGoogleCredentialsBtn?.addEventListener('click', () => loadGoogleCredentials());
 groupBtn.addEventListener('click', createGroup);
 deleteSelectedBtn?.addEventListener('click', async () => {
   const selectedOrders = orders.filter(o => selected.has(o._id));
@@ -2756,7 +2823,7 @@ function fetchOrderDetails(configHint) {
       const perms = computePerms(currentUser);
       if (currentUser) currentUser.permissions = perms;
       newOrderBtn.disabled = !perms.canPlacePartRequests;
-      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings) ? 'inline-flex' : 'none';
+      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings || perms.canManageGoogleCredentials) ? 'inline-flex' : 'none';
       if (addStockBtn) addStockBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       if (manageSubteamsBtn) manageSubteamsBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
@@ -2821,6 +2888,61 @@ function fetchOrderDetails(configHint) {
       }
     }
 
+    function renderGoogleCredentials() {
+      if (!adminGoogleSection) return;
+      if (!currentUser?.permissions?.canManageGoogleCredentials) {
+        adminGoogleSection.style.display = 'none';
+        return;
+      }
+      if (googleCredentialsSummary) {
+        if (!googleCredentials) {
+          googleCredentialsSummary.innerHTML = '<div class="small">No credentials saved yet.</div>';
+        } else {
+          const updated = googleCredentials.updatedAt ? fmtDate(googleCredentials.updatedAt) : 'unknown';
+          googleCredentialsSummary.innerHTML = `
+            <div>Project: ${escapeHtml(googleCredentials.projectId || 'n/a')}</div>
+            <div>Client email: ${escapeHtml(googleCredentials.clientEmail || 'n/a')}</div>
+            <div>Folder ID: ${escapeHtml(googleCredentials.folderId || 'n/a')}</div>
+            <div>Private key stored: ${googleCredentials.hasPrivateKey ? 'Yes' : 'No'}</div>
+            <div>Updated: ${updated}</div>
+          `;
+        }
+      }
+      if (googleFolderInput && googleCredentials?.folderId) {
+        googleFolderInput.value = googleCredentials.folderId;
+      }
+    }
+
+    async function loadGoogleCredentials(showSectionOnly = false) {
+      if (!currentUser?.permissions?.canManageGoogleCredentials) return;
+      if (showSectionOnly) {
+        renderGoogleCredentials();
+        return;
+      }
+      if (googleCredentialsMessage) {
+        googleCredentialsMessage.textContent = 'Loading...';
+        googleCredentialsMessage.className = 'small';
+      }
+      try {
+        const res = await fetch('/api/google/credentials');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Unable to load credentials');
+        googleCredentials = data.credentials || null;
+        if (googleCredentialsMessage) googleCredentialsMessage.textContent = '';
+        renderGoogleCredentials();
+      } catch (err) {
+        if (googleCredentialsMessage) {
+          googleCredentialsMessage.textContent = err.message || 'Failed to load credentials';
+          googleCredentialsMessage.className = 'error';
+        }
+      }
+    }
+
+    function resetGoogleFileState() {
+      googleCredentialsFileJson = null;
+      if (googleCredentialsFile) googleCredentialsFile.value = '';
+    }
+
     async function loadRoles() {
       if (!currentUser?.permissions?.canManageUsers) {
         roleList.innerHTML = '<div class="empty">No access to manage roles.</div>';
@@ -2859,6 +2981,7 @@ function fetchOrderDetails(configHint) {
               ${renderToggle(role, 'canSubmitInvoices', 'Submit Invoices/Receipts')}
               ${renderToggle(role, 'canViewInvoices', 'View All Invoices')}
               ${renderToggle(role, 'canManageInvoices', 'Manage Reimbursements')}
+              ${renderToggle(role, 'canManageGoogleCredentials', 'Manage Google Credentials')}
               ${renderToggle(role, 'canManageTags', 'Manage Tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Manage Inventory Catalog')}
               ${renderToggle(role, 'canManageStock', 'Manage Tracked Stock & Locations')}
@@ -3013,6 +3136,9 @@ function fetchOrderDetails(configHint) {
       if (currentUser?.permissions?.canManageVendors) {
         tabs.push('vendors');
       }
+      if (currentUser?.permissions?.canManageGoogleCredentials) {
+        tabs.push('google');
+      }
       return tabs;
     }
 
@@ -3022,6 +3148,7 @@ function fetchOrderDetails(configHint) {
       if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canEditTrackingSettings ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
+      if (adminTabGoogle) adminTabGoogle.style.display = currentUser?.permissions?.canManageGoogleCredentials ? 'inline-flex' : 'none';
       if (!allowed.includes(activeAdminTab)) {
         activeAdminTab = allowed[0] || null;
       }
@@ -3029,6 +3156,7 @@ function fetchOrderDetails(configHint) {
       if (adminRolesSection) adminRolesSection.style.display = 'none';
       if (adminTrackingSection) adminTrackingSection.style.display = 'none';
       if (adminVendorsSection) adminVendorsSection.style.display = 'none';
+      if (adminGoogleSection) adminGoogleSection.style.display = 'none';
     }
 
     function showAdminSection(which) {
@@ -3040,16 +3168,19 @@ function fetchOrderDetails(configHint) {
       if (adminRolesSection) adminRolesSection.style.display = which === 'roles' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
-      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors].forEach(btn => btn?.classList.remove('primary'));
+      if (adminGoogleSection) adminGoogleSection.style.display = which === 'google' ? 'block' : 'none';
+      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabGoogle].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'roles') adminTabRoles?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
+      if (which === 'google') adminTabGoogle?.classList.add('primary');
     }
     adminTabUsers?.addEventListener('click', () => showAdminSection('users'));
     adminTabRoles?.addEventListener('click', () => { showAdminSection('roles'); loadRoles(); });
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
+    adminTabGoogle?.addEventListener('click', () => { showAdminSection('google'); loadGoogleCredentials(); });
 
     async function fetchMe() {
       try {

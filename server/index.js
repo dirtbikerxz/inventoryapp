@@ -45,6 +45,22 @@ const mouserService = new MouserService({ logger });
 const invoiceService = new InvoiceService({ logger });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 8 } });
 
+async function syncGoogleCredentialsFromStore() {
+  try {
+    const stored = await client.query('googleCredentials:get', {});
+    if (stored) {
+      invoiceService.updateCredentials({
+        folderId: stored.folderId,
+        clientEmail: stored.clientEmail,
+        privateKey: stored.privateKey,
+        projectId: stored.projectId
+      });
+    }
+  } catch (err) {
+    logger.warn(err, 'Unable to load stored Google credentials');
+  }
+}
+
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
@@ -69,6 +85,7 @@ function defaultPermissions(role) {
     canEditStock: false,
     notesNotRequired: false,
     canImportBulkOrders: false,
+    canManageGoogleCredentials: false,
     canSubmitInvoices: false,
     canViewInvoices: false,
     canManageInvoices: false
@@ -91,7 +108,8 @@ function defaultPermissions(role) {
         canImportBulkOrders: true,
         canSubmitInvoices: true,
         canViewInvoices: true,
-        canManageInvoices: true
+        canManageInvoices: true,
+        canManageGoogleCredentials: true
       };
     case 'mentor':
       return {
@@ -110,7 +128,8 @@ function defaultPermissions(role) {
         canImportBulkOrders: false,
         canSubmitInvoices: true,
         canViewInvoices: true,
-        canManageInvoices: true
+        canManageInvoices: true,
+        canManageGoogleCredentials: false
       };
     case 'student':
       return {
@@ -131,10 +150,27 @@ function parseBoolean(input) {
   return false;
 }
 
+function normalizePrivateKey(key) {
+  if (!key) return null;
+  return String(key).replace(/\\n/g, '\n');
+}
+
 function toNumber(val) {
   if (val === null || val === undefined || val === '') return undefined;
   const num = Number(val);
   return Number.isFinite(num) ? num : undefined;
+}
+
+function parseServiceAccountJson(raw) {
+  if (!raw) return null;
+  const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const clientEmail = obj.client_email || obj.clientEmail;
+  const privateKey = normalizePrivateKey(obj.private_key || obj.privateKey);
+  const projectId = obj.project_id || obj.projectId;
+  if (!clientEmail || !privateKey) {
+    throw new Error('Invalid service account JSON: missing client_email or private_key');
+  }
+  return { clientEmail, privateKey, projectId, rawJson: JSON.stringify(obj) };
 }
 
 function normalizeInvoice(inv) {
@@ -146,6 +182,19 @@ function normalizeInvoice(inv) {
     }
   });
   return norm;
+}
+
+function sanitizeGoogleConfig(record) {
+  if (!record) return null;
+  const safe = {
+    projectId: record.projectId,
+    clientEmail: record.clientEmail,
+    folderId: record.folderId,
+    updatedAt: record.updatedAt,
+    updatedBy: record.updatedBy,
+    hasPrivateKey: Boolean(record.privateKey)
+  };
+  return safe;
 }
 
 function isOwnOrder(order, user) {
@@ -946,6 +995,55 @@ app.patch('/api/invoices/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to update invoice');
     res.status(500).json({ error: 'Unable to update invoice' });
+  }
+});
+
+app.get('/api/google/credentials', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageGoogleCredentials');
+  if (!user) return;
+  try {
+    const record = await client.query('googleCredentials:get', {});
+    res.json({ credentials: sanitizeGoogleConfig(record) });
+  } catch (error) {
+    logger.error(error, 'Failed to load Google credentials');
+    res.status(500).json({ error: 'Unable to load Google credentials' });
+  }
+});
+
+app.post('/api/google/credentials', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageGoogleCredentials');
+  if (!user) return;
+  try {
+    const { folderId, credentialsJson, serviceAccount } = req.body || {};
+    let parsed = null;
+    if (credentialsJson) {
+      parsed = parseServiceAccountJson(credentialsJson);
+    } else if (serviceAccount) {
+      parsed = parseServiceAccountJson(serviceAccount);
+    }
+    if (!folderId && !parsed) {
+      return res.status(400).json({ error: 'Provide a folderId and/or service account JSON' });
+    }
+    const payload = {
+      folderId: folderId || undefined,
+      projectId: parsed?.projectId,
+      clientEmail: parsed?.clientEmail,
+      privateKey: parsed?.privateKey,
+      rawJson: parsed?.rawJson,
+      updatedBy: user._id?.toString()
+    };
+    const result = await client.mutation('googleCredentials:save', payload);
+    const saved = await client.query('googleCredentials:get', {});
+    invoiceService.updateCredentials({
+      folderId: saved?.folderId,
+      clientEmail: saved?.clientEmail,
+      privateKey: saved?.privateKey,
+      projectId: saved?.projectId
+    });
+    res.json({ credentials: sanitizeGoogleConfig(saved), id: result?._id || result?.id });
+  } catch (error) {
+    logger.error(error, 'Failed to save Google credentials');
+    res.status(500).json({ error: 'Unable to save Google credentials', details: error.message });
   }
 });
 
@@ -1773,6 +1871,7 @@ app.use((err, req, res, next) => {
 });
 
 ensureAdminSeed().finally(() => {
+  syncGoogleCredentialsFromStore().catch(err => logger.warn(err, 'Failed to load Google credentials on startup'));
   trackingService.init().catch(err => logger.error(err, 'Failed to start tracking service'));
   app.listen(config.port, () => {
     logger.info(`Inventory app server (Convex-backed) listening on port ${config.port}`);

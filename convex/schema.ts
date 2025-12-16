@@ -47,6 +47,16 @@ const invoiceStatusEntry = v.object({
   note: v.optional(v.string())
 });
 
+const googleCredentials = defineTable({
+  projectId: v.optional(v.string()),
+  clientEmail: v.optional(v.string()),
+  privateKey: v.optional(v.string()),
+  rawJson: v.optional(v.string()),
+  folderId: v.optional(v.string()),
+  updatedAt: v.number(),
+  updatedBy: v.optional(v.id("users"))
+});
+
 export default defineSchema({
   orders: defineTable({
     orderNumber: v.string(),
@@ -111,6 +121,8 @@ export default defineSchema({
   }).index("by_orderId", ["orderId"])
     .index("by_groupId", ["groupId"])
     .index("by_status", ["reimbursementStatus"]),
+
+  googleCredentials,
 
   orderGroups: defineTable({
     title: v.optional(v.string()),
