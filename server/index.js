@@ -127,8 +127,8 @@ function defaultPermissions(role) {
         notesNotRequired: true,
         canImportBulkOrders: false,
         canSubmitInvoices: true,
-        canViewInvoices: true,
-        canManageInvoices: true,
+        canViewInvoices: false,
+        canManageInvoices: false,
         canManageGoogleCredentials: false
       };
     case 'student':
@@ -176,7 +176,7 @@ function parseServiceAccountJson(raw) {
 function normalizeInvoice(inv) {
   if (!inv) return inv;
   const norm = { ...inv };
-  ['_id', 'orderId', 'groupId', 'requestedBy'].forEach(key => {
+  ['_id', 'orderId', 'groupId', 'requestedBy', 'reimbursementUser'].forEach(key => {
     if (norm[key] && norm[key].toString) {
       norm[key] = norm[key].toString();
     }
@@ -212,6 +212,13 @@ async function getSessionUser(token) {
     ...(policy?.permissions || {}),
     ...(session.user.permissions || {})
   };
+  // Ensure admins always have every permission, including newly added ones.
+  if ((session.user.role || '').toLowerCase() === 'admin') {
+    Object.assign(effectivePermissions, defaultPermissions('admin'));
+  }
+  if (effectivePermissions.canManageInvoices) {
+    effectivePermissions.canViewInvoices = true;
+  }
   return {
     sessionId: session.sessionId,
     ...session.user,
@@ -879,7 +886,7 @@ app.get('/api/invoices', async (req, res) => {
   const user = await requireAuth(req, res, null);
   if (!user) return;
   const canManage = Boolean(user.permissions?.canManageInvoices);
-  const canViewAll = canManage || Boolean(user.permissions?.canViewInvoices);
+  const canViewAll = Boolean(user.permissions?.canManageInvoices || user.permissions?.canViewInvoices);
   const args = {
     orderId: req.query.orderId || undefined,
     groupId: req.query.groupId || undefined,
@@ -891,6 +898,33 @@ app.get('/api/invoices', async (req, res) => {
   }
   try {
     let invoices = (await client.query('invoices:list', args) || []).map(normalizeInvoice);
+    if (canManage) {
+      const needNames = Array.from(
+        new Set(
+          invoices
+            .filter((i) => i.reimbursementUser && !i.reimbursementUserName)
+            .map((i) => i.reimbursementUser),
+        ),
+      );
+      if (needNames.length) {
+        const users = await client.query('auth:listUsers', {});
+        const lookup = new Map(
+          (users || []).map((u) => [
+            u._id?.toString?.() || u._id,
+            u.name || u.username || '',
+          ]),
+        );
+        invoices = invoices.map((inv) =>
+          inv.reimbursementUser && !inv.reimbursementUserName
+            ? {
+                ...inv,
+                reimbursementUserName:
+                  lookup.get(inv.reimbursementUser) || inv.reimbursementUserName,
+              }
+            : inv,
+        );
+      }
+    }
     if (!canViewAll) {
       const name = (user.name || '').toLowerCase();
       invoices = invoices.filter(inv => {
@@ -932,8 +966,10 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       .sort((a, b) => Number(b) - Number(a));
     const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
     const amount = toNumber(req.body?.amount) ?? detectedTotal;
-    const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? true);
-    const reimbursementAmount = toNumber(req.body?.reimbursementAmount) ?? amount ?? detectedTotal;
+    const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? false);
+    const reimbursementUser = req.body?.reimbursementUser || user._id?.toString();
+    const reimbursementUserName = req.body?.reimbursementUserName || (reimbursementUser === String(user._id || '') ? user.name : undefined);
+    const reimbursementAmount = amount ?? detectedTotal;
     const payload = {
       orderId,
       groupId: req.body?.groupId || order.groupId || order.group?._id,
@@ -945,6 +981,8 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       requestedByName: user.name,
       amount,
       reimbursementAmount,
+      reimbursementUser,
+      reimbursementUserName,
       reimbursementRequested,
       reimbursementStatus: reimbursementRequested ? 'requested' : 'not_requested',
       detectedTotal,
@@ -961,6 +999,36 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to submit invoice');
     res.status(500).json({ error: 'Unable to submit invoice', details: error.message });
+  }
+});
+
+app.post('/api/invoices/preview', upload.array('files', 8), async (req, res) => {
+  const user = await requireAuth(req, res, 'canSubmitInvoices');
+  if (!user) return;
+  const files = Array.isArray(req.files) ? req.files : [];
+  if (!files.length) {
+    return res.status(400).json({ error: 'At least one invoice file is required' });
+  }
+  try {
+    const processedFiles = [];
+    for (const file of files) {
+      processedFiles.push(await invoiceService.processFile(file, { upload: false }));
+    }
+    const detectedTotals = processedFiles
+      .map(f => toNumber(f.detectedTotal))
+      .filter(v => v !== undefined)
+      .sort((a, b) => Number(b) - Number(a));
+    const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
+    res.json({
+      processedFiles,
+      detectedTotal,
+      detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
+      detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
+      detectedMerchant: processedFiles.find(f => f.detectedMerchant)?.detectedMerchant
+    });
+  } catch (error) {
+    logger.error(error, 'Failed to preview invoice');
+    res.status(500).json({ error: 'Unable to process invoice', details: error.message });
   }
 });
 
@@ -983,6 +1051,13 @@ app.patch('/api/invoices/:id', async (req, res) => {
       reimbursementRequested: req.body?.reimbursementRequested === undefined ? undefined : parseBoolean(req.body?.reimbursementRequested),
       notes: req.body?.notes
     };
+    if (updates.amount !== undefined) {
+      updates.reimbursementAmount = updates.amount;
+    }
+    if (req.body?.reimbursementUser && req.body?.reimbursementRequested !== undefined && parseBoolean(req.body.reimbursementRequested)) {
+      updates.reimbursementUser = req.body.reimbursementUser;
+      updates.reimbursementUserName = req.body.reimbursementUserName;
+    }
     if (req.body?.reimbursementStatus && canManage) {
       updates.reimbursementStatus = req.body.reimbursementStatus;
       updates.statusNote = req.body?.statusNote;
@@ -995,6 +1070,43 @@ app.patch('/api/invoices/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to update invoice');
     res.status(500).json({ error: 'Unable to update invoice' });
+  }
+});
+
+app.delete('/api/invoices/:id', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const invoice = await client.query('invoices:get', { invoiceId: req.params.id });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const isOwner = invoice.requestedBy && String(invoice.requestedBy) === String(user._id || '');
+    const canManage = Boolean(user.permissions?.canManageInvoices);
+    const canSubmit = Boolean(user.permissions?.canSubmitInvoices);
+    if (!canManage && !(isOwner && canSubmit)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await client.mutation('invoices:remove', { invoiceId: req.params.id });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to delete invoice');
+    res.status(500).json({ error: 'Unable to delete invoice' });
+  }
+});
+
+app.get('/api/users/min', async (req, res) => {
+  const user = await requireAuth(req, res, 'canSubmitInvoices');
+  if (!user) return;
+  try {
+    const list = await client.query('auth:listUsers', {});
+    const users = (list || []).map(u => ({
+      _id: u._id?.toString?.() || u._id,
+      name: u.name,
+      username: u.username
+    }));
+    res.json({ users });
+  } catch (error) {
+    logger.error(error, 'Failed to list minimal users');
+    res.status(500).json({ error: 'Unable to list users' });
   }
 });
 

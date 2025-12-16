@@ -144,8 +144,20 @@ const invoiceOrderSelect = document.getElementById("invoice-order-select");
 const invoiceMessage = document.getElementById("invoice-message");
 const invoiceExistingList = document.getElementById("invoice-existing-list");
 const invoiceTargetSummary = document.getElementById("invoice-target-summary");
+const invoiceCreateModal = document.getElementById("invoice-editor-modal");
+const invoiceEditorTitle = document.getElementById("invoice-editor-title");
+const invoiceEditorSubtitle = document.getElementById("invoice-editor-subtitle");
+const closeInvoiceEditorBtn = document.getElementById("close-invoice-editor");
+const invoiceEditorForm = document.getElementById("invoice-editor-form");
 const invoiceFilesInput = document.getElementById("invoice-files");
-const resetInvoiceFormBtn = document.getElementById("reset-invoice-form");
+const processInvoiceBtn = document.getElementById("process-invoice-btn");
+const saveInvoiceBtn = document.getElementById("save-invoice-btn");
+const invoiceStatusField = document.getElementById("invoice-status-field");
+const invoiceStatusSelect = invoiceEditorForm?.elements?.reimbursementStatus;
+const invoiceFileField = document.getElementById("invoice-file-field");
+const newInvoiceBtn = document.getElementById("new-invoice-btn");
+const reimbursementUserField = document.getElementById("reimbursement-user-field");
+const reimbursementUserSelect = invoiceEditorForm?.elements?.reimbursementUser;
 const reimbursementStatusFilter = document.getElementById(
   "reimbursement-status-filter",
 );

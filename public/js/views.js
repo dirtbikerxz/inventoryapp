@@ -110,6 +110,12 @@ const reimbursementStatusOptions = [
   { value: "not_requested", label: "Not requested" },
 ];
 
+function primaryFileLink(inv) {
+  if (!inv || !Array.isArray(inv.files)) return "";
+  const file = inv.files.find((f) => f.driveWebViewLink || f.driveDownloadLink);
+  return file?.driveWebViewLink || file?.driveDownloadLink || "";
+}
+
 function createTrackingRow(container, data = {}, partsOptions = []) {
   if (!container) return;
   const row = document.createElement("div");
@@ -329,8 +335,8 @@ function reimbursementStatusColor(status) {
 
 function invoiceDisplayAmount(inv) {
   return (
-    inv?.reimbursementAmount ??
     inv?.amount ??
+    inv?.reimbursementAmount ??
     inv?.detectedTotal ??
     inv?.files?.find((f) => f?.detectedTotal)?.detectedTotal
   );
@@ -352,6 +358,55 @@ function renderInvoiceFiles(files = []) {
 function renderInvoiceStatusChip(status) {
   const color = reimbursementStatusColor(status);
   return `<span class="tag" style="border-color:${color}; color:${color};">${formatReimbursementStatus(status)}</span>`;
+}
+
+function renderInvoiceCards(invoices = []) {
+  const canManage = Boolean(currentUser?.permissions?.canManageInvoices);
+  const canSubmit = Boolean(currentUser?.permissions?.canSubmitInvoices);
+  if (!invoices.length) return '<div class="small">No invoices uploaded yet.</div>';
+  const userMap =
+    Array.isArray(window.__allUsers) && window.__allUsers.length
+      ? window.__allUsers.reduce((acc, u) => {
+          acc[u._id || u.id] = u.name || u.username || "";
+          return acc;
+        }, {})
+      : {};
+  return invoices
+    .map((inv) => {
+      const amt = invoiceDisplayAmount(inv);
+      const statusChip = renderInvoiceStatusChip(
+        inv.reimbursementStatus || "not_requested",
+      );
+      const fileLink = primaryFileLink(inv);
+      const recipient =
+        inv.reimbursementUserName ||
+        userMap[inv.reimbursementUser] ||
+        inv.requestedByName ||
+        inv.studentName ||
+        "";
+      return `<div class="card" data-id="${inv._id}" style="margin-bottom:8px;">
+        <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div class="page-title" style="font-size:16px;">${statusChip}</div>
+            <div class="small">Submitted: ${fmtDate(inv.requestedAt)}</div>
+            <div class="small">By: ${escapeHtml(inv.requestedByName || inv.studentName || '')}</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${fileLink ? `<button class="btn ghost" data-action="view-file" data-url="${fileLink}" style="padding:6px 10px;">View file</button>` : ""}
+            ${(canManage || canSubmit) ? `<button class="btn ghost" data-action="edit-invoice" data-id="${inv._id}" style="padding:6px 10px;">Edit</button>` : ""}
+            ${(canManage || canSubmit) ? `<button class="btn ghost" data-action="delete-invoice" data-id="${inv._id}" style="padding:6px 10px; border-color: var(--danger); color: var(--danger);">Delete</button>` : ""}
+          </div>
+        </div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px; margin-top:6px;">
+          <div class="small">Invoice total: ${amt !== undefined ? formatMoney(amt) : 'n/a'}</div>
+          <div class="small">Reimbursement: ${inv.reimbursementRequested ? 'Yes' : 'No'}</div>
+          <div class="small">Recipient: ${escapeHtml(recipient)}</div>
+          <div class="small">Status: ${formatReimbursementStatus(inv.reimbursementStatus)}</div>
+        </div>
+        <div class="small" style="margin-top:6px;">${renderInvoiceFiles(inv.files)}</div>
+      </div>`;
+    })
+    .join("");
 }
 
 function showBoardMessage(text, type = "info", timeout = 3500) {
@@ -499,6 +554,17 @@ async function updateInvoice(invoiceId, payload) {
     throw new Error(data.error || "Unable to update invoice");
   }
   return data.invoice;
+}
+
+async function deleteInvoice(invoiceId) {
+  const res = await fetch(`/api/invoices/${invoiceId}`, {
+    method: "DELETE",
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Unable to delete invoice");
+  }
+  return true;
 }
 
 async function loadInvoicesForOrder(orderId) {
@@ -708,13 +774,13 @@ function renderInvoiceSummary(order) {
 }
 
 function resetInvoiceForm(keepSelection = true) {
-  const savedOrder = invoiceForm?.elements?.orderId?.value;
-  const savedGroup = invoiceForm?.elements?.groupId?.value;
-  invoiceForm?.reset();
-  if (keepSelection && savedOrder && invoiceForm?.elements?.orderId) {
-    invoiceForm.elements.orderId.value = savedOrder;
-    if (invoiceForm.elements.groupId) {
-      invoiceForm.elements.groupId.value = savedGroup || "";
+  const savedOrder = invoiceEditorForm?.elements?.orderId?.value;
+  const savedGroup = invoiceEditorForm?.elements?.groupId?.value;
+  invoiceEditorForm?.reset();
+  if (keepSelection && savedOrder && invoiceEditorForm?.elements?.orderId) {
+    invoiceEditorForm.elements.orderId.value = savedOrder;
+    if (invoiceEditorForm.elements.groupId) {
+      invoiceEditorForm.elements.groupId.value = savedGroup || "";
     }
   }
   if (invoiceMessage) {
@@ -726,102 +792,60 @@ function resetInvoiceForm(keepSelection = true) {
 
 function closeInvoiceModal() {
   if (invoiceModal) invoiceModal.style.display = "none";
+  if (invoiceCreateModal) invoiceCreateModal.style.display = "none";
 }
 
 function renderInvoiceExistingList() {
   if (!invoiceExistingList) return;
-  const canManage = Boolean(currentUser?.permissions?.canManageInvoices);
-  const canSubmit = Boolean(currentUser?.permissions?.canSubmitInvoices);
-  if (!currentOrderInvoices.length) {
-    invoiceExistingList.innerHTML =
-      '<div class="small">No invoices uploaded yet.</div>';
-    return;
-  }
-  invoiceExistingList.innerHTML = currentOrderInvoices
-    .map((inv) => {
-      const isOwner =
-        inv.requestedBy &&
-        String(inv.requestedBy) === String(currentUser?._id || "");
-      const canEdit = canManage || (canSubmit && isOwner);
-      const canEditStatus = canManage;
-      const invoiceAmount = inv.amount ?? inv.detectedTotal ?? "";
-      const reimbAmount =
-        inv.reimbursementAmount ?? inv.amount ?? inv.detectedTotal ?? "";
-      return `<div class="card" data-id="${inv._id}" style="padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:space-between;">
-          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            ${renderInvoiceStatusChip(inv.reimbursementStatus)}
-            <span class="small">Submitted ${fmtDate(inv.requestedAt)}</span>
-            ${inv.requestedByName ? `<span class="tag" style="padding:4px 8px;">${escapeHtml(inv.requestedByName)}</span>` : ""}
-          </div>
-          <div class="small">${renderInvoiceFiles(inv.files)}</div>
-        </div>
-        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
-          <label class="small">Invoice total
-            <input class="input invoice-amount" type="number" step="0.01" value="${invoiceAmount}" ${canEdit ? "" : "disabled"} />
-          </label>
-          <label class="small">Reimbursement amount
-            <input class="input invoice-reimb-amount" type="number" step="0.01" value="${reimbAmount}" ${canEdit ? "" : "disabled"} />
-          </label>
-          <label class="small">Status
-            <select class="input invoice-status" ${canEditStatus ? "" : "disabled"}>
-              ${reimbursementStatusOptions
-                .map(
-                  (opt) =>
-                    `<option value="${opt.value}" ${
-                      opt.value === (inv.reimbursementStatus || "not_requested")
-                        ? "selected"
-                        : ""
-                    }>${opt.label}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
-        </div>
-        ${
-          inv.detectedTotal
-            ? `<div class="small">Detected total: ${formatMoney(inv.detectedTotal)}${inv.detectedMerchant ? " · " + escapeHtml(inv.detectedMerchant) : ""}</div>`
-            : ""
-        }
-        ${
-          canEdit || canEditStatus
-            ? `<div style="display:flex; justify-content:flex-end; gap:8px;">
-                <button class="btn ghost save-invoice" data-id="${inv._id}" style="padding:6px 10px;">Save</button>
-               </div>`
-            : ""
-        }
-      </div>`;
-    })
-    .join("");
-
+  invoiceExistingList.innerHTML = renderInvoiceCards(currentOrderInvoices);
   invoiceExistingList
-    .querySelectorAll(".save-invoice")
+    .querySelectorAll('button[data-action="edit-invoice"]')
+    .forEach((btn) => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        const inv = currentOrderInvoices.find((x) => x._id === id);
+        openInvoiceEditor("edit", inv);
+      };
+    });
+  invoiceExistingList
+    .querySelectorAll('a[data-action="view-file"], button[data-action="view-file"]')
+    .forEach((btn) => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        const url = btn.dataset.url;
+        if (url) window.open(url, "_blank", "noopener");
+      };
+    });
+  invoiceExistingList
+    .querySelectorAll('button[data-action="delete-invoice"]')
     .forEach((btn) => {
       btn.onclick = async () => {
-        const container = btn.closest("[data-id]");
-        const id = btn.dataset.id || container?.dataset?.id;
+        const id = btn.dataset.id;
         if (!id) return;
-        const amountVal = container?.querySelector(".invoice-amount")?.value;
-        const reimbVal =
-          container?.querySelector(".invoice-reimb-amount")?.value;
-        const statusVal =
-          container?.querySelector(".invoice-status")?.value || undefined;
-        btn.disabled = true;
-        try {
-          await updateInvoice(id, {
-            amount: amountVal ? Number(amountVal) : undefined,
-            reimbursementAmount: reimbVal ? Number(reimbVal) : undefined,
-            reimbursementStatus: statusVal,
-          });
-          await loadInvoicesForOrder(activeInvoiceOrderId);
-          await loadReimbursements();
-          fetchOrders();
-          showBoardMessage("Invoice updated");
-        } catch (err) {
-          showBoardMessage(err.message || "Failed to update invoice", "error");
-        } finally {
-          btn.disabled = false;
-        }
+        openConfirm("Delete this invoice? This cannot be undone.", async () => {
+          try {
+            if (invoiceMessage) {
+              invoiceMessage.textContent = "Deleting invoice...";
+              invoiceMessage.className = "small";
+            }
+            await deleteInvoice(id);
+            currentOrderInvoices = currentOrderInvoices.filter(
+              (x) => x._id !== id,
+            );
+            renderInvoiceExistingList();
+            if (invoiceMessage) {
+              invoiceMessage.textContent = "Invoice deleted";
+              invoiceMessage.className = "success";
+            }
+          } catch (err) {
+            if (invoiceMessage) {
+              invoiceMessage.textContent =
+                err?.message || "Failed to delete invoice";
+              invoiceMessage.className = "error";
+            }
+            throw err;
+          }
+        });
       };
     });
 }
@@ -842,33 +866,24 @@ function setInvoiceTarget(order, ordersList = []) {
     ) || list[0];
   activeInvoiceOrderId = target?._id || null;
   if (invoiceOrderSelect) {
-    invoiceOrderSelect.innerHTML = list
-      .map(
-        (o) =>
-          `<option value="${o._id}">${escapeHtml(
-            o.orderNumber
-              ? `Order ${o.orderNumber}`
-              : o.partName || o.group?.title || "Order",
-          )}</option>`,
-      )
-      .join("");
-    if (activeInvoiceOrderId) {
-      invoiceOrderSelect.value = activeInvoiceOrderId;
-    }
-    invoiceOrderSelect.disabled = list.length <= 1;
+    invoiceOrderSelect.innerHTML = "";
+    if (invoiceOrderSelect.parentElement)
+      invoiceOrderSelect.parentElement.style.display = "none";
   }
-  if (invoiceForm?.elements?.orderId) {
-    invoiceForm.elements.orderId.value = activeInvoiceOrderId || "";
+  if (typeof ensureUserOptions === "function") {
+    ensureUserOptions();
   }
-  if (invoiceForm?.elements?.groupId) {
-    invoiceForm.elements.groupId.value =
+  if (invoiceEditorForm?.elements?.orderId) {
+    invoiceEditorForm.elements.orderId.value = activeInvoiceOrderId || "";
+  }
+  if (invoiceEditorForm?.elements?.groupId) {
+    invoiceEditorForm.elements.groupId.value =
       target?.groupId || target?.group?._id || "";
   }
   if (invoiceTargetSummary) {
     const parts = [];
     if (target?.orderNumber) parts.push(`Order ${target.orderNumber}`);
     if (target?.group?.title) parts.push(`Group ${target.group.title}`);
-    if (target?.partName) parts.push(target.partName);
     invoiceTargetSummary.textContent =
       parts.filter(Boolean).join(" · ") || "Select an order";
   }
@@ -886,10 +901,102 @@ function openInvoiceModal(order, orderList = []) {
     normalized.find(
       (o) => o._id === (order?._id || order?.id || order?.orderId),
     ) || normalized[0] || order;
+  activeInvoiceOrders = normalized;
   setInvoiceTarget(target, normalized.length ? normalized : [target]);
-  resetInvoiceForm(true);
   loadInvoicesForOrder(target?._id);
+  if (newInvoiceBtn)
+    newInvoiceBtn.style.display = currentUser?.permissions?.canSubmitInvoices
+      ? "inline-flex"
+      : "none";
+  if (reimbursementUserSelect) {
+    const options = window.__allUsers || [];
+    let html = options
+      .map(
+        (u) =>
+          `<option value="${u._id || u.id}">${escapeHtml(
+            u.name || u.username || "",
+          )}</option>`,
+      )
+      .join("");
+    if (!html && currentUser?._id) {
+      html = `<option value="${currentUser._id}">${escapeHtml(
+        currentUser.name || currentUser.username || "",
+      )}</option>`;
+    }
+    reimbursementUserSelect.innerHTML = html;
+    if (currentUser?._id) reimbursementUserSelect.value = currentUser._id;
+  }
   if (invoiceModal) invoiceModal.style.display = "flex";
+}
+
+function openInvoiceEditor(mode = "create", invoice = null) {
+  if (!invoiceEditorForm || !invoiceCreateModal) return;
+  invoiceEditorForm.reset();
+  googleCredentialsFileJson = null;
+  if (invoiceEditorForm.elements.mode) invoiceEditorForm.elements.mode.value = mode;
+  if (invoiceEditorForm.elements.invoiceId)
+    invoiceEditorForm.elements.invoiceId.value = mode === "edit" ? invoice?._id || "" : "";
+  if (invoiceEditorTitle)
+    invoiceEditorTitle.textContent = mode === "edit"
+      ? "Edit Invoice"
+      : "New Invoice";
+  if (invoiceEditorSubtitle)
+    invoiceEditorSubtitle.textContent = invoiceTargetSummary?.textContent || "";
+  if (invoiceStatusField) {
+    invoiceStatusField.style.display = mode === "edit" ? "block" : "none";
+  }
+  if (invoiceFileField) {
+    invoiceFileField.style.display = mode === "edit" ? "none" : "block";
+  }
+  if (processInvoiceBtn) {
+    processInvoiceBtn.style.display = mode === "edit" ? "none" : "inline-flex";
+  }
+  if (invoiceStatusSelect) {
+    invoiceStatusSelect.innerHTML = reimbursementStatusOptions
+      .map(
+        (opt) =>
+          `<option value="${opt.value}" ${
+            opt.value === (invoice?.reimbursementStatus || "not_requested")
+              ? "selected"
+              : ""
+          }>${opt.label}</option>`,
+      )
+      .join("");
+    if (!currentUser?.permissions?.canManageInvoices) {
+      invoiceStatusSelect.disabled = true;
+    } else {
+      invoiceStatusSelect.disabled = false;
+    }
+  }
+  if (invoiceEditorForm.elements.orderId) {
+    invoiceEditorForm.elements.orderId.value = activeInvoiceOrderId || "";
+  }
+  if (invoiceEditorForm.elements.groupId) {
+    invoiceEditorForm.elements.groupId.value =
+      invoice?.groupId || invoice?.group?._id || "";
+  }
+  if (mode === "edit" && invoice) {
+    if (invoiceEditorForm.elements.amount)
+      invoiceEditorForm.elements.amount.value =
+        invoice.amount ?? invoice.detectedTotal ?? "";
+    if (invoiceEditorForm.elements.reimbursementRequested)
+      invoiceEditorForm.elements.reimbursementRequested.value = String(
+        invoice.reimbursementRequested ?? true,
+      );
+    if (reimbursementUserSelect) {
+      reimbursementUserSelect.value =
+        invoice.reimbursementUser || invoice.requestedBy || currentUser?._id || "";
+    }
+    if (invoiceEditorForm.elements.notes)
+      invoiceEditorForm.elements.notes.value = invoice.notes || "";
+  }
+  // Sync visibility after values are populated
+  if (reimbursementUserField && invoiceEditorForm.elements.reimbursementRequested) {
+    const needs =
+      invoiceEditorForm.elements.reimbursementRequested.value === "true";
+    reimbursementUserField.style.display = needs ? "block" : "none";
+  }
+  if (invoiceCreateModal) invoiceCreateModal.style.display = "flex";
 }
 
 function openEdit(order) {

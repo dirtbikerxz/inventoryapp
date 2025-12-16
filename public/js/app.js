@@ -1,7 +1,7 @@
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
       admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true },
-      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: false },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false },
       student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false }
     };
     function computePerms(user) {
@@ -11,6 +11,7 @@
       // Only fill missing keys with defaults; honor server-provided permissions
       const merged = { ...defaults };
       Object.keys(provided).forEach(k => { merged[k] = provided[k]; });
+      if (merged.canManageInvoices) merged.canViewInvoices = true;
       return merged;
     }
     const BUILTIN_CAPABILITY_LABELS = {
@@ -546,47 +547,164 @@ invoiceOrderSelect?.addEventListener('change', () => {
   setInvoiceTarget(target, activeInvoiceOrders || []);
   if (selectedId) loadInvoicesForOrder(selectedId);
 });
-invoiceForm?.addEventListener('submit', async (e) => {
+newInvoiceBtn?.addEventListener('click', () => {
+  openInvoiceEditor('create', null);
+});
+closeInvoiceModalBtn?.addEventListener('click', closeInvoiceModal);
+closeInvoiceEditorBtn?.addEventListener('click', () => {
+  if (invoiceCreateModal) invoiceCreateModal.style.display = 'none';
+});
+processInvoiceBtn?.addEventListener('click', async () => {
+  const files = invoiceFilesInput?.files;
+  if (!files || !files.length) {
+    if (invoiceMessage) {
+      invoiceMessage.textContent = 'Upload at least one file to process';
+      invoiceMessage.className = 'error';
+    }
+    return;
+  }
+  const fd = new FormData();
+  Array.from(files).forEach((f) => fd.append('files', f));
+  if (invoiceMessage) {
+    invoiceMessage.textContent = 'Processing invoice...';
+    invoiceMessage.className = 'small';
+  }
+  try {
+    const res = await fetch('/api/invoices/preview', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to process invoice');
+    const detected = data.detectedTotal;
+    if (detected && invoiceEditorForm?.elements?.amount && !invoiceEditorForm.elements.amount.value) {
+      invoiceEditorForm.elements.amount.value = detected;
+    }
+    if (detected && invoiceEditorForm?.elements?.reimbursementAmount && !invoiceEditorForm.elements.reimbursementAmount.value) {
+      invoiceEditorForm.elements.reimbursementAmount.value = detected;
+    }
+    if (invoiceMessage) {
+      invoiceMessage.textContent = detected ? `Detected total: ${detected}` : 'Processed invoice';
+      invoiceMessage.className = 'success';
+    }
+  } catch (err) {
+    if (invoiceMessage) {
+      invoiceMessage.textContent = err.message || 'Failed to process invoice';
+      invoiceMessage.className = 'error';
+    }
+  }
+});
+invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', () => {
+  const show = invoiceEditorForm.elements.reimbursementRequested.value === 'true';
+  if (reimbursementUserField) reimbursementUserField.style.display = show ? 'block' : 'none';
+  if (show && reimbursementUserSelect && !reimbursementUserSelect.value && currentUser?._id) {
+    reimbursementUserSelect.value = currentUser._id;
+  }
+});
+invoiceEditorForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const orderId = invoiceForm?.elements?.orderId?.value;
-  if (!orderId) {
+  const mode = invoiceEditorForm.elements.mode?.value || 'create';
+  const orderId = invoiceEditorForm.elements.orderId?.value;
+  const invoiceId = invoiceEditorForm.elements.invoiceId?.value;
+  if (mode === 'create' && !orderId) {
     if (invoiceMessage) {
       invoiceMessage.textContent = 'Select an order to submit an invoice';
       invoiceMessage.className = 'error';
     }
     return;
   }
-  const fd = new FormData(invoiceForm);
-  fd.set('orderId', orderId);
-  const groupVal = invoiceForm.elements.groupId?.value;
-  if (groupVal) fd.set('groupId', groupVal);
-  if (invoiceMessage) {
-    invoiceMessage.textContent = 'Uploading and processing…';
-    invoiceMessage.className = 'small';
-  }
-  const res = await fetch('/api/invoices', {
-    method: 'POST',
-    body: fd
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    if (invoiceMessage) {
-      invoiceMessage.textContent = data.error || 'Failed to submit invoice';
-      invoiceMessage.className = 'error';
+  if (mode === 'create') {
+    const files = invoiceFilesInput?.files;
+    if (!files || !files.length) {
+      if (invoiceMessage) {
+        invoiceMessage.textContent = 'Upload at least one file';
+        invoiceMessage.className = 'error';
+      }
+      return;
     }
-    return;
+    const fd = new FormData();
+    fd.set('orderId', orderId);
+    const groupVal = invoiceEditorForm.elements.groupId?.value;
+    if (groupVal) fd.set('groupId', groupVal);
+    ['amount','notes'].forEach((field) => {
+      const val = invoiceEditorForm.elements[field]?.value;
+      if (val) fd.set(field, val);
+    });
+    if (invoiceEditorForm.elements.reimbursementRequested) {
+      fd.set('reimbursementRequested', invoiceEditorForm.elements.reimbursementRequested.value);
+    }
+    if (invoiceEditorForm.elements.reimbursementUser && invoiceEditorForm.elements.reimbursementRequested?.value === 'true') {
+      fd.set('reimbursementUser', invoiceEditorForm.elements.reimbursementUser.value);
+      const selectedOption = invoiceEditorForm.elements.reimbursementUser.selectedOptions?.[0];
+      if (selectedOption?.textContent) {
+        fd.set('reimbursementUserName', selectedOption.textContent);
+      }
+    }
+    Array.from(files).forEach((f) => fd.append('files', f));
+    if (invoiceMessage) {
+      invoiceMessage.textContent = 'Uploading and processing…';
+      invoiceMessage.className = 'small';
+    }
+    const res = await fetch('/api/invoices', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      if (invoiceMessage) {
+        invoiceMessage.textContent = data.error || 'Failed to submit invoice';
+        invoiceMessage.className = 'error';
+      }
+      return;
+    }
+    if (invoiceMessage) {
+      invoiceMessage.textContent = 'Invoice submitted';
+      invoiceMessage.className = 'success';
+    }
+    if (invoiceCreateModal) invoiceCreateModal.style.display = 'none';
+    await loadInvoicesForOrder(orderId);
+    await loadReimbursements();
+    fetchOrders();
+    resetInvoiceForm(true);
+  } else if (mode === 'edit') {
+    if (!invoiceId) return;
+    const payload = {
+      amount: invoiceEditorForm.elements.amount?.value
+        ? Number(invoiceEditorForm.elements.amount.value)
+        : undefined,
+      reimbursementRequested: invoiceEditorForm.elements.reimbursementRequested
+        ? invoiceEditorForm.elements.reimbursementRequested.value === 'true'
+        : undefined,
+      notes: invoiceEditorForm.elements.notes?.value || undefined
+    };
+    if (invoiceEditorForm.elements.reimbursementUser && invoiceEditorForm.elements.reimbursementRequested?.value === 'true') {
+      payload.reimbursementUser = invoiceEditorForm.elements.reimbursementUser.value;
+      const selectedOption = invoiceEditorForm.elements.reimbursementUser.selectedOptions?.[0];
+      if (selectedOption?.textContent) {
+        payload.reimbursementUserName = selectedOption.textContent;
+      }
+    }
+    if (currentUser?.permissions?.canManageInvoices && invoiceEditorForm.elements.reimbursementStatus) {
+      payload.reimbursementStatus = invoiceEditorForm.elements.reimbursementStatus.value;
+    }
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update invoice');
+      if (invoiceMessage) {
+        invoiceMessage.textContent = 'Invoice updated';
+        invoiceMessage.className = 'success';
+      }
+      if (invoiceCreateModal) invoiceCreateModal.style.display = 'none';
+      await loadInvoicesForOrder(activeInvoiceOrderId);
+      await loadReimbursements();
+      fetchOrders();
+    } catch (err) {
+      if (invoiceMessage) {
+        invoiceMessage.textContent = err.message || 'Failed to update invoice';
+        invoiceMessage.className = 'error';
+      }
+    }
   }
-  if (invoiceMessage) {
-    invoiceMessage.textContent = 'Invoice submitted';
-    invoiceMessage.className = 'success';
-  }
-  await loadInvoicesForOrder(orderId);
-  await loadReimbursements();
-  fetchOrders();
-  resetInvoiceForm(true);
 });
-closeInvoiceModalBtn?.addEventListener('click', closeInvoiceModal);
-resetInvoiceFormBtn?.addEventListener('click', () => resetInvoiceForm(true));
 
 googleCredentialsFile?.addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
@@ -2844,6 +2962,7 @@ function fetchOrderDetails(configHint) {
         const res = await fetch('/api/users');
         const data = await res.json();
         const users = data.users || [];
+        window.__allUsers = users;
         if (!users.length) {
           userList.innerHTML = '<div class="empty">No users.</div>';
           return;
@@ -2885,6 +3004,35 @@ function fetchOrderDetails(configHint) {
         });
       } catch (e) {
         userList.textContent = 'Failed to load users';
+      }
+    }
+
+    async function ensureUserOptions() {
+      if (window.__allUsers && window.__allUsers.length) return;
+      if (!currentUser) return;
+      const url = currentUser.permissions?.canManageUsers
+        ? '/api/users'
+        : (currentUser.permissions?.canManageInvoices || currentUser.permissions?.canSubmitInvoices
+            ? '/api/users/min'
+            : null);
+      if (!url) return;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const users = data.users || data.usersMinimal || [];
+        window.__allUsers = users;
+        if (reimbursementUserSelect && !reimbursementUserSelect.innerHTML && users.length) {
+          reimbursementUserSelect.innerHTML = users
+            .map(
+              (u) =>
+                `<option value="${u._id || u.id}">${escapeHtml(
+                  u.name || u.username || "",
+                )}</option>`,
+            )
+            .join("");
+        }
+      } catch (err) {
+        // ignore
       }
     }
 
@@ -2954,8 +3102,8 @@ function fetchOrderDetails(configHint) {
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
-          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
+          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true },
+          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false },
           student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
@@ -2979,8 +3127,7 @@ function fetchOrderDetails(configHint) {
               ${renderToggle(role, 'canManageOwnPartRequests', 'Manage Own Part Requests')}
               ${renderToggle(role, 'canManageOrders', 'Create and Manage Orders')}
               ${renderToggle(role, 'canSubmitInvoices', 'Submit Invoices/Receipts')}
-              ${renderToggle(role, 'canViewInvoices', 'View All Invoices')}
-              ${renderToggle(role, 'canManageInvoices', 'Manage Reimbursements')}
+              ${renderToggle(role, 'canManageInvoices', 'Manage Invoices')}
               ${renderToggle(role, 'canManageGoogleCredentials', 'Manage Google Credentials')}
               ${renderToggle(role, 'canManageTags', 'Manage Tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Manage Inventory Catalog')}
@@ -3016,6 +3163,8 @@ function fetchOrderDetails(configHint) {
             inputs.forEach(input => {
               perms[input.dataset.key] = input.checked;
             });
+            // Viewing all invoices is implied by managing invoices
+            perms.canViewInvoices = Boolean(perms.canManageInvoices);
             await fetch(`/api/roles/${role}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -3169,6 +3318,9 @@ function fetchOrderDetails(configHint) {
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
       if (adminGoogleSection) adminGoogleSection.style.display = which === 'google' ? 'block' : 'none';
+      if (which === 'google' && currentUser?.permissions?.canManageGoogleCredentials) {
+        loadGoogleCredentials();
+      }
       [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabGoogle].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'roles') adminTabRoles?.classList.add('primary');
@@ -3192,6 +3344,7 @@ function fetchOrderDetails(configHint) {
         setAuthenticated(true);
         updateUserUI();
         syncCatalogSaveUI();
+        ensureUserOptions?.();
         await syncTrackingAutoRefreshFromServer();
         await loadTags();
         await loadPriorityTags();

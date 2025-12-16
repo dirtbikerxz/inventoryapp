@@ -191,7 +191,7 @@ class InvoiceService {
     return '';
   }
 
-  async processFile(file) {
+  async processFile(file, { upload = true } = {}) {
     const text = await this.extractText(file);
     const detectedTotal = parseTotal(text);
     const detectedDate = extractDate(text);
@@ -200,7 +200,7 @@ class InvoiceService {
       .map((l) => l.trim())
       .filter(Boolean);
     const merchant = pickLikelyMerchant(lines);
-    const uploadMeta = await this.uploadToDrive(file);
+    const uploadMeta = upload ? await this.uploadToDrive(file) : {};
     return {
       name: file.originalname || 'invoice',
       mimeType: file.mimetype || 'application/octet-stream',

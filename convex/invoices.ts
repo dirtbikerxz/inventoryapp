@@ -117,6 +117,8 @@ export const create = mutation({
     reimbursementAmount: v.optional(v.number()),
     reimbursementRequested: v.boolean(),
     reimbursementStatus: v.optional(v.string()),
+    reimbursementUser: v.optional(v.string()),
+    reimbursementUserName: v.optional(v.string()),
     detectedTotal: v.optional(v.number()),
     detectedCurrency: v.optional(v.string()),
     detectedDate: v.optional(v.union(v.number(), v.string())),
@@ -153,6 +155,8 @@ export const create = mutation({
       reimbursementAmount: args.reimbursementAmount ?? args.amount ?? args.detectedTotal,
       reimbursementRequested: args.reimbursementRequested,
       reimbursementStatus: status,
+      reimbursementUser: args.reimbursementUser,
+      reimbursementUserName: args.reimbursementUserName,
       detectedTotal: args.detectedTotal,
       detectedCurrency: args.detectedCurrency,
       detectedDate: args.detectedDate,
@@ -173,6 +177,8 @@ export const update = mutation({
     reimbursementAmount: v.optional(v.number()),
     reimbursementRequested: v.optional(v.boolean()),
     reimbursementStatus: v.optional(v.string()),
+    reimbursementUser: v.optional(v.string()),
+    reimbursementUserName: v.optional(v.string()),
     notes: v.optional(v.string()),
     statusNote: v.optional(v.string()),
     changedBy: v.optional(v.string()),
@@ -201,7 +207,21 @@ export const update = mutation({
       });
       updates.statusHistory = statusHistory;
     }
+    if (args.reimbursementUser !== undefined) {
+      updates.reimbursementUser = args.reimbursementUser;
+      updates.reimbursementUserName = args.reimbursementUserName;
+    }
     await ctx.db.patch(id, updates);
     return { invoiceId: id };
+  }
+});
+
+export const remove = mutation({
+  args: { invoiceId: v.string() },
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("invoices", args.invoiceId);
+    if (!id) throw new Error("Invalid invoice id");
+    await ctx.db.delete(id);
+    return { invoiceId: args.invoiceId };
   }
 });

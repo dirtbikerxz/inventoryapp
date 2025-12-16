@@ -36,8 +36,8 @@ const DEFAULTS: Record<string, Record<string, boolean>> = {
     notesNotRequired: true,
     canImportBulkOrders: false,
     canSubmitInvoices: true,
-    canViewInvoices: true,
-    canManageInvoices: true,
+    canViewInvoices: false,
+    canManageInvoices: false,
     canManageGoogleCredentials: false
   },
   student: {
