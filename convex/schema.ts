@@ -190,6 +190,14 @@ export default defineSchema({
     createdAt: v.number()
   }).index("by_label", ["label"]),
 
+  reimbursementTags: defineTable({
+    label: v.string(),
+    value: v.string(),
+    color: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
+    createdAt: v.number()
+  }).index("by_value", ["value"]),
+
   users: defineTable({
     username: v.optional(v.string()),
     email: v.optional(v.string()),

@@ -112,6 +112,13 @@
       { label: 'High', color: '#ff8b55', sortOrder: 3 },
       { label: 'Urgent', color: '#ff5565', sortOrder: 4 }
     ];
+    const defaultReimbursementStatuses = [
+      { label: 'Reimbursement requested', value: 'requested', color: '#fdd023', sortOrder: 1 },
+      { label: 'Reimbursement submitted', value: 'submitted', color: '#5aa0ff', sortOrder: 2 },
+      { label: 'Reimbursed', value: 'reimbursed', color: '#6dd96f', sortOrder: 3 },
+      { label: 'Declined', value: 'declined', color: '#ff5565', sortOrder: 4 },
+      { label: 'Not requested', value: 'not_requested', color: '#888888', sortOrder: 5 }
+    ];
     let catalogNavStack = [];
     let currentCatalogCategoryId = 'root';
     let stockItems = [];
@@ -127,6 +134,7 @@
     let googleCredentials = null;
     let googleCredentialsFileJson = null;
     let actionBusy = false;
+    let reimbursementTagList = defaultReimbursementStatuses;
 
     function setActionBusy(busy, text) {
       actionBusy = busy;
@@ -152,7 +160,7 @@
       if (activePrimaryView === 'stock') {
         globalSearch.placeholder = 'Search stock...';
       } else if (activePrimaryView === 'reimbursements') {
-        globalSearch.placeholder = 'Search reimbursements...';
+        globalSearch.placeholder = 'Search invoices...';
       } else {
         globalSearch.placeholder = 'Search parts, suppliers, users...';
       }
@@ -437,6 +445,8 @@ const switchToReimbursements = () => {
   boardSection.style.display = 'none'; tableSection.style.display = 'none';
   if (reimbursementsSection) reimbursementsSection.style.display = 'flex';
   if (selectionBar) selectionBar.style.display = 'none';
+  if (primaryTitle) primaryTitle.textContent = 'Invoices';
+  if (primarySubtitle) primarySubtitle.textContent = 'Submit receipts and track reimbursement status.';
   updateSearchPlaceholder();
   renderReimbursementsTable();
   loadReimbursements();
@@ -617,6 +627,14 @@ invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', 
   if (show && reimbursementUserSelect && !reimbursementUserSelect.value && currentUser?._id) {
     reimbursementUserSelect.value = currentUser._id;
   }
+  if (invoiceStatusSelect) {
+    if (!show) {
+      invoiceStatusSelect.value = 'not_requested';
+    } else if (invoiceStatusSelect.value === 'not_requested') {
+      invoiceStatusSelect.value = 'requested';
+    }
+  }
+  if (invoiceStatusField) invoiceStatusField.style.display = show ? 'block' : 'none';
 });
 invoiceEditorForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1419,11 +1437,13 @@ function fetchOrderDetails(configHint) {
       loadTags();
       loadPriorityTags();
       loadStatusTags();
+      loadReimbursementTags();
       showTagsModalTab('tags');
     });
     tagsTabTags?.addEventListener('click', () => showTagsModalTab('tags'));
     tagsTabPriorities?.addEventListener('click', () => showTagsModalTab('priorities'));
     tagsTabStatus?.addEventListener('click', () => showTagsModalTab('status'));
+    tagsTabReimbursements?.addEventListener('click', () => showTagsModalTab('reimbursements'));
     closeTags?.addEventListener('click', () => { tagsModal.style.display = 'none'; });
     closeAdmin.addEventListener('click', () => { adminModal.style.display = 'none'; resetCatalogItemForm(); closeVendorModal(); });
     function updateCatalogEditVisibility() {
@@ -2063,6 +2083,23 @@ function fetchOrderDetails(configHint) {
       }
     }
 
+    async function loadReimbursementTags() {
+      try {
+        const res = await fetch('/api/reimbursement-tags');
+        const data = await res.json();
+        reimbursementTagList = (data.statuses && data.statuses.length ? data.statuses : defaultReimbursementStatuses) || defaultReimbursementStatuses;
+        window.__reimbursementTags = reimbursementTagList;
+        renderReimbursementManager();
+        renderReimbursementFilters();
+      } catch (e) {
+        console.warn('Failed to load reimbursement tags', e);
+        reimbursementTagList = defaultReimbursementStatuses;
+        window.__reimbursementTags = reimbursementTagList;
+        renderReimbursementManager();
+        renderReimbursementFilters();
+      }
+    }
+
     function renderTagOptions(selected = []) {
       if (!tagSelect) return;
       const selSet = new Set(selected.map(String));
@@ -2128,17 +2165,20 @@ function fetchOrderDetails(configHint) {
       if (createTagForm) createTagForm.style.display = canManage ? 'flex' : 'none';
       if (createPriorityForm) createPriorityForm.style.display = canManage ? 'flex' : 'none';
       if (createStatusForm) createStatusForm.style.display = canManage ? 'flex' : 'none';
+      if (createReimbursementTagForm) createReimbursementTagForm.style.display = canManage ? 'flex' : 'none';
     }
 
     function showTagsModalTab(which) {
-      const allowed = ['tags', 'priorities', 'status'];
+      const allowed = ['tags', 'priorities', 'status', 'reimbursements'];
       activeTagsTab = allowed.includes(which) ? which : 'tags';
       if (tagsTabTags) tagsTabTags.classList.toggle('primary', activeTagsTab === 'tags');
       if (tagsTabPriorities) tagsTabPriorities.classList.toggle('primary', activeTagsTab === 'priorities');
       if (tagsTabStatus) tagsTabStatus.classList.toggle('primary', activeTagsTab === 'status');
+      if (tagsTabReimbursements) tagsTabReimbursements.classList.toggle('primary', activeTagsTab === 'reimbursements');
       if (tagsSection) tagsSection.style.display = activeTagsTab === 'tags' ? 'block' : 'none';
       if (prioritiesSection) prioritiesSection.style.display = activeTagsTab === 'priorities' ? 'block' : 'none';
       if (statusesSection) statusesSection.style.display = activeTagsTab === 'status' ? 'block' : 'none';
+      if (reimbursementTagsSection) reimbursementTagsSection.style.display = activeTagsTab === 'reimbursements' ? 'block' : 'none';
     }
     function getCatalogRequestTagIds() {
       if (!catalogRequestTags) return [];
@@ -2432,6 +2472,65 @@ function fetchOrderDetails(configHint) {
       }
     }
 
+    function renderReimbursementManager() {
+      if (!reimbursementTagsList) return;
+      syncTagEditUI();
+      if (!reimbursementTagList.length) {
+        reimbursementTagsList.innerHTML = '<div class="empty">No reimbursement statuses yet.</div>';
+        return;
+      }
+      reimbursementTagsList.innerHTML = reimbursementTagList.map((s) => {
+        const id = s._id || s.id || s.value || s.label;
+        const color = s.color || '#fdd023';
+        const sort = s.sortOrder ?? '';
+        return `<div class="tag-manager-item" data-id="${id}">
+          <div class="tag-manager-meta" style="gap:12px;">
+            <input type="color" class="reimbursement-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+            <div style="min-width:160px;">${escapeHtml(s.label || '')}</div>
+            <input type="number" class="reimbursement-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          </div>
+          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-reimbursement-tag" style="color: var(--danger);">Delete</button>` : ''}
+        </div>`;
+      }).join('');
+      if (currentUser?.permissions?.canManageTags) {
+        reimbursementTagsList.querySelectorAll('.reimbursement-color-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            await fetch(`/api/reimbursement-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ color: e.target.value })
+            });
+            await loadReimbursementTags();
+          });
+        });
+        reimbursementTagsList.querySelectorAll('.reimbursement-sort-input').forEach(inp => {
+          inp.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            const sort = Number(e.target.value);
+            await fetch(`/api/reimbursement-tags/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+            });
+            await loadReimbursementTags();
+          });
+        });
+        reimbursementTagsList.querySelectorAll('button[data-action="delete-reimbursement-tag"]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.target.closest('.tag-manager-item')?.dataset.id;
+            if (!id) return;
+            openConfirm('Delete this reimbursement status?', async () => {
+              await fetch(`/api/reimbursement-tags/${id}`, { method: 'DELETE' });
+              await loadReimbursementTags();
+            });
+          });
+        });
+      }
+    }
+
     function openCatalogRequestModal(item) {
       pendingCatalogRequest = item;
       if (catalogRequestMessage) {
@@ -2518,6 +2617,7 @@ function fetchOrderDetails(configHint) {
 
     refreshPrioritiesBtn?.addEventListener('click', () => loadPriorityTags());
     refreshStatusesBtn?.addEventListener('click', () => loadStatusTags());
+    refreshReimbursementTagsBtn?.addEventListener('click', () => loadReimbursementTags());
     createPriorityForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!currentUser?.permissions?.canManageTags) return;
@@ -2570,6 +2670,33 @@ function fetchOrderDetails(configHint) {
       } catch (err) {
         statusesMessage.textContent = err.message || 'Failed to create status';
         statusesMessage.className = 'error';
+      }
+    });
+    createReimbursementTagForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentUser?.permissions?.canManageTags) return;
+      const label = (reimbursementTagLabelInput?.value || '').trim();
+      const color = reimbursementTagColorInput?.value || '#fdd023';
+      const sortOrder = Number(reimbursementTagSortInput?.value);
+      if (!label) return;
+      reimbursementTagsMessage.textContent = 'Saving...';
+      reimbursementTagsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/reimbursement-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, color, sortOrder: Number.isFinite(sortOrder) ? sortOrder : undefined })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create reimbursement status');
+        reimbursementTagLabelInput.value = '';
+        reimbursementTagSortInput.value = '';
+        reimbursementTagsMessage.textContent = 'Reimbursement status created';
+        reimbursementTagsMessage.className = 'success';
+        await loadReimbursementTags();
+      } catch (err) {
+        reimbursementTagsMessage.textContent = err.message || 'Failed to create reimbursement status';
+        reimbursementTagsMessage.className = 'error';
       }
     });
     confirmCatalogRequest?.addEventListener('click', submitCatalogRequest);
@@ -3369,6 +3496,7 @@ function fetchOrderDetails(configHint) {
         await loadTags();
         await loadPriorityTags();
         await loadStatusTags();
+        await loadReimbursementTags();
         renderReimbursementFilters();
         fetchOrders();
         await loadReimbursements();

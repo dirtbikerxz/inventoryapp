@@ -196,24 +196,37 @@ export const update = mutation({
       if (val !== undefined) updates[key] = val;
     });
     const statusHistory: any[] = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-    if (args.reimbursementStatus) {
-      updates.reimbursementStatus = args.reimbursementStatus;
-      statusHistory.push({
-        status: args.reimbursementStatus,
-        changedAt: updates.updatedAt,
-        changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
-        changedByName: args.changedByName,
-        note: args.statusNote
-      });
-      updates.statusHistory = statusHistory;
-    }
-    if (args.reimbursementUser !== undefined) {
-      updates.reimbursementUser = args.reimbursementUser;
-      updates.reimbursementUserName = args.reimbursementUserName;
-    }
-    await ctx.db.patch(id, updates);
-    return { invoiceId: id };
+  if (args.reimbursementStatus) {
+    updates.reimbursementStatus = args.reimbursementStatus;
+    statusHistory.push({
+      status: args.reimbursementStatus,
+      changedAt: updates.updatedAt,
+      changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
+      changedByName: args.changedByName,
+      note: args.statusNote
+    });
+    updates.statusHistory = statusHistory;
   }
+  if (args.reimbursementUser !== undefined) {
+    updates.reimbursementUser = args.reimbursementUser;
+    updates.reimbursementUserName = args.reimbursementUserName;
+  }
+  if (args.reimbursementRequested === false) {
+    updates.reimbursementStatus = "not_requested";
+    updates.reimbursementUser = undefined;
+    updates.reimbursementUserName = undefined;
+    statusHistory.push({
+      status: "not_requested",
+      changedAt: updates.updatedAt,
+      changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
+      changedByName: args.changedByName,
+      note: args.statusNote
+    });
+    updates.statusHistory = statusHistory;
+  }
+  await ctx.db.patch(id, updates);
+  return { invoiceId: id };
+}
 });
 
 export const remove = mutation({

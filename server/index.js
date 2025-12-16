@@ -891,7 +891,8 @@ app.get('/api/invoices', async (req, res) => {
     orderId: req.query.orderId || undefined,
     groupId: req.query.groupId || undefined,
     status: req.query.status || undefined,
-    reimbursementOnly: req.query.reimbursementOnly === 'true'
+    reimbursementOnly: req.query.reimbursementOnly === 'true',
+    requestedBy: req.query.requestedBy || undefined
   };
   if (!canViewAll) {
     args.requestedBy = user._id?.toString();
@@ -1051,6 +1052,11 @@ app.patch('/api/invoices/:id', async (req, res) => {
       reimbursementRequested: req.body?.reimbursementRequested === undefined ? undefined : parseBoolean(req.body?.reimbursementRequested),
       notes: req.body?.notes
     };
+    if (updates.reimbursementRequested === false) {
+      updates.reimbursementStatus = 'not_requested';
+      updates.reimbursementUser = undefined;
+      updates.reimbursementUserName = undefined;
+    }
     if (updates.amount !== undefined) {
       updates.reimbursementAmount = updates.amount;
     }
@@ -1628,6 +1634,57 @@ app.delete('/api/status-tags/:id', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Failed to delete status');
     res.status(500).json({ error: 'Unable to delete status' });
+  }
+});
+
+app.get('/api/reimbursement-tags', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const items = await client.query('reimbursementTags:list', {});
+    res.json({ statuses: items });
+  } catch (error) {
+    logger.error(error, 'Failed to list reimbursement tags');
+    res.status(500).json({ error: 'Unable to load reimbursement tags' });
+  }
+});
+
+app.post('/api/reimbursement-tags', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  if (!label) return res.status(400).json({ error: 'label required' });
+  try {
+    const result = await client.mutation('reimbursementTags:create', { label, color, sortOrder });
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to create reimbursement status');
+    res.status(500).json({ error: 'Unable to create reimbursement status' });
+  }
+});
+
+app.patch('/api/reimbursement-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  const { label, color, sortOrder } = req.body || {};
+  try {
+    await client.mutation('reimbursementTags:update', { id: req.params.id, label, color, sortOrder });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to update reimbursement status');
+    res.status(500).json({ error: 'Unable to update reimbursement status' });
+  }
+});
+
+app.delete('/api/reimbursement-tags/:id', async (req, res) => {
+  const user = await requireAuth(req, res, 'canManageTags');
+  if (!user) return;
+  try {
+    const result = await client.mutation('reimbursementTags:remove', { id: req.params.id });
+    res.json(result);
+  } catch (error) {
+    logger.error(error, 'Failed to delete reimbursement status');
+    res.status(500).json({ error: 'Unable to delete reimbursement status' });
   }
 });
 

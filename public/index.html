@@ -73,7 +73,7 @@
       <div class="view-toggle" id="orders-layout-toggle">
         <button id="board-view-btn" class="active">Board</button>
         <button id="table-view-btn">Table</button>
-        <button id="reimbursements-view-btn">Reimbursements</button>
+        <button id="reimbursements-view-btn">Invoices</button>
       </div>
       <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-left:auto;">
         <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
@@ -112,7 +112,7 @@
         <div>
           <label class="small">Scope</label>
           <select id="reimbursement-scope-filter" class="input">
-            <option value="mine">My submissions</option>
+            <option value="mine">My invoices</option>
             <option value="all">All invoices</option>
           </select>
         </div>
@@ -707,6 +707,7 @@
             <button class="btn ghost" id="tags-tab-tags">Organization tags</button>
             <button class="btn ghost" id="tags-tab-priorities">Priority tags</button>
             <button class="btn ghost" id="tags-tab-status">Status tags</button>
+            <button class="btn ghost" id="tags-tab-reimbursements">Reimbursement statuses</button>
           </div>
         </div>
         <div id="tags-section" class="card" style="background:var(--panel-2); margin-top:10px;">
@@ -764,6 +765,25 @@
         </form>
         <div id="statuses-message" class="small" style="margin-top:6px;"></div>
         <div id="statuses-list" class="tag-manager-list" style="margin-top:10px;"></div>
+      </div>
+      <div id="reimbursements-tags-section" class="card" style="background:var(--panel-2); margin-top:10px; display:none;">
+        <div class="flex-between" style="align-items:flex-start;">
+          <div>
+            <div class="page-title" style="font-size:18px;">Reimbursement statuses</div>
+            <div class="subtitle" style="margin-bottom:12px;">Customize invoice/reimbursement status options.</div>
+          </div>
+          <div class="flex-between" style="gap:8px;">
+            <button class="btn ghost" id="refresh-reimbursement-tags">Refresh</button>
+          </div>
+        </div>
+        <form id="create-reimbursement-tag-form" class="admin-inline-form" style="margin-top:10px;">
+          <input id="reimbursement-tag-color-input" class="inline-color" type="color" value="#5aa0ff" />
+          <input id="reimbursement-tag-label-input" class="input" placeholder="Status name (e.g., Reimbursed)" required style="flex:1; min-width:180px;" />
+          <input id="reimbursement-tag-sort-input" class="input" type="number" placeholder="Sort" style="width:80px;" />
+          <button type="submit" class="btn primary">New status</button>
+        </form>
+        <div id="reimbursement-tags-message" class="small" style="margin-top:6px;"></div>
+        <div id="reimbursement-tags-list" class="tag-manager-list" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>

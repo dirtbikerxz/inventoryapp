@@ -102,13 +102,29 @@ let reimbursementsScope = "mine";
 let currentOrderInvoices = [];
 let activeInvoiceOrderId = null;
 let activeInvoiceOrders = [];
-const reimbursementStatusOptions = [
+const defaultReimbursementStatusOptions = [
   { value: "requested", label: "Reimbursement requested" },
   { value: "submitted", label: "Reimbursement submitted" },
   { value: "reimbursed", label: "Reimbursed" },
   { value: "declined", label: "Declined" },
   { value: "not_requested", label: "Not requested" },
 ];
+
+function getReimbursementStatusOptions() {
+  if (typeof window !== "undefined" && !window.__reimbursementTags) {
+    window.__reimbursementTags = defaultReimbursementStatusOptions;
+  }
+  const list =
+    Array.isArray(window.__reimbursementTags) &&
+    window.__reimbursementTags.length
+      ? window.__reimbursementTags
+      : defaultReimbursementStatusOptions;
+  return list.map((o) => ({
+    value: o.value || o.label,
+    label: o.label || o.value,
+    color: o.color,
+  }));
+}
 
 function primaryFileLink(inv) {
   if (!inv || !Array.isArray(inv.files)) return "";
@@ -308,6 +324,9 @@ function formatMoney(value) {
 }
 
 function formatReimbursementStatus(status) {
+  const options = getReimbursementStatusOptions();
+  const found = options.find((o) => o.value === status);
+  if (found) return found.label || found.value || "Unknown";
   const map = {
     requested: "Reimbursement requested",
     submitted: "Submitted",
@@ -319,6 +338,9 @@ function formatReimbursementStatus(status) {
 }
 
 function reimbursementStatusColor(status) {
+  const options = getReimbursementStatusOptions();
+  const found = options.find((o) => o.value === status);
+  if (found?.color) return found.color;
   switch (status) {
     case "reimbursed":
       return "var(--success)";
@@ -596,7 +618,7 @@ function renderReimbursementFilters() {
   if (reimbursementStatusFilter) {
     reimbursementStatusFilter.innerHTML = [
       '<option value="">All statuses</option>',
-      ...reimbursementStatusOptions.map(
+      ...getReimbursementStatusOptions().map(
         (opt) => `<option value="${opt.value}">${opt.label}</option>`,
       ),
     ].join("");
@@ -610,6 +632,44 @@ function renderReimbursementFilters() {
       ? reimbursementsScope
       : "mine";
   }
+}
+
+function updateReimbursementScopeOptions(list = []) {
+  if (!reimbursementScopeFilter) return;
+  const canViewAll =
+    currentUser?.permissions?.canViewInvoices ||
+    currentUser?.permissions?.canManageInvoices;
+  if (!canViewAll) {
+    reimbursementScopeFilter.disabled = true;
+    reimbursementScopeFilter.value = "mine";
+    return;
+  }
+  const userMap = new Map();
+  list.forEach((inv) => {
+    const id = inv.requestedBy;
+    const name = inv.requestedByName || inv.studentName || "";
+    if (id && name) userMap.set(id, name);
+  });
+  const current = reimbursementScopeFilter.value || reimbursementsScope || "mine";
+  const options = [
+    { value: "mine", label: "My invoices" },
+    { value: "all", label: "All invoices" },
+    ...Array.from(userMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ];
+  reimbursementScopeFilter.innerHTML = options
+    .map(
+      (opt) =>
+        `<option value="${opt.value}" ${
+          opt.value === current ? "selected" : ""
+        }>${escapeHtml(opt.label)}</option>`,
+    )
+    .join("");
+  reimbursementsScope = options.find((o) => o.value === current)
+    ? current
+    : "mine";
+  reimbursementScopeFilter.value = reimbursementsScope;
 }
 
 function filteredReimbursements() {
@@ -642,13 +702,13 @@ function renderReimbursementsTable() {
   const rows = filteredReimbursements();
   if (!rows.length) {
     reimbursementsTable.innerHTML =
-      '<div class="small">No reimbursements found.</div>';
+      '<div class="small">No invoices found.</div>';
     return;
   }
   reimbursementsTable.innerHTML = `
     <div class="table-row header" style="font-weight:700; display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px;">
       <div>Order</div>
-      <div>Student</div>
+      <div>Person</div>
       <div>Amount</div>
       <div>Status</div>
       <div>Files</div>
@@ -671,7 +731,7 @@ function renderReimbursementsTable() {
           <div>${amt !== undefined ? formatMoney(amt) : ""}</div>
           <div>
             <select class="input reimbursement-status-select" data-id="${inv._id}" ${selectDisabled} ${selectStyle}>
-              ${reimbursementStatusOptions
+              ${getReimbursementStatusOptions()
                 .map(
                   (opt) =>
                     `<option value="${opt.value}" ${
@@ -731,32 +791,34 @@ function renderReimbursementsTable() {
 async function loadReimbursements(statusOverride, scopeOverride) {
   if (!currentUser) return;
   const status = statusOverride ?? reimbursementStatusFilter?.value ?? "";
-  const scope =
+  const scopeRaw =
     scopeOverride ??
     reimbursementScopeFilter?.value ??
     reimbursementsScope ??
     "mine";
-  reimbursementsScope = scope;
+  reimbursementsScope = scopeRaw;
   if (reimbursementScopeFilter) {
     const canViewAll =
       currentUser?.permissions?.canViewInvoices ||
       currentUser?.permissions?.canManageInvoices;
     reimbursementScopeFilter.disabled = !canViewAll;
-    reimbursementScopeFilter.value = canViewAll ? scope : "mine";
+    reimbursementScopeFilter.value = canViewAll ? scopeRaw : "mine";
   }
   const params = new URLSearchParams();
-  params.set("reimbursementOnly", "true");
   if (status) params.set("status", status);
-  if (
-    scope !== "all" ||
-    !(currentUser?.permissions?.canViewInvoices ||
-      currentUser?.permissions?.canManageInvoices)
-  ) {
-    params.set("scope", "mine");
+  const canViewAll =
+    currentUser?.permissions?.canViewInvoices ||
+    currentUser?.permissions?.canManageInvoices;
+  if (!canViewAll || scopeRaw === "mine") {
+    params.set("requestedBy", currentUser?._id || "");
+    reimbursementsScope = "mine";
+  } else if (scopeRaw && scopeRaw !== "all") {
+    params.set("requestedBy", scopeRaw);
   }
   const res = await fetch(`/api/invoices?${params.toString()}`);
   const data = await res.json();
   reimbursements = data.invoices || [];
+  updateReimbursementScopeOptions(reimbursements);
   renderReimbursementsTable();
 }
 
@@ -956,7 +1018,7 @@ function openInvoiceEditor(mode = "create", invoice = null) {
     processInvoiceBtn.style.display = mode === "edit" ? "none" : "inline-flex";
   }
   if (invoiceStatusSelect) {
-    invoiceStatusSelect.innerHTML = reimbursementStatusOptions
+    invoiceStatusSelect.innerHTML = getReimbursementStatusOptions()
       .map(
         (opt) =>
           `<option value="${opt.value}" ${
@@ -1005,6 +1067,11 @@ function openInvoiceEditor(mode = "create", invoice = null) {
     const needs =
       invoiceEditorForm.elements.reimbursementRequested.value === "true";
     reimbursementUserField.style.display = needs ? "block" : "none";
+  }
+  if (invoiceStatusField && invoiceEditorForm.elements.reimbursementRequested) {
+    const needs =
+      invoiceEditorForm.elements.reimbursementRequested.value === "true";
+    invoiceStatusField.style.display = needs ? "block" : "none";
   }
   if (invoiceCreateModal) invoiceCreateModal.style.display = "flex";
 }
@@ -3033,9 +3100,14 @@ function showOrdersView() {
       layout === "reimbursements" ? "flex" : "none";
   boardSection.style.display = layout === "board" ? "flex" : "none";
   tableSection.style.display = layout === "table" ? "flex" : "none";
-  if (primaryTitle) primaryTitle.textContent = "Orders";
+  if (primaryTitle)
+    primaryTitle.textContent =
+      layout === "reimbursements" ? "Invoices" : "Orders";
   if (primarySubtitle)
-    primarySubtitle.textContent = "Track parts from request to delivery.";
+    primarySubtitle.textContent =
+      layout === "reimbursements"
+        ? "Submit receipts and track reimbursement status."
+        : "Track parts from request to delivery.";
   updateSearchPlaceholder();
   updateSelectionBar();
   resizeColumns();
