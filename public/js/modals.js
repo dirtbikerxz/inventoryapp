@@ -198,6 +198,7 @@ attachBackdropClose(modal, () => {
   modal.style.display = "none";
 });
 attachBackdropClose(groupModal, resetGroupModal);
+attachBackdropClose(invoiceModal, closeInvoiceModal);
 attachBackdropClose(groupDetailModal, () => {
   if (groupDetailModal) groupDetailModal.style.display = "none";
 });

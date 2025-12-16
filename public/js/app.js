@@ -1,8 +1,8 @@
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true },
-      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false },
-      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false }
+      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
+      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -146,9 +146,13 @@
 
     function updateSearchPlaceholder() {
       if (!globalSearch) return;
-      globalSearch.placeholder = activePrimaryView === 'stock'
-        ? 'Search stock...'
-        : 'Search parts, suppliers, users...';
+      if (activePrimaryView === 'stock') {
+        globalSearch.placeholder = 'Search stock...';
+      } else if (activePrimaryView === 'reimbursements') {
+        globalSearch.placeholder = 'Search reimbursements...';
+      } else {
+        globalSearch.placeholder = 'Search parts, suppliers, users...';
+      }
     }
 
     function updateUndoRedoUI() {
@@ -417,6 +421,7 @@ const switchToTable = () => {
   setTimeout(resizeColumns, 30);
 };
 ordersViewBtn?.addEventListener('click', showOrdersView);
+reimbursementsViewBtn?.addEventListener('click', showReimbursementsView);
 stockViewBtn?.addEventListener('click', showStockView);
 boardBtn.addEventListener('click', switchToBoard);
 tableBtn.addEventListener('click', switchToTable);
@@ -430,13 +435,21 @@ boardEl?.addEventListener('click', (e) => {
   }
 });
 refreshBtn.addEventListener('click', () => {
-  if (activePrimaryView === 'stock') loadStock(); else fetchOrders();
+  if (activePrimaryView === 'stock') {
+    loadStock();
+  } else if (activePrimaryView === 'reimbursements') {
+    loadReimbursements();
+  } else {
+    fetchOrders();
+  }
 });
 undoBtn.addEventListener('click', doUndo);
 globalSearch.addEventListener('input', () => {
   if (activePrimaryView === 'stock') {
     clearTimeout(stockSearchTimer);
     stockSearchTimer = setTimeout(() => loadStock(), 250);
+  } else if (activePrimaryView === 'reimbursements') {
+    renderReimbursementsTable();
   } else {
     renderBoard(); renderTable();
   }
@@ -445,6 +458,9 @@ statusFilter.addEventListener('change', () => { renderBoard(); renderTable(); })
 vendorFilter.addEventListener('change', () => { renderBoard(); renderTable(); });
 startDate.addEventListener('change', () => { renderBoard(); renderTable(); });
 endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
+reimbursementStatusFilter?.addEventListener('change', () => { loadReimbursements(); });
+reimbursementScopeFilter?.addEventListener('change', () => { loadReimbursements(undefined, reimbursementScopeFilter.value); });
+refreshReimbursementsBtn?.addEventListener('click', () => { loadReimbursements(); });
 stockSubteamFilter?.addEventListener('change', () => { selectedStockSubteam = stockSubteamFilter.value; loadStock(); });
   addStockBtn?.addEventListener('click', () => openStockModal());
   manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
@@ -519,6 +535,56 @@ confirmOk?.addEventListener('click', async () => {
     pendingConfirmAction = null;
   }
 });
+invoiceOrderSelect?.addEventListener('change', () => {
+  const selectedId = invoiceOrderSelect.value;
+  const target =
+    (activeInvoiceOrders || []).find((o) => o._id === selectedId) || {
+      _id: selectedId,
+    };
+  setInvoiceTarget(target, activeInvoiceOrders || []);
+  if (selectedId) loadInvoicesForOrder(selectedId);
+});
+invoiceForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const orderId = invoiceForm?.elements?.orderId?.value;
+  if (!orderId) {
+    if (invoiceMessage) {
+      invoiceMessage.textContent = 'Select an order to submit an invoice';
+      invoiceMessage.className = 'error';
+    }
+    return;
+  }
+  const fd = new FormData(invoiceForm);
+  fd.set('orderId', orderId);
+  const groupVal = invoiceForm.elements.groupId?.value;
+  if (groupVal) fd.set('groupId', groupVal);
+  if (invoiceMessage) {
+    invoiceMessage.textContent = 'Uploading and processing…';
+    invoiceMessage.className = 'small';
+  }
+  const res = await fetch('/api/invoices', {
+    method: 'POST',
+    body: fd
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    if (invoiceMessage) {
+      invoiceMessage.textContent = data.error || 'Failed to submit invoice';
+      invoiceMessage.className = 'error';
+    }
+    return;
+  }
+  if (invoiceMessage) {
+    invoiceMessage.textContent = 'Invoice submitted';
+    invoiceMessage.className = 'success';
+  }
+  await loadInvoicesForOrder(orderId);
+  await loadReimbursements();
+  fetchOrders();
+  resetInvoiceForm(true);
+});
+closeInvoiceModalBtn?.addEventListener('click', closeInvoiceModal);
+resetInvoiceFormBtn?.addEventListener('click', () => resetInvoiceForm(true));
 groupBtn.addEventListener('click', createGroup);
 deleteSelectedBtn?.addEventListener('click', async () => {
   const selectedOrders = orders.filter(o => selected.has(o._id));
@@ -2766,9 +2832,9 @@ function fetchOrderDetails(configHint) {
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true },
-          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false },
-          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false }
+          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
+          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true },
+          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
@@ -2790,6 +2856,9 @@ function fetchOrderDetails(configHint) {
               ${renderToggle(role, 'canManagePartRequests', 'Manage Part Requests')}
               ${renderToggle(role, 'canManageOwnPartRequests', 'Manage Own Part Requests')}
               ${renderToggle(role, 'canManageOrders', 'Create and Manage Orders')}
+              ${renderToggle(role, 'canSubmitInvoices', 'Submit Invoices/Receipts')}
+              ${renderToggle(role, 'canViewInvoices', 'View All Invoices')}
+              ${renderToggle(role, 'canManageInvoices', 'Manage Reimbursements')}
               ${renderToggle(role, 'canManageTags', 'Manage Tags')}
               ${renderToggle(role, 'canEditInventoryCatalog', 'Manage Inventory Catalog')}
               ${renderToggle(role, 'canManageStock', 'Manage Tracked Stock & Locations')}
@@ -2996,7 +3065,9 @@ function fetchOrderDetails(configHint) {
         await loadTags();
         await loadPriorityTags();
         await loadStatusTags();
+        renderReimbursementFilters();
         fetchOrders();
+        await loadReimbursements();
         await loadStock();
         await loadSubteams();
         loadVendors();
@@ -3011,6 +3082,9 @@ function fetchOrderDetails(configHint) {
         stockItems = [];
         renderStockGrid();
         renderStockFilters();
+        reimbursements = [];
+        currentOrderInvoices = [];
+        renderReimbursementsTable();
       }
     }
 
@@ -3037,6 +3111,9 @@ function fetchOrderDetails(configHint) {
       renderStockGrid();
       stockSubteams = [];
       renderStockFilters();
+      reimbursements = [];
+      currentOrderInvoices = [];
+      renderReimbursementsTable();
       showOrdersView();
     });
 
@@ -3071,7 +3148,9 @@ function fetchOrderDetails(configHint) {
       await loadTags();
       await loadPriorityTags();
       await loadStatusTags();
+      renderReimbursementFilters();
       fetchOrders();
+      await loadReimbursements();
       await loadStock();
       await loadSubteams();
       loadVendors();

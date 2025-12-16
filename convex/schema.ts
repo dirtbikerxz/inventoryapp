@@ -25,6 +25,28 @@ const catalogVariation = v.object({
   attributes: v.optional(v.record(v.string(), v.string()))
 });
 
+const invoiceFile = v.object({
+  name: v.string(),
+  mimeType: v.string(),
+  size: v.optional(v.number()),
+  driveFileId: v.optional(v.string()),
+  driveWebViewLink: v.optional(v.string()),
+  driveDownloadLink: v.optional(v.string()),
+  detectedTotal: v.optional(v.number()),
+  detectedCurrency: v.optional(v.string()),
+  detectedDate: v.optional(v.union(v.number(), v.string())),
+  detectedMerchant: v.optional(v.string()),
+  textSnippet: v.optional(v.string())
+});
+
+const invoiceStatusEntry = v.object({
+  status: v.string(),
+  changedAt: v.number(),
+  changedBy: v.optional(v.id("users")),
+  changedByName: v.optional(v.string()),
+  note: v.optional(v.string())
+});
+
 export default defineSchema({
   orders: defineTable({
     orderNumber: v.string(),
@@ -63,6 +85,32 @@ export default defineSchema({
     .index("by_orderNumber", ["orderNumber"])
     .index("by_groupId", ["groupId"])
     .index("by_status", ["status"]),
+
+  invoices: defineTable({
+    orderId: v.id("orders"),
+    groupId: v.optional(v.id("orderGroups")),
+    orderNumber: v.optional(v.string()),
+    groupTitle: v.optional(v.string()),
+    vendor: v.optional(v.string()),
+    studentName: v.optional(v.string()),
+    requestedBy: v.optional(v.id("users")),
+    requestedByName: v.optional(v.string()),
+    requestedAt: v.number(),
+    amount: v.optional(v.number()),
+    reimbursementAmount: v.optional(v.number()),
+    reimbursementRequested: v.boolean(),
+    reimbursementStatus: v.string(),
+    detectedTotal: v.optional(v.number()),
+    detectedCurrency: v.optional(v.string()),
+    detectedDate: v.optional(v.union(v.number(), v.string())),
+    detectedMerchant: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    files: v.array(invoiceFile),
+    statusHistory: v.optional(v.array(invoiceStatusEntry)),
+    updatedAt: v.number()
+  }).index("by_orderId", ["orderId"])
+    .index("by_groupId", ["groupId"])
+    .index("by_status", ["reimbursementStatus"]),
 
   orderGroups: defineTable({
     title: v.optional(v.string()),

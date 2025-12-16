@@ -6,12 +6,14 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const path = require('path');
+const multer = require('multer');
 const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
 const { TrackingService, buildTrackingUrl } = require('./trackingService');
 const { DigiKeyService } = require('./digikeyService');
 const { MouserService } = require('./mouserService');
 const { builtinVendors, getBuiltinVendor } = require('./builtinVendors');
+const { InvoiceService } = require('./invoiceService');
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 dotenv.config();
@@ -40,6 +42,8 @@ const app = express();
 const trackingService = new TrackingService({ client, logger });
 const digikeyService = new DigiKeyService({ logger });
 const mouserService = new MouserService({ logger });
+const invoiceService = new InvoiceService({ logger });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 8 } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -64,7 +68,10 @@ function defaultPermissions(role) {
     canManageStock: false,
     canEditStock: false,
     notesNotRequired: false,
-    canImportBulkOrders: false
+    canImportBulkOrders: false,
+    canSubmitInvoices: false,
+    canViewInvoices: false,
+    canManageInvoices: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -81,7 +88,10 @@ function defaultPermissions(role) {
         canManageStock: true,
         canEditStock: true,
         notesNotRequired: true,
-        canImportBulkOrders: true
+        canImportBulkOrders: true,
+        canSubmitInvoices: true,
+        canViewInvoices: true,
+        canManageInvoices: true
       };
     case 'mentor':
       return {
@@ -97,13 +107,45 @@ function defaultPermissions(role) {
         canManageStock: true,
         canEditStock: true,
         notesNotRequired: true,
-        canImportBulkOrders: false
+        canImportBulkOrders: false,
+        canSubmitInvoices: true,
+        canViewInvoices: true,
+        canManageInvoices: true
       };
     case 'student':
-      return base;
+      return {
+        ...base,
+        canSubmitInvoices: true
+      };
     default:
       return base;
   }
+}
+
+function parseBoolean(input) {
+  if (typeof input === 'boolean') return input;
+  if (typeof input === 'string') {
+    const lowered = input.toLowerCase();
+    return lowered === 'true' || lowered === '1' || lowered === 'yes' || lowered === 'on';
+  }
+  return false;
+}
+
+function toNumber(val) {
+  if (val === null || val === undefined || val === '') return undefined;
+  const num = Number(val);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function normalizeInvoice(inv) {
+  if (!inv) return inv;
+  const norm = { ...inv };
+  ['_id', 'orderId', 'groupId', 'requestedBy'].forEach(key => {
+    if (norm[key] && norm[key].toString) {
+      norm[key] = norm[key].toString();
+    }
+  });
+  return norm;
 }
 
 function isOwnOrder(order, user) {
@@ -737,10 +779,173 @@ app.get('/api/orders', async (req, res) => {
     const data = await client.query('orders:list', {
       status: req.query.status || undefined
     });
-    res.json(data);
+    const orderIds = (data.orders || []).map(o => (o._id && o._id.toString) ? o._id.toString() : (o._id || o.id || o.orderId)).filter(Boolean);
+    let invoiceMap = new Map();
+    const canViewInvoices = Boolean(user.permissions?.canViewInvoices || user.permissions?.canManageInvoices);
+    if (orderIds.length) {
+      const invoiceListRaw = await client.query('invoices:listForOrders', { orderIds });
+      const filteredInvoices = canViewInvoices
+        ? invoiceListRaw
+        : (invoiceListRaw || []).filter(inv => {
+            const requester = inv.requestedBy && inv.requestedBy.toString ? inv.requestedBy.toString() : inv.requestedBy;
+            const studentName = (inv.studentName || '').toLowerCase();
+            const userName = (user.name || '').toLowerCase();
+            return requester === String(user._id || '') || studentName === userName;
+          });
+      const invoiceList = (filteredInvoices || []).map(normalizeInvoice);
+      invoiceMap = new Map();
+      (invoiceList || []).forEach(inv => {
+        const key = inv.orderId && inv.orderId.toString ? inv.orderId.toString() : inv.orderId;
+        if (!key) return;
+        const list = invoiceMap.get(key) || [];
+        list.push(inv);
+        invoiceMap.set(key, list);
+      });
+    }
+    const ordersWithInvoices = (data.orders || []).map(order => {
+      const key = order._id && order._id.toString ? order._id.toString() : order._id || order.id || order.orderId;
+      const invoices = key ? (invoiceMap.get(String(key)) || []) : [];
+      const requested = invoices.filter(i => i.reimbursementRequested || i.reimbursementStatus !== 'not_requested');
+      const latest = requested[0] || invoices[0] || null;
+      const statuses = Array.from(new Set(requested.map(i => i.reimbursementStatus).filter(Boolean)));
+      return {
+        ...order,
+        invoices,
+        reimbursementSummary: {
+          count: invoices.length,
+          requestedCount: requested.length,
+          statuses,
+          latestStatus: latest?.reimbursementStatus || null
+        }
+      };
+    });
+    res.json({ ...data, orders: ordersWithInvoices });
   } catch (error) {
     logger.error(error, 'Failed to load orders');
     res.status(500).json({ error: 'Unable to load orders' });
+  }
+});
+
+app.get('/api/invoices', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const canManage = Boolean(user.permissions?.canManageInvoices);
+  const canViewAll = canManage || Boolean(user.permissions?.canViewInvoices);
+  const args = {
+    orderId: req.query.orderId || undefined,
+    groupId: req.query.groupId || undefined,
+    status: req.query.status || undefined,
+    reimbursementOnly: req.query.reimbursementOnly === 'true'
+  };
+  if (!canViewAll) {
+    args.requestedBy = user._id?.toString();
+  }
+  try {
+    let invoices = (await client.query('invoices:list', args) || []).map(normalizeInvoice);
+    if (!canViewAll) {
+      const name = (user.name || '').toLowerCase();
+      invoices = invoices.filter(inv => {
+        const requester = inv.requestedBy ? String(inv.requestedBy) : '';
+        return requester === String(user._id || '') || (inv.studentName || '').toLowerCase() === name;
+      });
+    }
+    res.json({ invoices });
+  } catch (error) {
+    logger.error(error, 'Failed to list invoices');
+    res.status(500).json({ error: 'Unable to list invoices' });
+  }
+});
+
+app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
+  const user = await requireAuth(req, res, 'canSubmitInvoices');
+  if (!user) return;
+  const { orderId } = req.body || {};
+  if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+  try {
+    const order = await client.query('orders:getOne', { orderId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const ownsOrder = isOwnOrder(order, user);
+    const canManage = Boolean(user.permissions?.canManageInvoices || user.permissions?.canManageOrders);
+    if (!ownsOrder && !canManage) {
+      return res.status(403).json({ error: 'You can only submit invoices for your own requests' });
+    }
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) {
+      return res.status(400).json({ error: 'At least one invoice file is required' });
+    }
+    const processedFiles = [];
+    for (const file of files) {
+      processedFiles.push(await invoiceService.processFile(file));
+    }
+    const detectedTotals = processedFiles
+      .map(f => toNumber(f.detectedTotal))
+      .filter(v => v !== undefined)
+      .sort((a, b) => Number(b) - Number(a));
+    const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
+    const amount = toNumber(req.body?.amount) ?? detectedTotal;
+    const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? true);
+    const reimbursementAmount = toNumber(req.body?.reimbursementAmount) ?? amount ?? detectedTotal;
+    const payload = {
+      orderId,
+      groupId: req.body?.groupId || order.groupId || order.group?._id,
+      orderNumber: order.orderNumber,
+      groupTitle: order.group?.title || order.group?.supplier,
+      vendor: order.supplier || order.vendor,
+      studentName: order.studentName,
+      requestedBy: user._id?.toString(),
+      requestedByName: user.name,
+      amount,
+      reimbursementAmount,
+      reimbursementRequested,
+      reimbursementStatus: reimbursementRequested ? 'requested' : 'not_requested',
+      detectedTotal,
+      detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
+      detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
+      detectedMerchant: processedFiles.find(f => f.detectedMerchant)?.detectedMerchant,
+      notes: req.body?.notes,
+      files: processedFiles
+    };
+    const result = await client.mutation('invoices:create', payload);
+    const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });
+    const invoice = saved ? normalizeInvoice(saved) : normalizeInvoice({ ...payload, _id: result.invoiceId });
+    res.status(201).json({ invoice });
+  } catch (error) {
+    logger.error(error, 'Failed to submit invoice');
+    res.status(500).json({ error: 'Unable to submit invoice', details: error.message });
+  }
+});
+
+app.patch('/api/invoices/:id', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  try {
+    const invoice = await client.query('invoices:get', { invoiceId: req.params.id });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const isOwner = invoice.requestedBy && String(invoice.requestedBy) === String(user._id || '');
+    const canManage = Boolean(user.permissions?.canManageInvoices);
+    const canSubmit = Boolean(user.permissions?.canSubmitInvoices);
+    if (!canManage && !(isOwner && canSubmit)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const updates = {
+      invoiceId: req.params.id,
+      amount: toNumber(req.body?.amount),
+      reimbursementAmount: toNumber(req.body?.reimbursementAmount),
+      reimbursementRequested: req.body?.reimbursementRequested === undefined ? undefined : parseBoolean(req.body?.reimbursementRequested),
+      notes: req.body?.notes
+    };
+    if (req.body?.reimbursementStatus && canManage) {
+      updates.reimbursementStatus = req.body.reimbursementStatus;
+      updates.statusNote = req.body?.statusNote;
+      updates.changedBy = user._id?.toString();
+      updates.changedByName = user.name;
+    }
+    await client.mutation('invoices:update', updates);
+    const refreshed = await client.query('invoices:get', { invoiceId: req.params.id });
+    res.json({ invoice: normalizeInvoice(refreshed) });
+  } catch (error) {
+    logger.error(error, 'Failed to update invoice');
+    res.status(500).json({ error: 'Unable to update invoice' });
   }
 });
 

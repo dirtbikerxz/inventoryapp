@@ -65,6 +65,7 @@
       </div>
       <div class="view-toggle" id="primary-view-toggle">
         <button id="orders-view-btn" class="active">Orders</button>
+        <button id="reimbursements-view-btn">Reimbursements</button>
         <button id="stock-view-btn">Stock</button>
       </div>
     </div>
@@ -100,6 +101,26 @@
         <div><label class="small">Vendor</label><select id="vendor-filter" class="input"></select></div>
       </div>
       <div id="table-container" style="overflow:auto; flex:1; min-height:0; padding-bottom: 12px;"></div>
+    </section>
+
+    <section id="reimbursements-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
+      <div class="filters" style="align-items:flex-end;">
+        <div>
+          <label class="small">Status</label>
+          <select id="reimbursement-status-filter" class="input"></select>
+        </div>
+        <div>
+          <label class="small">Scope</label>
+          <select id="reimbursement-scope-filter" class="input">
+            <option value="mine">My submissions</option>
+            <option value="all">All invoices</option>
+          </select>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button class="btn ghost" id="refresh-reimbursements">Refresh</button>
+        </div>
+      </div>
+      <div id="reimbursements-table" class="card" style="background:var(--panel-2); padding:10px; overflow:auto; flex:1; min-height:240px;">Loading reimbursements...</div>
     </section>
 
     <section id="stock-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
@@ -915,6 +936,58 @@
       <div style="display:flex; justify-content:flex-end; gap:8px;">
         <button class="btn ghost" id="close-group-detail">Close</button>
       </div>
+    </div>
+  </div>
+
+  <div id="invoice-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:62; align-items:center; justify-content:center; padding:16px;">
+    <div class="tag-modal-card" style="max-width:820px; width:100%; display:flex; flex-direction:column; gap:12px;">
+      <div class="flex-between" style="align-items:flex-start; gap:8px;">
+        <div>
+          <div class="page-title" style="font-size:20px;">Invoices & Reimbursements</div>
+          <div class="subtitle" id="invoice-target-summary" style="margin-bottom:6px;"></div>
+        </div>
+        <button class="btn ghost" id="close-invoice-modal">Close</button>
+      </div>
+      <div id="invoice-existing-list" class="tag-manager-list" style="max-height:320px; overflow:auto;"></div>
+      <form id="invoice-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px; border:1px solid var(--border); border-radius:10px; padding:10px;">
+        <input type="hidden" name="orderId" />
+        <input type="hidden" name="groupId" />
+        <div style="grid-column: span 2;">
+          <label class="small">Order</label>
+          <select id="invoice-order-select" class="input" name="orderSelect"></select>
+        </div>
+        <div>
+          <label class="small">Detected / Invoice total</label>
+          <input name="amount" class="input" type="number" step="0.01" placeholder="Auto-detected if left blank" />
+        </div>
+        <div>
+          <label class="small">Reimbursement amount</label>
+          <input name="reimbursementAmount" class="input" type="number" step="0.01" placeholder="Defaults to invoice total" />
+        </div>
+        <div>
+          <label class="small">Reimbursement requested?</label>
+          <select name="reimbursementRequested" class="input">
+            <option value="true" selected>Yes - reimburse me</option>
+            <option value="false">No reimbursement needed</option>
+          </select>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Upload receipts (PDF or images)</label>
+          <input id="invoice-files" name="files" class="input" type="file" accept=".pdf,image/*" multiple />
+          <div class="small">We will automatically read totals; you can override below.</div>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="small">Notes</label>
+          <textarea name="notes" class="input" rows="3" placeholder="Optional context for treasurer"></textarea>
+        </div>
+        <div class="flex-between" style="grid-column: span 2; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div id="invoice-message" class="small"></div>
+          <div class="flex-between" style="gap:8px;">
+            <button type="button" class="btn ghost" id="reset-invoice-form">Reset</button>
+            <button type="submit" class="btn primary">Submit invoice</button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 

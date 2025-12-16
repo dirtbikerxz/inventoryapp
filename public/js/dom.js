@@ -4,11 +4,14 @@ const tableBtn = document.getElementById("table-view-btn");
 const boardSection = document.getElementById("board-section");
 const tableSection = document.getElementById("table-section");
 const stockSection = document.getElementById("stock-section");
+const reimbursementsSection = document.getElementById("reimbursements-section");
 const stockGrid = document.getElementById("stock-grid");
+const reimbursementsTable = document.getElementById("reimbursements-table");
 const stockSubteamFilter = document.getElementById("stock-subteam-filter");
 const primaryTitle = document.getElementById("primary-title");
 const primarySubtitle = document.getElementById("primary-subtitle");
 const ordersViewBtn = document.getElementById("orders-view-btn");
+const reimbursementsViewBtn = document.getElementById("reimbursements-view-btn");
 const stockViewBtn = document.getElementById("stock-view-btn");
 const ordersLayoutRow = document.getElementById("orders-layout-row");
 const ordersLayoutToggle = document.getElementById("orders-layout-toggle");
@@ -134,6 +137,24 @@ const vendorSaveBtn = vendorForm?.querySelector('button[type="submit"]');
 const newVendorBtn = document.getElementById("new-vendor-btn");
 const closeVendorModalBtn = document.getElementById("close-vendor-modal");
 const cancelVendorBtn = document.getElementById("cancel-vendor");
+const invoiceModal = document.getElementById("invoice-modal");
+const closeInvoiceModalBtn = document.getElementById("close-invoice-modal");
+const invoiceForm = document.getElementById("invoice-form");
+const invoiceOrderSelect = document.getElementById("invoice-order-select");
+const invoiceMessage = document.getElementById("invoice-message");
+const invoiceExistingList = document.getElementById("invoice-existing-list");
+const invoiceTargetSummary = document.getElementById("invoice-target-summary");
+const invoiceFilesInput = document.getElementById("invoice-files");
+const resetInvoiceFormBtn = document.getElementById("reset-invoice-form");
+const reimbursementStatusFilter = document.getElementById(
+  "reimbursement-status-filter",
+);
+const reimbursementScopeFilter = document.getElementById(
+  "reimbursement-scope-filter",
+);
+const refreshReimbursementsBtn = document.getElementById(
+  "refresh-reimbursements",
+);
 function resizeColumns() {
   window.requestAnimationFrame(() => {
     const main = document.querySelector("main");
@@ -175,6 +196,18 @@ function resizeColumns() {
         stockSection.style.maxHeight = `${available}px`;
         if (stockGrid) {
           stockGrid.style.maxHeight = `${available - 40}px`;
+        }
+      }
+    }
+    if (reimbursementsSection) {
+      const top =
+        reimbursementsSection.getBoundingClientRect().top - mainRect.top;
+      const available = Math.max(0, baseAvailable - top);
+      if (available > 240) {
+        reimbursementsSection.style.height = `${available}px`;
+        reimbursementsSection.style.maxHeight = `${available}px`;
+        if (reimbursementsTable) {
+          reimbursementsTable.style.maxHeight = `${available - 40}px`;
         }
       }
     }

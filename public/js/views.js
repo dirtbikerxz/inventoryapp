@@ -97,6 +97,19 @@ function escapeHtml(str = "") {
     .replace(/'/g, "&#39;");
 }
 
+let reimbursements = [];
+let reimbursementsScope = "mine";
+let currentOrderInvoices = [];
+let activeInvoiceOrderId = null;
+let activeInvoiceOrders = [];
+const reimbursementStatusOptions = [
+  { value: "requested", label: "Reimbursement requested" },
+  { value: "submitted", label: "Reimbursement submitted" },
+  { value: "reimbursed", label: "Reimbursed" },
+  { value: "declined", label: "Declined" },
+  { value: "not_requested", label: "Not requested" },
+];
+
 function createTrackingRow(container, data = {}, partsOptions = []) {
   if (!container) return;
   const row = document.createElement("div");
@@ -281,6 +294,66 @@ function renderTrackingBadges(tracking = []) {
     })
     .join("")}</div>`;
 }
+
+function formatMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return `$${num.toFixed(2)}`;
+}
+
+function formatReimbursementStatus(status) {
+  const map = {
+    requested: "Reimbursement requested",
+    submitted: "Submitted",
+    reimbursed: "Reimbursed",
+    declined: "Declined",
+    not_requested: "Not requested",
+  };
+  return map[status] || status || "Unknown";
+}
+
+function reimbursementStatusColor(status) {
+  switch (status) {
+    case "reimbursed":
+      return "var(--success)";
+    case "submitted":
+      return "var(--accent-2)";
+    case "requested":
+      return "var(--gold)";
+    case "declined":
+      return "var(--danger)";
+    default:
+      return "var(--muted)";
+  }
+}
+
+function invoiceDisplayAmount(inv) {
+  return (
+    inv?.reimbursementAmount ??
+    inv?.amount ??
+    inv?.detectedTotal ??
+    inv?.files?.find((f) => f?.detectedTotal)?.detectedTotal
+  );
+}
+
+function renderInvoiceFiles(files = []) {
+  if (!Array.isArray(files) || !files.length) return "";
+  return files
+    .map((f, idx) => {
+      const url = f.driveWebViewLink || f.driveDownloadLink;
+      const label = f.name || `File ${idx + 1}`;
+      return url
+        ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="tag" style="padding:4px 8px;">${escapeHtml(label)}</a>`
+        : `<span class="tag" style="padding:4px 8px;">${escapeHtml(label)}</span>`;
+    })
+    .join(" ");
+}
+
+function renderInvoiceStatusChip(status) {
+  const color = reimbursementStatusColor(status);
+  return `<span class="tag" style="border-color:${color}; color:${color};">${formatReimbursementStatus(status)}</span>`;
+}
+
 function showBoardMessage(text, type = "info", timeout = 3500) {
   boardMessage.textContent = text;
   boardMessage.style.borderColor =
@@ -415,6 +488,27 @@ async function fetchOrders() {
   updateUndoRedoUI();
 }
 
+async function updateInvoice(invoiceId, payload) {
+  const res = await fetch(`/api/invoices/${invoiceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Unable to update invoice");
+  }
+  return data.invoice;
+}
+
+async function loadInvoicesForOrder(orderId) {
+  if (!orderId) return;
+  const res = await fetch(`/api/invoices?orderId=${encodeURIComponent(orderId)}`);
+  const data = await res.json();
+  currentOrderInvoices = data.invoices || [];
+  renderInvoiceExistingList();
+}
+
 function buildFilters() {
   const statusesUnique = Array.from(
     new Set(orders.map((o) => o.status).filter(Boolean)),
@@ -430,6 +524,372 @@ function buildFilters() {
     '<option value="">All vendors</option>',
     ...vendors.map((v) => `<option>${v}</option>`),
   ].join("");
+}
+
+function renderReimbursementFilters() {
+  if (reimbursementStatusFilter) {
+    reimbursementStatusFilter.innerHTML = [
+      '<option value="">All statuses</option>',
+      ...reimbursementStatusOptions.map(
+        (opt) => `<option value="${opt.value}">${opt.label}</option>`,
+      ),
+    ].join("");
+  }
+  if (reimbursementScopeFilter) {
+    const canViewAll =
+      currentUser?.permissions?.canViewInvoices ||
+      currentUser?.permissions?.canManageInvoices;
+    reimbursementScopeFilter.disabled = !canViewAll;
+    reimbursementScopeFilter.value = canViewAll
+      ? reimbursementsScope
+      : "mine";
+  }
+}
+
+function filteredReimbursements() {
+  const term = (globalSearch?.value || "").trim().toLowerCase();
+  const statusVal = reimbursementStatusFilter?.value || "";
+  return (reimbursements || [])
+    .filter(
+      (inv) =>
+        (!statusVal || inv.reimbursementStatus === statusVal) &&
+        (!term ||
+          [
+            inv.orderNumber,
+            inv.studentName,
+            inv.vendor,
+            inv.requestedByName,
+            inv.reimbursementStatus,
+            ...(inv.files || []).map((f) => f?.name || ""),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(term)),
+    )
+    .sort((a, b) => (b.requestedAt ?? 0) - (a.requestedAt ?? 0));
+}
+
+function renderReimbursementsTable() {
+  if (!reimbursementsTable) return;
+  const canManage = Boolean(currentUser?.permissions?.canManageInvoices);
+  const rows = filteredReimbursements();
+  if (!rows.length) {
+    reimbursementsTable.innerHTML =
+      '<div class="small">No reimbursements found.</div>';
+    return;
+  }
+  reimbursementsTable.innerHTML = `
+    <div class="table-row header" style="font-weight:700; display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px;">
+      <div>Order</div>
+      <div>Student</div>
+      <div>Amount</div>
+      <div>Status</div>
+      <div>Files</div>
+      <div>Submitted</div>
+      <div>Actions</div>
+    </div>
+    ${rows
+      .map((inv) => {
+        const amt = invoiceDisplayAmount(inv);
+        return `<div class="table-row" data-id="${inv._id}" style="display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px; border-bottom:1px solid var(--border);">
+          <div>
+            <div class="small">${escapeHtml(inv.orderNumber || "")}</div>
+            <div class="small muted">${escapeHtml(inv.vendor || "")}</div>
+          </div>
+          <div>${escapeHtml(inv.studentName || inv.requestedByName || "")}</div>
+          <div>${amt !== undefined ? formatMoney(amt) : ""}</div>
+          <div>
+            <select class="input reimbursement-status-select" data-id="${inv._id}" ${canManage ? "" : "disabled"}>
+              ${reimbursementStatusOptions
+                .map(
+                  (opt) =>
+                    `<option value="${opt.value}" ${
+                      opt.value === (inv.reimbursementStatus || "not_requested")
+                        ? "selected"
+                        : ""
+                    }>${opt.label}</option>`,
+                )
+                .join("")}
+            </select>
+          </div>
+          <div class="small">${renderInvoiceFiles(inv.files)}</div>
+          <div class="small">${fmtDate(inv.requestedAt)}</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn ghost" data-action="open-invoice" data-order-id="${inv.orderId}" data-order-number="${escapeHtml(inv.orderNumber || "")}" data-vendor="${escapeHtml(inv.vendor || "")}" style="padding:6px 10px;">Details</button>
+          </div>
+        </div>`;
+      })
+      .join("")}
+  `;
+  reimbursementsTable
+    .querySelectorAll(".reimbursement-status-select")
+    .forEach((select) => {
+      select.onchange = async () => {
+        if (!canManage) return;
+        try {
+          await updateInvoice(select.dataset.id, {
+            reimbursementStatus: select.value,
+          });
+          await loadReimbursements();
+          fetchOrders();
+        } catch (err) {
+          showBoardMessage(
+            err.message || "Unable to update reimbursement",
+            "error",
+          );
+        }
+      };
+    });
+  reimbursementsTable
+    .querySelectorAll('button[data-action="open-invoice"]')
+    .forEach((btn) => {
+      btn.onclick = () => {
+        const oid = btn.dataset.orderId;
+        const order = orders.find((o) => o._id === oid);
+        openInvoiceModal(
+          order || {
+            _id: oid,
+            orderNumber: btn.dataset.orderNumber || oid,
+            vendor: btn.dataset.vendor,
+          },
+        );
+      };
+    });
+}
+
+async function loadReimbursements(statusOverride, scopeOverride) {
+  if (!currentUser) return;
+  const status = statusOverride ?? reimbursementStatusFilter?.value ?? "";
+  const scope =
+    scopeOverride ??
+    reimbursementScopeFilter?.value ??
+    reimbursementsScope ??
+    "mine";
+  reimbursementsScope = scope;
+  if (reimbursementScopeFilter) {
+    const canViewAll =
+      currentUser?.permissions?.canViewInvoices ||
+      currentUser?.permissions?.canManageInvoices;
+    reimbursementScopeFilter.disabled = !canViewAll;
+    reimbursementScopeFilter.value = canViewAll ? scope : "mine";
+  }
+  const params = new URLSearchParams();
+  params.set("reimbursementOnly", "true");
+  if (status) params.set("status", status);
+  if (
+    scope !== "all" ||
+    !(currentUser?.permissions?.canViewInvoices ||
+      currentUser?.permissions?.canManageInvoices)
+  ) {
+    params.set("scope", "mine");
+  }
+  const res = await fetch(`/api/invoices?${params.toString()}`);
+  const data = await res.json();
+  reimbursements = data.invoices || [];
+  renderReimbursementsTable();
+}
+
+function renderInvoiceSummary(order) {
+  const summary = order?.reimbursementSummary || {};
+  if (!summary.count) return "";
+  const color = reimbursementStatusColor(
+    summary.latestStatus || (summary.statuses || [])[0],
+  );
+  const label = summary.latestStatus
+    ? formatReimbursementStatus(summary.latestStatus)
+    : "Invoices on file";
+  return `<div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+    <span class="tag" style="border-color:${color}; color:${color};">Invoices: ${summary.count}${
+    summary.requestedCount ? ` (${summary.requestedCount} to reimburse)` : ""
+  }</span>
+    <span class="tag" style="border-color:${color}; color:${color};">${label}</span>
+  </div>`;
+}
+
+function resetInvoiceForm(keepSelection = true) {
+  const savedOrder = invoiceForm?.elements?.orderId?.value;
+  const savedGroup = invoiceForm?.elements?.groupId?.value;
+  invoiceForm?.reset();
+  if (keepSelection && savedOrder && invoiceForm?.elements?.orderId) {
+    invoiceForm.elements.orderId.value = savedOrder;
+    if (invoiceForm.elements.groupId) {
+      invoiceForm.elements.groupId.value = savedGroup || "";
+    }
+  }
+  if (invoiceMessage) {
+    invoiceMessage.textContent = "";
+    invoiceMessage.className = "small";
+  }
+  if (invoiceFilesInput) invoiceFilesInput.value = "";
+}
+
+function closeInvoiceModal() {
+  if (invoiceModal) invoiceModal.style.display = "none";
+}
+
+function renderInvoiceExistingList() {
+  if (!invoiceExistingList) return;
+  const canManage = Boolean(currentUser?.permissions?.canManageInvoices);
+  const canSubmit = Boolean(currentUser?.permissions?.canSubmitInvoices);
+  if (!currentOrderInvoices.length) {
+    invoiceExistingList.innerHTML =
+      '<div class="small">No invoices uploaded yet.</div>';
+    return;
+  }
+  invoiceExistingList.innerHTML = currentOrderInvoices
+    .map((inv) => {
+      const isOwner =
+        inv.requestedBy &&
+        String(inv.requestedBy) === String(currentUser?._id || "");
+      const canEdit = canManage || (canSubmit && isOwner);
+      const canEditStatus = canManage;
+      const invoiceAmount = inv.amount ?? inv.detectedTotal ?? "";
+      const reimbAmount =
+        inv.reimbursementAmount ?? inv.amount ?? inv.detectedTotal ?? "";
+      return `<div class="card" data-id="${inv._id}" style="padding:10px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:space-between;">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            ${renderInvoiceStatusChip(inv.reimbursementStatus)}
+            <span class="small">Submitted ${fmtDate(inv.requestedAt)}</span>
+            ${inv.requestedByName ? `<span class="tag" style="padding:4px 8px;">${escapeHtml(inv.requestedByName)}</span>` : ""}
+          </div>
+          <div class="small">${renderInvoiceFiles(inv.files)}</div>
+        </div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px;">
+          <label class="small">Invoice total
+            <input class="input invoice-amount" type="number" step="0.01" value="${invoiceAmount}" ${canEdit ? "" : "disabled"} />
+          </label>
+          <label class="small">Reimbursement amount
+            <input class="input invoice-reimb-amount" type="number" step="0.01" value="${reimbAmount}" ${canEdit ? "" : "disabled"} />
+          </label>
+          <label class="small">Status
+            <select class="input invoice-status" ${canEditStatus ? "" : "disabled"}>
+              ${reimbursementStatusOptions
+                .map(
+                  (opt) =>
+                    `<option value="${opt.value}" ${
+                      opt.value === (inv.reimbursementStatus || "not_requested")
+                        ? "selected"
+                        : ""
+                    }>${opt.label}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+        </div>
+        ${
+          inv.detectedTotal
+            ? `<div class="small">Detected total: ${formatMoney(inv.detectedTotal)}${inv.detectedMerchant ? " · " + escapeHtml(inv.detectedMerchant) : ""}</div>`
+            : ""
+        }
+        ${
+          canEdit || canEditStatus
+            ? `<div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn ghost save-invoice" data-id="${inv._id}" style="padding:6px 10px;">Save</button>
+               </div>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("");
+
+  invoiceExistingList
+    .querySelectorAll(".save-invoice")
+    .forEach((btn) => {
+      btn.onclick = async () => {
+        const container = btn.closest("[data-id]");
+        const id = btn.dataset.id || container?.dataset?.id;
+        if (!id) return;
+        const amountVal = container?.querySelector(".invoice-amount")?.value;
+        const reimbVal =
+          container?.querySelector(".invoice-reimb-amount")?.value;
+        const statusVal =
+          container?.querySelector(".invoice-status")?.value || undefined;
+        btn.disabled = true;
+        try {
+          await updateInvoice(id, {
+            amount: amountVal ? Number(amountVal) : undefined,
+            reimbursementAmount: reimbVal ? Number(reimbVal) : undefined,
+            reimbursementStatus: statusVal,
+          });
+          await loadInvoicesForOrder(activeInvoiceOrderId);
+          await loadReimbursements();
+          fetchOrders();
+          showBoardMessage("Invoice updated");
+        } catch (err) {
+          showBoardMessage(err.message || "Failed to update invoice", "error");
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    });
+}
+
+function setInvoiceTarget(order, ordersList = []) {
+  const list = (ordersList && ordersList.length ? ordersList : order ? [order] : [])
+    .map((o) => ({
+      ...o,
+      _id: o._id || o.id || o.orderId,
+      groupId: o.groupId || o.group?._id,
+    }))
+    .filter((o) => o._id);
+  if (!list.length) return;
+  activeInvoiceOrders = list;
+  const target =
+    list.find(
+      (o) => o._id === (order?._id || order?.id || order?.orderId),
+    ) || list[0];
+  activeInvoiceOrderId = target?._id || null;
+  if (invoiceOrderSelect) {
+    invoiceOrderSelect.innerHTML = list
+      .map(
+        (o) =>
+          `<option value="${o._id}">${escapeHtml(
+            o.orderNumber
+              ? `Order ${o.orderNumber}`
+              : o.partName || o.group?.title || "Order",
+          )}</option>`,
+      )
+      .join("");
+    if (activeInvoiceOrderId) {
+      invoiceOrderSelect.value = activeInvoiceOrderId;
+    }
+    invoiceOrderSelect.disabled = list.length <= 1;
+  }
+  if (invoiceForm?.elements?.orderId) {
+    invoiceForm.elements.orderId.value = activeInvoiceOrderId || "";
+  }
+  if (invoiceForm?.elements?.groupId) {
+    invoiceForm.elements.groupId.value =
+      target?.groupId || target?.group?._id || "";
+  }
+  if (invoiceTargetSummary) {
+    const parts = [];
+    if (target?.orderNumber) parts.push(`Order ${target.orderNumber}`);
+    if (target?.group?.title) parts.push(`Group ${target.group.title}`);
+    if (target?.partName) parts.push(target.partName);
+    invoiceTargetSummary.textContent =
+      parts.filter(Boolean).join(" · ") || "Select an order";
+  }
+}
+
+function openInvoiceModal(order, orderList = []) {
+  if (!invoiceModal) return;
+  const list = orderList && orderList.length ? orderList : order ? [order] : [];
+  const normalized = list.map((o) => ({
+    ...o,
+    _id: o._id || o.id || o.orderId,
+    groupId: o.groupId || o.group?._id,
+  }));
+  const target =
+    normalized.find(
+      (o) => o._id === (order?._id || order?.id || order?.orderId),
+    ) || normalized[0] || order;
+  setInvoiceTarget(target, normalized.length ? normalized : [target]);
+  resetInvoiceForm(true);
+  loadInvoicesForOrder(target?._id);
+  if (invoiceModal) invoiceModal.style.display = "flex";
 }
 
 function openEdit(order) {
@@ -519,10 +979,12 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
       }
     </div>
     ${renderTrackingBadges(order.group?.tracking && order.group.tracking.length ? order.group.tracking : order.tracking || [])}
+    ${renderInvoiceSummary(order)}
   </div>
   <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
     ${currentUser?.permissions?.canManagePartRequests ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === "approved" ? "Unapprove" : "Approve"}</button>` : ""}
     ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
+    ${currentUser?.permissions?.canSubmitInvoices ? `<button class="btn ghost" data-action="invoice" style="padding:4px 8px;">Invoices</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ""}
   </div>
@@ -554,6 +1016,12 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
       const next = order.approvalStatus === "approved" ? "pending" : "approved";
       await approveOrder(order._id, next);
       fetchOrders();
+    });
+  });
+  card.querySelectorAll('button[data-action="invoice"]').forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openInvoiceModal(order);
     });
   });
   card.querySelectorAll('button[data-action="delete"]').forEach((btn) => {
@@ -2235,6 +2703,7 @@ function openGroupDetailModal(groupInfo, items) {
   if (groupDetailActions) {
     groupDetailActions.innerHTML = `
       ${supportsVendorExportByName(groupInfo?.vendor || "") ? `<button class="btn ghost" data-action="export-group" style="padding:6px 10px;">Export</button>` : ""}
+      ${currentUser?.permissions?.canSubmitInvoices ? `<button class="btn ghost" data-action="group-invoices" style="padding:6px 10px;">Invoices</button>` : ""}
       ${currentUser?.permissions?.canManageOrders && groupInfo?.status === "Ordered" ? `<button class="btn ghost" data-action="advance-group" style="padding:6px 10px;">Advance</button>` : ""}
       ${currentUser?.permissions?.canManageOrders && groupInfo?.status === "Received" ? `<button class="btn ghost" data-action="revert-group" style="padding:6px 10px;">Revert</button>` : ""}
       ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-group" style="padding:6px 10px;">Edit</button>` : ""}
@@ -2286,6 +2755,8 @@ function openGroupDetailModal(groupInfo, items) {
           await updateGroupStatus(gid, "Received");
         } else if (action === "revert-group") {
           await updateGroupStatus(gid, "Ordered");
+        } else if (action === "group-invoices") {
+          openInvoiceModal(items[0], items);
         } else if (action === "edit-group") {
           hideGroupDetailModal();
           openGroupModal({
@@ -2429,11 +2900,13 @@ function selectSameVendorRequested() {
 function showOrdersView() {
   activePrimaryView = "orders";
   ordersViewBtn?.classList.add("active");
+  reimbursementsViewBtn?.classList.remove("active");
   stockViewBtn?.classList.remove("active");
   if (ordersLayoutRow) ordersLayoutRow.style.display = "flex";
   if (ordersLayoutToggle) ordersLayoutToggle.style.display = "inline-flex";
   if (selectionBar) selectionBar.style.display = "";
   if (stockSection) stockSection.style.display = "none";
+  if (reimbursementsSection) reimbursementsSection.style.display = "none";
   boardSection.style.display = boardBtn.classList.contains("active")
     ? "flex"
     : "none";
@@ -2453,17 +2926,43 @@ function showStockView() {
   resetAddToOrderMode();
   activePrimaryView = "stock";
   stockViewBtn?.classList.add("active");
+  reimbursementsViewBtn?.classList.remove("active");
   ordersViewBtn?.classList.remove("active");
   if (ordersLayoutRow) ordersLayoutRow.style.display = "none";
   if (ordersLayoutToggle) ordersLayoutToggle.style.display = "none";
   if (selectionBar) selectionBar.style.display = "none";
   boardSection.style.display = "none";
   tableSection.style.display = "none";
+  if (reimbursementsSection) reimbursementsSection.style.display = "none";
   if (stockSection) stockSection.style.display = "flex";
   if (primaryTitle) primaryTitle.textContent = "Stock";
   if (primarySubtitle)
     primarySubtitle.textContent = "Live view of parts on-hand by location.";
   loadStock();
+  updateSearchPlaceholder();
+  resizeColumns();
+  setTimeout(resizeColumns, 30);
+}
+
+function showReimbursementsView() {
+  resetAddToOrderMode();
+  activePrimaryView = "reimbursements";
+  reimbursementsViewBtn?.classList.add("active");
+  ordersViewBtn?.classList.remove("active");
+  stockViewBtn?.classList.remove("active");
+  if (ordersLayoutRow) ordersLayoutRow.style.display = "none";
+  if (ordersLayoutToggle) ordersLayoutToggle.style.display = "none";
+  if (selectionBar) selectionBar.style.display = "none";
+  boardSection.style.display = "none";
+  tableSection.style.display = "none";
+  if (stockSection) stockSection.style.display = "none";
+  if (reimbursementsSection) reimbursementsSection.style.display = "flex";
+  if (primaryTitle) primaryTitle.textContent = "Reimbursements";
+  if (primarySubtitle)
+    primarySubtitle.textContent =
+      "Submit receipts and track reimbursement status.";
+  renderReimbursementsTable();
+  loadReimbursements();
   updateSearchPlaceholder();
   resizeColumns();
   setTimeout(resizeColumns, 30);
