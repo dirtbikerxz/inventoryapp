@@ -840,8 +840,9 @@ app.get('/api/orders', async (req, res) => {
     const canViewInvoices = Boolean(user.permissions?.canViewInvoices || user.permissions?.canManageInvoices);
     if (orderIds.length) {
       const invoiceListRaw = await client.query('invoices:listForOrders', { orderIds });
+      const filteredForGrouping = invoiceListRaw.filter(inv => inv.groupId || inv.group || inv.groupId === null);
       const filteredInvoices = canViewInvoices
-        ? invoiceListRaw
+        ? filteredForGrouping
         : (invoiceListRaw || []).filter(inv => {
             const requester = inv.requestedBy && inv.requestedBy.toString ? inv.requestedBy.toString() : inv.requestedBy;
             const studentName = (inv.studentName || '').toLowerCase();
@@ -948,6 +949,9 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
   try {
     const order = await client.query('orders:getOne', { orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (!order.groupId && !(order.group && order.group._id)) {
+      return res.status(400).json({ error: 'Invoices can only be added to grouped orders' });
+    }
     const ownsOrder = isOwnOrder(order, user);
     const canManage = Boolean(user.permissions?.canManageInvoices || user.permissions?.canManageOrders);
     if (!ownsOrder && !canManage) {
@@ -1105,6 +1109,10 @@ app.post('/api/invoices/restore', async (req, res) => {
     });
     if (!payload.orderId || !Array.isArray(payload.files) || !payload.files.length) {
       return res.status(400).json({ error: 'Missing orderId or files for restore' });
+    }
+    const order = await client.query('orders:getOne', { orderId: payload.orderId });
+    if (!order || (!order.groupId && !(order.group && order.group._id))) {
+      return res.status(400).json({ error: 'Invoices can only be restored onto grouped orders' });
     }
     payload.requestedBy = payload.requestedBy || user._id?.toString();
     payload.requestedByName = payload.requestedByName || user.name;
@@ -1337,6 +1345,12 @@ app.patch('/api/orders/:id/group', async (req, res) => {
   if (!user) return;
   const { groupId } = req.body || {};
   try {
+    if (!groupId) {
+      const invs = await client.query('invoices:list', { orderId: req.params.id });
+      if (Array.isArray(invs) && invs.length) {
+        return res.status(400).json({ error: 'Cannot ungroup an order that has invoices' });
+      }
+    }
     const result = await client.mutation('orders:assignGroup', {
       orderId: req.params.id,
       groupId

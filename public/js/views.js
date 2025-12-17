@@ -135,6 +135,36 @@ function primaryFileLink(inv) {
   return file?.driveWebViewLink || file?.driveDownloadLink || "";
 }
 
+function renderGroupInvoiceSummary(items = []) {
+  if (!Array.isArray(items) || !items.length) return "";
+  const totals = items.reduce(
+    (acc, o) => {
+      const s = o.reimbursementSummary || {};
+      acc.count += s.count || 0;
+      acc.requestedCount += s.requestedCount || 0;
+      if (s.statuses && s.statuses.length) {
+        s.statuses.forEach((st) => acc.statuses.add(st));
+      }
+      if (s.latestStatus) acc.latestStatus = s.latestStatus;
+      return acc;
+    },
+    { count: 0, requestedCount: 0, statuses: new Set(), latestStatus: null },
+  );
+  if (!totals.count) return "";
+  const statuses = getReimbursementStatusOptions();
+  const sorted = statuses
+    .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+  const highest = sorted[sorted.length - 1]?.value || "reimbursed";
+  const allAtHighest = Array.from(totals.statuses).every(
+    (st) => st === highest,
+  );
+  const color = allAtHighest ? "var(--success)" : "var(--danger)";
+  return `<div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+    <span class="tag" style="border-color:${color}; color:${color}; min-width: auto;">Invoices: ${totals.count}</span>
+  </div>`;
+}
+
 function createTrackingRow(container, data = {}, partsOptions = []) {
   if (!container) return;
   const row = document.createElement("div");
@@ -906,6 +936,7 @@ function updateReimbursementsSelectionText() {
 }
 
 function renderInvoiceSummary(order) {
+  if (!order?.groupId && !(order?.group && order.group._id)) return "";
   const summary = order?.reimbursementSummary || {};
   if (!summary.count) return "";
   const color = reimbursementStatusColor(
@@ -915,9 +946,7 @@ function renderInvoiceSummary(order) {
     ? formatReimbursementStatus(summary.latestStatus)
     : "Invoices on file";
   return `<div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-    <span class="tag" style="border-color:${color}; color:${color};">Invoices: ${summary.count}${
-    summary.requestedCount ? ` (${summary.requestedCount} to reimburse)` : ""
-  }</span>
+    <span class="tag" style="border-color:${color}; color:${color};">Invoices: ${summary.count}${summary.requestedCount ? ` (${summary.requestedCount} to reimburse)` : ""}</span>
     <span class="tag" style="border-color:${color}; color:${color};">${label}</span>
   </div>`;
 }
@@ -1062,24 +1091,6 @@ function openInvoiceModal(order, orderList = []) {
     newInvoiceBtn.style.display = currentUser?.permissions?.canSubmitInvoices
       ? "inline-flex"
       : "none";
-  if (reimbursementUserSelect) {
-    const options = window.__allUsers || [];
-    let html = options
-      .map(
-        (u) =>
-          `<option value="${u._id || u.id}">${escapeHtml(
-            u.name || u.username || "",
-          )}</option>`,
-      )
-      .join("");
-    if (!html && currentUser?._id) {
-      html = `<option value="${currentUser._id}">${escapeHtml(
-        currentUser.name || currentUser.username || "",
-      )}</option>`;
-    }
-    reimbursementUserSelect.innerHTML = html;
-    if (currentUser?._id) reimbursementUserSelect.value = currentUser._id;
-  }
   if (invoiceModal) invoiceModal.style.display = "flex";
 }
 
@@ -1143,19 +1154,10 @@ function openInvoiceEditor(mode = "create", invoice = null) {
       invoiceEditorForm.elements.reimbursementRequested.value = String(
         invoice.reimbursementRequested ?? true,
       );
-    if (reimbursementUserSelect) {
-      reimbursementUserSelect.value =
-        invoice.reimbursementUser || invoice.requestedBy || currentUser?._id || "";
-    }
     if (invoiceEditorForm.elements.notes)
       invoiceEditorForm.elements.notes.value = invoice.notes || "";
   }
   // Sync visibility after values are populated
-  if (reimbursementUserField && invoiceEditorForm.elements.reimbursementRequested) {
-    const needs =
-      invoiceEditorForm.elements.reimbursementRequested.value === "true";
-    reimbursementUserField.style.display = needs ? "block" : "none";
-  }
   if (invoiceStatusField && invoiceEditorForm.elements.reimbursementRequested) {
     const needs =
       invoiceEditorForm.elements.reimbursementRequested.value === "true";
@@ -1243,6 +1245,7 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
       ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ""}
       ${order.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(order.priority)}; color:${getPriorityColor(order.priority)};">${order.priority}</span>` : ""}
       ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || "Grouped"}</span>` : ""}
+      ${renderInvoiceSummary(order)}
       ${renderTagChips(order.tags || [])}
       ${
         order.approvalStatus === "approved"
@@ -1251,12 +1254,11 @@ ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;"
       }
     </div>
     ${renderTrackingBadges(order.group?.tracking && order.group.tracking.length ? order.group.tracking : order.tracking || [])}
-    ${renderInvoiceSummary(order)}
   </div>
   <div class="row-actions" style="display:flex; gap:6px; align-self:flex-end; flex-wrap:wrap;">
     ${currentUser?.permissions?.canManagePartRequests ? `<button class="btn ghost" data-action="approve" style="padding:4px 8px;">${order.approvalStatus === "approved" ? "Unapprove" : "Approve"}</button>` : ""}
     ${order.partLink || order.supplierLink ? `<a class="btn ghost" data-action="link" href="${escapeHtml(order.partLink || order.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
-    ${currentUser?.permissions?.canSubmitInvoices ? `<button class="btn ghost" data-action="invoice" style="padding:4px 8px;">Invoices</button>` : ""}
+    ${(currentUser?.permissions?.canSubmitInvoices && (order.groupId || order.group?._id)) ? `<button class="btn ghost" data-action="invoice" style="padding:4px 8px;">Invoices</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="edit" style="padding:4px 8px;">Edit</button>` : ""}
     ${currentUser?.permissions?.canManagePartRequests || (currentUser?.permissions?.canManageOwnPartRequests && isOwnOrder(order)) ? `<button class="btn ghost" data-action="delete" style="padding:4px 8px; color: var(--danger);">Delete</button>` : ""}
   </div>
@@ -1590,6 +1592,7 @@ function renderBoard() {
           ${statusTagLabel ? `<span class="tag" style="background:${statusTagColor || "var(--panel)"}22; border-color:${statusTagColor || "var(--border)"}; color:${statusTagColor || "var(--text)"};">${escapeHtml(statusTagLabel)}</span>` : ""}
         </div>
         ${renderTrackingBadges(trackingList)}
+        ${renderGroupInvoiceSummary(items)}
       </div>
       <div class="muted" style="min-width:80px; text-align:right; align-self:flex-end;">${total ? "$" + total.toFixed(2) : ""}</div>
     </div>

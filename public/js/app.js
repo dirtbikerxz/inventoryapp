@@ -166,8 +166,33 @@
       }
     }
 
+    function labelForAction(action) {
+      if (!action) return 'Undo';
+      switch (action.type) {
+        case 'deleteOrder':
+        case 'deleteGroup':
+        case 'deleteInvoices':
+        case 'deleteInvoice':
+          return 'Undo delete';
+        case 'updateStatus':
+        case 'bulkStatus':
+          return 'Undo status change';
+        case 'updateOrder':
+        case 'restoreOrder':
+          return 'Undo change';
+        default:
+          return 'Undo';
+      }
+    }
+
     function updateUndoRedoUI() {
-      if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+      const hasUndo = undoStack.length > 0;
+      if (undoBtn) {
+        undoBtn.disabled = !hasUndo;
+        undoBtn.style.display = hasUndo ? 'inline-flex' : 'none';
+        const last = undoStack[undoStack.length - 1];
+        undoBtn.textContent = labelForAction(last?.undo);
+      }
       // redo button removed
     }
 

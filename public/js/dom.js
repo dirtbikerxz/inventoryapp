@@ -55,7 +55,8 @@ deleteSelectedBtn.textContent = "Delete selected";
 const undoBtn = document.createElement("button");
 undoBtn.className = "btn ghost";
 undoBtn.id = "undo-btn";
-undoBtn.textContent = "Undo";
+undoBtn.textContent = "Undo delete";
+undoBtn.style.display = "none";
 const selectionControls = selectionBar.querySelector(".selection-actions");
 if (selectionControls) {
   selectionControls.appendChild(undoBtn);
