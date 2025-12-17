@@ -110,14 +110,17 @@
           <select id="reimbursement-status-filter" class="input"></select>
         </div>
         <div>
-          <label class="small">Scope</label>
-          <select id="reimbursement-scope-filter" class="input">
-            <option value="mine">My invoices</option>
-            <option value="all">All invoices</option>
-          </select>
+          <label class="small">Person</label>
+          <select id="reimbursement-scope-filter" class="input"></select>
         </div>
-        <div style="margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn ghost" id="refresh-reimbursements">Refresh</button>
+        <div>
+          <label class="small">Vendor</label>
+          <select id="reimbursement-vendor-filter" class="input"></select>
+        </div>
+        <div id="reimbursements-bulk" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; margin-left:auto;">
+          <select id="reimbursements-bulk-status" class="input"></select>
+          <button class="btn ghost" id="reimbursements-bulk-apply">Set status on selected</button>
+          <div id="reimbursements-bulk-count" class="small"></div>
         </div>
       </div>
       <div id="reimbursements-table" class="card" style="background:var(--panel-2); padding:10px; overflow:auto; flex:1; min-height:240px;">Loading reimbursements...</div>
@@ -1005,11 +1008,6 @@
             <option value="false" selected>No</option>
             <option value="true">Yes</option>
           </select>
-        </div>
-        <div id="reimbursement-user-field" style="grid-column: span 2; display:none;">
-          <label class="small">Reimbursement recipient</label>
-          <select name="reimbursementUser" class="input"></select>
-          <div class="small">Choose who should be reimbursed for this invoice.</div>
         </div>
         <div id="invoice-status-field" style="grid-column: span 2; display:none;">
           <label class="small">Reimbursement status</label>

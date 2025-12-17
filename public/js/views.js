@@ -98,10 +98,11 @@ function escapeHtml(str = "") {
 }
 
 let reimbursements = [];
-let reimbursementsScope = "mine";
+let reimbursementsScope = "all";
 let currentOrderInvoices = [];
 let activeInvoiceOrderId = null;
 let activeInvoiceOrders = [];
+let reimbursementsSelected = new Set();
 const defaultReimbursementStatusOptions = [
   { value: "requested", label: "Reimbursement requested" },
   { value: "submitted", label: "Reimbursement submitted" },
@@ -624,13 +625,39 @@ function renderReimbursementFilters() {
     ].join("");
   }
   if (reimbursementScopeFilter) {
-    const canViewAll =
-      currentUser?.permissions?.canViewInvoices ||
-      currentUser?.permissions?.canManageInvoices;
-    reimbursementScopeFilter.disabled = !canViewAll;
-    reimbursementScopeFilter.value = canViewAll
-      ? reimbursementsScope
-      : "mine";
+    updateReimbursementScopeOptions(reimbursements);
+  }
+  if (reimbursementVendorFilter) {
+    const vendorsSet = new Set(
+      (reimbursements || []).map((r) => r.vendor).filter(Boolean),
+    );
+    (reimbursements || []).forEach((inv) => {
+      if (inv.orderId) {
+        const order = (orders || []).find((o) => o._id === inv.orderId);
+        if (order?.vendor) vendorsSet.add(order.vendor);
+        if (order?.supplier) vendorsSet.add(order.supplier);
+        if (order?.group?.supplier) vendorsSet.add(order.group.supplier);
+      }
+    });
+    const vendors = Array.from(vendorsSet).sort((a, b) =>
+      String(a || "").localeCompare(String(b || "")),
+    );
+    const current = reimbursementVendorFilter.value || "";
+    reimbursementVendorFilter.innerHTML = [
+      '<option value="">All vendors</option>',
+      ...vendors.map(
+        (v) =>
+          `<option value="${escapeHtml(v)}"${v === current ? " selected" : ""}>${escapeHtml(v)}</option>`,
+      ),
+    ].join("");
+  }
+  if (reimbursementsBulkStatus) {
+    reimbursementsBulkStatus.innerHTML = getReimbursementStatusOptions()
+      .map(
+        (opt) =>
+          `<option value="${opt.value}">${escapeHtml(opt.label || opt.value)}</option>`,
+      )
+      .join("");
   }
 }
 
@@ -639,21 +666,21 @@ function updateReimbursementScopeOptions(list = []) {
   const canViewAll =
     currentUser?.permissions?.canViewInvoices ||
     currentUser?.permissions?.canManageInvoices;
-  if (!canViewAll) {
-    reimbursementScopeFilter.disabled = true;
-    reimbursementScopeFilter.value = "mine";
-    return;
-  }
   const userMap = new Map();
   list.forEach((inv) => {
     const id = inv.requestedBy;
-    const name = inv.requestedByName || inv.studentName || "";
+    const name = inv.requestedByName || inv.studentName;
     if (id && name) userMap.set(id, name);
   });
-  const current = reimbursementScopeFilter.value || reimbursementsScope || "mine";
+  if (!userMap.has(currentUser?._id) && currentUser) {
+    userMap.set(
+      currentUser._id,
+      currentUser.name || currentUser.username || "My invoices",
+    );
+  }
+  const current = reimbursementScopeFilter.value || reimbursementsScope || "all";
   const options = [
-    { value: "mine", label: "My invoices" },
-    { value: "all", label: "All invoices" },
+    ...(canViewAll ? [{ value: "all", label: "All invoices" }] : []),
     ...Array.from(userMap.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label)),
@@ -668,17 +695,25 @@ function updateReimbursementScopeOptions(list = []) {
     .join("");
   reimbursementsScope = options.find((o) => o.value === current)
     ? current
-    : "mine";
+    : canViewAll
+      ? "all"
+      : (currentUser?._id || "mine");
   reimbursementScopeFilter.value = reimbursementsScope;
 }
 
 function filteredReimbursements() {
   const term = (globalSearch?.value || "").trim().toLowerCase();
   const statusVal = reimbursementStatusFilter?.value || "";
+  const vendorVal = reimbursementVendorFilter?.value || "";
+  const scopeVal = reimbursementScopeFilter?.value || reimbursementsScope || "";
   return (reimbursements || [])
     .filter(
       (inv) =>
         (!statusVal || inv.reimbursementStatus === statusVal) &&
+        (!vendorVal || inv.vendor === vendorVal) &&
+        (!scopeVal ||
+          scopeVal === "all" ||
+          inv.requestedBy === scopeVal),
         (!term ||
           [
             inv.orderNumber,
@@ -706,7 +741,8 @@ function renderReimbursementsTable() {
     return;
   }
   reimbursementsTable.innerHTML = `
-    <div class="table-row header" style="font-weight:700; display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px;">
+    <div class="table-row header" style="font-weight:700; display:grid; grid-template-columns: ${canManage ? "0.5fr " : ""}1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px;">
+      ${canManage ? "<div></div>" : ""}
       <div>Order</div>
       <div>Person</div>
       <div>Amount</div>
@@ -718,31 +754,31 @@ function renderReimbursementsTable() {
     ${rows
       .map((inv) => {
         const amt = invoiceDisplayAmount(inv);
-        const selectDisabled = canManage ? "" : "disabled";
-        const selectStyle = canManage
-          ? ""
-          : 'style="opacity:0.6; pointer-events:none;" title="You do not have permission to change reimbursement status"';
-        return `<div class="table-row" data-id="${inv._id}" style="display:grid; grid-template-columns: 1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px; border-bottom:1px solid var(--border);">
+        const checked = reimbursementsSelected.has(inv._id);
+        const statusChip = renderInvoiceStatusChip(
+          inv.reimbursementStatus || "not_requested",
+        );
+        const order =
+          (orders || []).find((o) => o._id === inv.orderId) || null;
+        const orderName =
+          inv.groupTitle ||
+          order?.group?.title ||
+          order?.partName ||
+          order?.vendor ||
+          inv.vendor ||
+          "";
+        return `<div class="table-row" data-id="${inv._id}" style="display:grid; grid-template-columns: ${canManage ? "0.5fr " : ""}1.2fr 1fr 0.8fr 1fr 1fr 0.8fr 0.8fr; gap:8px; align-items:center; padding:8px; border-bottom:1px solid var(--border);">
+          ${
+            canManage
+              ? `<div><input type="checkbox" class="reimb-select" data-id="${inv._id}" ${checked ? "checked" : ""}/></div>`
+              : ""
+          }
           <div>
-            <div class="small">${escapeHtml(inv.orderNumber || "")}</div>
-            <div class="small muted">${escapeHtml(inv.vendor || "")}</div>
+            <div class="small">${escapeHtml(orderName || "")}</div>
           </div>
-          <div>${escapeHtml(inv.studentName || inv.requestedByName || "")}</div>
+          <div>${escapeHtml(inv.requestedByName || inv.studentName || "")}</div>
           <div>${amt !== undefined ? formatMoney(amt) : ""}</div>
-          <div>
-            <select class="input reimbursement-status-select" data-id="${inv._id}" ${selectDisabled} ${selectStyle}>
-              ${getReimbursementStatusOptions()
-                .map(
-                  (opt) =>
-                    `<option value="${opt.value}" ${
-                      opt.value === (inv.reimbursementStatus || "not_requested")
-                        ? "selected"
-                        : ""
-                    }>${opt.label}</option>`,
-                )
-                .join("")}
-            </select>
-          </div>
+          <div>${statusChip}</div>
           <div class="small">${renderInvoiceFiles(inv.files)}</div>
           <div class="small">${fmtDate(inv.requestedAt)}</div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -753,24 +789,38 @@ function renderReimbursementsTable() {
       .join("")}
   `;
   reimbursementsTable
-    .querySelectorAll(".reimbursement-status-select")
-    .forEach((select) => {
-      select.onchange = async () => {
-        if (!canManage) return;
-        try {
-          await updateInvoice(select.dataset.id, {
-            reimbursementStatus: select.value,
-          });
-          await loadReimbursements();
-          fetchOrders();
-        } catch (err) {
-          showBoardMessage(
-            err.message || "Unable to update reimbursement",
-            "error",
-          );
-        }
+    .querySelectorAll(".reimb-select")
+    .forEach((cb) => {
+      cb.onchange = () => {
+        const id = cb.dataset.id;
+        if (!id) return;
+        if (cb.checked) reimbursementsSelected.add(id);
+        else reimbursementsSelected.delete(id);
+        updateReimbursementsBulkUI();
       };
     });
+  if (canManage) {
+    reimbursementsTable
+      .querySelectorAll(".table-row")
+      .forEach((row) => {
+        const id = row.dataset.id;
+        if (!id) return;
+        row.style.cursor = "pointer";
+        row.onclick = (e) => {
+          if (e.target.closest("button") || e.target.closest("a")) return;
+          const cb = row.querySelector('.reimb-select');
+          const checked = reimbursementsSelected.has(id);
+          if (checked) {
+            reimbursementsSelected.delete(id);
+            if (cb) cb.checked = false;
+          } else {
+            reimbursementsSelected.add(id);
+            if (cb) cb.checked = true;
+          }
+          updateReimbursementsBulkUI();
+        };
+      });
+  }
   reimbursementsTable
     .querySelectorAll('button[data-action="open-invoice"]')
     .forEach((btn) => {
@@ -795,31 +845,49 @@ async function loadReimbursements(statusOverride, scopeOverride) {
     scopeOverride ??
     reimbursementScopeFilter?.value ??
     reimbursementsScope ??
-    "mine";
+    "all";
   reimbursementsScope = scopeRaw;
   if (reimbursementScopeFilter) {
     const canViewAll =
       currentUser?.permissions?.canViewInvoices ||
       currentUser?.permissions?.canManageInvoices;
     reimbursementScopeFilter.disabled = !canViewAll;
-    reimbursementScopeFilter.value = canViewAll ? scopeRaw : "mine";
+    reimbursementScopeFilter.value = canViewAll ? scopeRaw || "all" : (currentUser?._id || "mine");
   }
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   const canViewAll =
     currentUser?.permissions?.canViewInvoices ||
     currentUser?.permissions?.canManageInvoices;
-  if (!canViewAll || scopeRaw === "mine") {
+  if (!canViewAll) {
     params.set("requestedBy", currentUser?._id || "");
-    reimbursementsScope = "mine";
+    reimbursementsScope = currentUser?._id || "mine";
   } else if (scopeRaw && scopeRaw !== "all") {
     params.set("requestedBy", scopeRaw);
   }
   const res = await fetch(`/api/invoices?${params.toString()}`);
   const data = await res.json();
   reimbursements = data.invoices || [];
+  reimbursementsSelected = new Set(
+    Array.from(reimbursementsSelected).filter((id) =>
+      (reimbursements || []).some((inv) => inv._id === id),
+    ),
+  );
   updateReimbursementScopeOptions(reimbursements);
   renderReimbursementsTable();
+  updateReimbursementsBulkUI();
+}
+
+function updateReimbursementsBulkUI() {
+  const canManage = Boolean(currentUser?.permissions?.canManageInvoices);
+  const count = reimbursementsSelected.size;
+  if (reimbursementsBulk)
+    reimbursementsBulk.style.display = canManage && count > 0 ? "flex" : "none";
+  if (!canManage) return;
+  if (reimbursementsBulkCount) {
+    reimbursementsBulkCount.textContent = count > 0 ? `${count} selected` : "";
+  }
+  if (reimbursementsBulkApply) reimbursementsBulkApply.disabled = count === 0;
 }
 
 function renderInvoiceSummary(order) {

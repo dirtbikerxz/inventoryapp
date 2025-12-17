@@ -213,8 +213,6 @@ export const update = mutation({
   }
   if (args.reimbursementRequested === false) {
     updates.reimbursementStatus = "not_requested";
-    updates.reimbursementUser = undefined;
-    updates.reimbursementUserName = undefined;
     statusHistory.push({
       status: "not_requested",
       changedAt: updates.updatedAt,

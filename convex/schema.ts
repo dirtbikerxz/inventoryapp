@@ -101,7 +101,7 @@ export default defineSchema({
     groupId: v.optional(v.id("orderGroups")),
     orderNumber: v.optional(v.string()),
     groupTitle: v.optional(v.string()),
-    vendor: v.optional(v.string()),
+  vendor: v.optional(v.string()),
     studentName: v.optional(v.string()),
     requestedBy: v.optional(v.id("users")),
     requestedByName: v.optional(v.string()),

@@ -165,16 +165,27 @@ const invoiceStatusField = document.getElementById("invoice-status-field");
 const invoiceStatusSelect = invoiceEditorForm?.elements?.reimbursementStatus;
 const invoiceFileField = document.getElementById("invoice-file-field");
 const newInvoiceBtn = document.getElementById("new-invoice-btn");
-const reimbursementUserField = document.getElementById("reimbursement-user-field");
-const reimbursementUserSelect = invoiceEditorForm?.elements?.reimbursementUser;
 const reimbursementStatusFilter = document.getElementById(
   "reimbursement-status-filter",
 );
 const reimbursementScopeFilter = document.getElementById(
   "reimbursement-scope-filter",
 );
+const reimbursementVendorFilter = document.getElementById(
+  "reimbursement-vendor-filter",
+);
 const refreshReimbursementsBtn = document.getElementById(
   "refresh-reimbursements",
+);
+const reimbursementsBulk = document.getElementById("reimbursements-bulk");
+const reimbursementsBulkStatus = document.getElementById(
+  "reimbursements-bulk-status",
+);
+const reimbursementsBulkApply = document.getElementById(
+  "reimbursements-bulk-apply",
+);
+const reimbursementsBulkCount = document.getElementById(
+  "reimbursements-bulk-count",
 );
 function resizeColumns() {
   window.requestAnimationFrame(() => {

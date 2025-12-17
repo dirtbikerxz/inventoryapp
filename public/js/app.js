@@ -623,10 +623,6 @@ processInvoiceBtn?.addEventListener('click', async () => {
 });
 invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', () => {
   const show = invoiceEditorForm.elements.reimbursementRequested.value === 'true';
-  if (reimbursementUserField) reimbursementUserField.style.display = show ? 'block' : 'none';
-  if (show && reimbursementUserSelect && !reimbursementUserSelect.value && currentUser?._id) {
-    reimbursementUserSelect.value = currentUser._id;
-  }
   if (invoiceStatusSelect) {
     if (!show) {
       invoiceStatusSelect.value = 'not_requested';
@@ -668,13 +664,6 @@ invoiceEditorForm?.addEventListener('submit', async (e) => {
     if (invoiceEditorForm.elements.reimbursementRequested) {
       fd.set('reimbursementRequested', invoiceEditorForm.elements.reimbursementRequested.value);
     }
-    if (invoiceEditorForm.elements.reimbursementUser && invoiceEditorForm.elements.reimbursementRequested?.value === 'true') {
-      fd.set('reimbursementUser', invoiceEditorForm.elements.reimbursementUser.value);
-      const selectedOption = invoiceEditorForm.elements.reimbursementUser.selectedOptions?.[0];
-      if (selectedOption?.textContent) {
-        fd.set('reimbursementUserName', selectedOption.textContent);
-      }
-    }
     Array.from(files).forEach((f) => fd.append('files', f));
     if (invoiceMessage) {
       invoiceMessage.textContent = 'Uploading and processing…';
@@ -709,13 +698,6 @@ invoiceEditorForm?.addEventListener('submit', async (e) => {
         : undefined,
       notes: invoiceEditorForm.elements.notes?.value || undefined
     };
-    if (invoiceEditorForm.elements.reimbursementUser && invoiceEditorForm.elements.reimbursementRequested?.value === 'true') {
-      payload.reimbursementUser = invoiceEditorForm.elements.reimbursementUser.value;
-      const selectedOption = invoiceEditorForm.elements.reimbursementUser.selectedOptions?.[0];
-      if (selectedOption?.textContent) {
-        payload.reimbursementUserName = selectedOption.textContent;
-      }
-    }
     if (currentUser?.permissions?.canManageInvoices && invoiceEditorForm.elements.reimbursementStatus) {
       payload.reimbursementStatus = invoiceEditorForm.elements.reimbursementStatus.value;
     }
@@ -2697,6 +2679,29 @@ function fetchOrderDetails(configHint) {
       } catch (err) {
         reimbursementTagsMessage.textContent = err.message || 'Failed to create reimbursement status';
         reimbursementTagsMessage.className = 'error';
+      }
+    });
+
+    reimbursementsBulkApply?.addEventListener('click', async () => {
+      if (!currentUser?.permissions?.canManageInvoices) return;
+      const status = reimbursementsBulkStatus?.value;
+      if (!status) return;
+      try {
+        if (reimbursementsBulkCount)
+          reimbursementsBulkCount.textContent = 'Updating...';
+        const ids = Array.from(reimbursementsSelected || []);
+        await Promise.all(
+          ids.map((id) =>
+            updateInvoice(id, {
+              reimbursementStatus: status
+            })
+          )
+        );
+        reimbursementsSelected = new Set();
+        await loadReimbursements();
+        fetchOrders();
+      } catch (err) {
+        showBoardMessage(err?.message || 'Failed to update invoices', 'error');
       }
     });
     confirmCatalogRequest?.addEventListener('click', submitCatalogRequest);

@@ -968,8 +968,8 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
     const amount = toNumber(req.body?.amount) ?? detectedTotal;
     const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? false);
-    const reimbursementUser = req.body?.reimbursementUser || user._id?.toString();
-    const reimbursementUserName = req.body?.reimbursementUserName || (reimbursementUser === String(user._id || '') ? user.name : undefined);
+    const reimbursementUser = user._id?.toString();
+    const reimbursementUserName = user.name;
     const reimbursementAmount = amount ?? detectedTotal;
     const payload = {
       orderId,
@@ -1054,15 +1054,9 @@ app.patch('/api/invoices/:id', async (req, res) => {
     };
     if (updates.reimbursementRequested === false) {
       updates.reimbursementStatus = 'not_requested';
-      updates.reimbursementUser = undefined;
-      updates.reimbursementUserName = undefined;
     }
     if (updates.amount !== undefined) {
       updates.reimbursementAmount = updates.amount;
-    }
-    if (req.body?.reimbursementUser && req.body?.reimbursementRequested !== undefined && parseBoolean(req.body.reimbursementRequested)) {
-      updates.reimbursementUser = req.body.reimbursementUser;
-      updates.reimbursementUserName = req.body.reimbursementUserName;
     }
     if (req.body?.reimbursementStatus && canManage) {
       updates.reimbursementStatus = req.body.reimbursementStatus;
