@@ -113,6 +113,7 @@ export const create = mutation({
     studentName: v.optional(v.string()),
     requestedBy: v.optional(v.string()),
     requestedByName: v.optional(v.string()),
+    requestedAt: v.optional(v.number()),
     amount: v.optional(v.number()),
     reimbursementAmount: v.optional(v.number()),
     reimbursementRequested: v.boolean(),
@@ -127,7 +128,7 @@ export const create = mutation({
     files: v.array(invoiceFileArg)
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const now = args.requestedAt ?? Date.now();
     const orderId = ctx.db.normalizeId("orders", args.orderId);
     if (!orderId) throw new Error("Invalid order id");
     const groupId = args.groupId ? ctx.db.normalizeId("orderGroups", args.groupId) : undefined;

@@ -103,6 +103,8 @@ let currentOrderInvoices = [];
 let activeInvoiceOrderId = null;
 let activeInvoiceOrders = [];
 let reimbursementsSelected = new Set();
+let lastDeletedInvoice = null;
+let lastDeletedList = [];
 const defaultReimbursementStatusOptions = [
   { value: "requested", label: "Reimbursement requested" },
   { value: "submitted", label: "Reimbursement submitted" },
@@ -797,6 +799,7 @@ function renderReimbursementsTable() {
         if (cb.checked) reimbursementsSelected.add(id);
         else reimbursementsSelected.delete(id);
         updateReimbursementsBulkUI();
+        updateReimbursementsSelectionText();
       };
     });
   if (canManage) {
@@ -883,11 +886,23 @@ function updateReimbursementsBulkUI() {
   const count = reimbursementsSelected.size;
   if (reimbursementsBulk)
     reimbursementsBulk.style.display = canManage && count > 0 ? "flex" : "none";
+  if (reimbursementsUndoBtn)
+    reimbursementsUndoBtn.style.display =
+      canManage && lastDeletedInvoice ? "inline-flex" : "none";
+  if (reimbursementsDeleteBtn)
+    reimbursementsDeleteBtn.style.display = canManage && count > 0 ? "inline-flex" : "none";
   if (!canManage) return;
   if (reimbursementsBulkCount) {
     reimbursementsBulkCount.textContent = count > 0 ? `${count} selected` : "";
   }
   if (reimbursementsBulkApply) reimbursementsBulkApply.disabled = count === 0;
+}
+
+function updateReimbursementsSelectionText() {
+  if (!reimbursementsSelection) return;
+  const count = reimbursementsSelected.size;
+  reimbursementsSelection.textContent =
+    count > 0 ? `${count} invoice${count > 1 ? "s" : ""} selected` : "No invoices selected";
 }
 
 function renderInvoiceSummary(order) {
@@ -962,10 +977,15 @@ function renderInvoiceExistingList() {
               invoiceMessage.textContent = "Deleting invoice...";
               invoiceMessage.className = "small";
             }
+            const inv = currentOrderInvoices.find((x) => x._id === id);
             await deleteInvoice(id);
             currentOrderInvoices = currentOrderInvoices.filter(
               (x) => x._id !== id,
             );
+            if (inv) {
+              lastDeletedInvoice = inv;
+              updateReimbursementsBulkUI();
+            }
             renderInvoiceExistingList();
             if (invoiceMessage) {
               invoiceMessage.textContent = "Invoice deleted";

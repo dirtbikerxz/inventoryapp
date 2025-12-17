@@ -2704,6 +2704,62 @@ function fetchOrderDetails(configHint) {
         showBoardMessage(err?.message || 'Failed to update invoices', 'error');
       }
     });
+
+    reimbursementsDeleteBtn?.addEventListener('click', async () => {
+      if (!currentUser?.permissions?.canManageInvoices) return;
+      const ids = Array.from(reimbursementsSelected || []);
+      if (!ids.length) return;
+      openConfirm(`Delete ${ids.length} invoice(s)? This cannot be undone (but you can undo once).`, async () => {
+        try {
+          lastDeletedInvoice = null;
+          lastDeletedList = [];
+          for (const id of ids) {
+            const inv = reimbursements.find((x) => x._id === id);
+            if (inv) lastDeletedList.push(inv);
+            await deleteInvoice(id);
+          }
+          reimbursementsSelected = new Set();
+          lastDeletedInvoice = lastDeletedList[0] || null;
+          await loadReimbursements();
+          fetchOrders();
+        } catch (err) {
+          showBoardMessage(err?.message || 'Failed to delete invoices', 'error');
+        } finally {
+          updateReimbursementsBulkUI();
+        }
+      });
+    });
+
+    reimbursementsUndoBtn?.addEventListener('click', async () => {
+      if (!currentUser?.permissions?.canManageInvoices) return;
+      const payloads = lastDeletedList.length
+        ? lastDeletedList
+        : lastDeletedInvoice
+          ? [lastDeletedInvoice]
+          : [];
+      if (!payloads.length) return;
+      try {
+        reimbursementsUndoBtn.textContent = 'Restoring...';
+        for (const inv of payloads) {
+          const res = await fetch('/api/invoices/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(inv)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to restore invoice');
+        }
+        lastDeletedInvoice = null;
+        lastDeletedList = [];
+        await loadReimbursements();
+        fetchOrders();
+      } catch (err) {
+        showBoardMessage(err?.message || 'Unable to restore invoice', 'error');
+      } finally {
+        reimbursementsUndoBtn.textContent = 'Undo delete';
+        updateReimbursementsBulkUI();
+      }
+    });
     confirmCatalogRequest?.addEventListener('click', submitCatalogRequest);
     cancelCatalogRequest?.addEventListener('click', () => { pendingCatalogRequest = null; catalogRequestModal.style.display = 'none'; });
     vendorForm.addEventListener('submit', async (e) => {

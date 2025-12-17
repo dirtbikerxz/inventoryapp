@@ -174,6 +174,12 @@ const reimbursementScopeFilter = document.getElementById(
 const reimbursementVendorFilter = document.getElementById(
   "reimbursement-vendor-filter",
 );
+const reimbursementsUndoBtn = document.getElementById(
+  "reimbursements-undo",
+);
+const reimbursementsDeleteBtn = document.getElementById(
+  "reimbursements-delete",
+);
 const refreshReimbursementsBtn = document.getElementById(
   "refresh-reimbursements",
 );
@@ -186,6 +192,9 @@ const reimbursementsBulkApply = document.getElementById(
 );
 const reimbursementsBulkCount = document.getElementById(
   "reimbursements-bulk-count",
+);
+const reimbursementsSelection = document.getElementById(
+  "reimbursements-selection",
 );
 function resizeColumns() {
   window.requestAnimationFrame(() => {

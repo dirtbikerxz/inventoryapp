@@ -1093,6 +1093,31 @@ app.delete('/api/invoices/:id', async (req, res) => {
   }
 });
 
+app.post('/api/invoices/restore', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const body = req.body || {};
+  try {
+    const allowed = ['orderId','groupId','orderNumber','groupTitle','vendor','studentName','requestedBy','requestedByName','requestedAt','amount','reimbursementAmount','reimbursementRequested','reimbursementStatus','reimbursementUser','reimbursementUserName','detectedTotal','detectedCurrency','detectedDate','detectedMerchant','notes','files'];
+    const payload = {};
+    allowed.forEach(k => {
+      if (body[k] !== undefined) payload[k] = body[k];
+    });
+    if (!payload.orderId || !Array.isArray(payload.files) || !payload.files.length) {
+      return res.status(400).json({ error: 'Missing orderId or files for restore' });
+    }
+    payload.requestedBy = payload.requestedBy || user._id?.toString();
+    payload.requestedByName = payload.requestedByName || user.name;
+    payload.requestedAt = payload.requestedAt || Date.now();
+    const result = await client.mutation('invoices:create', payload);
+    const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });
+    res.status(201).json({ invoice: normalizeInvoice(saved) });
+  } catch (error) {
+    logger.error(error, 'Failed to restore invoice');
+    res.status(500).json({ error: 'Unable to restore invoice' });
+  }
+});
+
 app.get('/api/users/min', async (req, res) => {
   const user = await requireAuth(req, res, 'canSubmitInvoices');
   if (!user) return;

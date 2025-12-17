@@ -104,6 +104,13 @@
     </section>
 
     <section id="reimbursements-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
+      <div class="selection-bar" style="display:flex; align-items:center; justify-content:space-between;">
+        <div id="reimbursements-selection" class="small">No invoices selected</div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button class="btn ghost" id="reimbursements-undo" style="display:none;">Undo delete</button>
+          <button class="btn ghost" id="reimbursements-delete" style="display:none; color: var(--danger);">Delete</button>
+        </div>
+      </div>
       <div class="filters" style="align-items:flex-end;">
         <div>
           <label class="small">Status</label>
