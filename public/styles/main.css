@@ -232,6 +232,13 @@
     .tag.tracking.intransit { background: rgba(79,180,255,0.18); color: #9bd0ff; border-color: rgba(79,180,255,0.5); }
     .tag.tracking.delivered { background: rgba(74,210,143,0.2); color: #7be0b4; border-color: rgba(74,210,143,0.5); }
     .tag.tracking.unknown { background: rgba(200,193,221,0.18); color: #d1cbe2; border-color: rgba(200,193,221,0.5); }
+    .tag.invoice-summary {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 4px 10px;
+      vertical-align: middle;
+    }
     .tracking-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .tracking-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .tracking-row select { min-width:120px; }

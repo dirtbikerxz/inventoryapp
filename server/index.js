@@ -155,6 +155,30 @@ function normalizePrivateKey(key) {
   return String(key).replace(/\\n/g, '\n');
 }
 
+function cleanInvoiceFile(file) {
+  if (!file || typeof file !== 'object') return file;
+  const allowed = [
+    'detectedCurrency',
+    'detectedDate',
+    'detectedMerchant',
+    'detectedTotal',
+    'driveDownloadLink',
+    'driveFileId',
+    'driveWebViewLink',
+    'mimeType',
+    'name',
+    'size',
+    'textSnippet'
+  ];
+  const cleaned = {};
+  allowed.forEach((key) => {
+    const val = file[key];
+    if (val === null || val === undefined) return;
+    cleaned[key] = val;
+  });
+  return cleaned;
+}
+
 function toNumber(val) {
   if (val === null || val === undefined || val === '') return undefined;
   const num = Number(val);
@@ -965,6 +989,7 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     for (const file of files) {
       processedFiles.push(await invoiceService.processFile(file));
     }
+    const cleanedFiles = processedFiles.map(cleanInvoiceFile);
     const detectedTotals = processedFiles
       .map(f => toNumber(f.detectedTotal))
       .filter(v => v !== undefined)
@@ -975,6 +1000,20 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     const reimbursementUser = user._id?.toString();
     const reimbursementUserName = user.name;
     const reimbursementAmount = amount ?? detectedTotal;
+    let reimbursementStatus = reimbursementRequested ? 'requested' : 'not_requested';
+    if (reimbursementRequested) {
+      try {
+        const statuses = await client.query('reimbursementTags:list', {});
+        if (Array.isArray(statuses) && statuses.length) {
+          const pick = [...statuses]
+            .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
+            .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))[0];
+          if (pick?.value) reimbursementStatus = pick.value;
+        }
+      } catch (err) {
+        logger.warn(err, 'Failed to load reimbursement tags for default status');
+      }
+    }
     const payload = {
       orderId,
       groupId: req.body?.groupId || order.groupId || order.group?._id,
@@ -989,13 +1028,13 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       reimbursementUser,
       reimbursementUserName,
       reimbursementRequested,
-      reimbursementStatus: reimbursementRequested ? 'requested' : 'not_requested',
+      reimbursementStatus,
       detectedTotal,
       detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
       detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
       detectedMerchant: processedFiles.find(f => f.detectedMerchant)?.detectedMerchant,
       notes: req.body?.notes,
-      files: processedFiles
+      files: cleanedFiles
     };
     const result = await client.mutation('invoices:create', payload);
     const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });
@@ -1019,13 +1058,14 @@ app.post('/api/invoices/preview', upload.array('files', 8), async (req, res) => 
     for (const file of files) {
       processedFiles.push(await invoiceService.processFile(file, { upload: false }));
     }
+    const cleanedFiles = processedFiles.map(cleanInvoiceFile);
     const detectedTotals = processedFiles
       .map(f => toNumber(f.detectedTotal))
       .filter(v => v !== undefined)
       .sort((a, b) => Number(b) - Number(a));
     const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
     res.json({
-      processedFiles,
+      processedFiles: cleanedFiles,
       detectedTotal,
       detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
       detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
@@ -1107,6 +1147,12 @@ app.post('/api/invoices/restore', async (req, res) => {
     allowed.forEach(k => {
       if (body[k] !== undefined) payload[k] = body[k];
     });
+    ['detectedTotal','detectedCurrency','detectedDate','detectedMerchant'].forEach(k => {
+      if (payload[k] === null || payload[k] === undefined) delete payload[k];
+    });
+    if (Array.isArray(payload.files)) {
+      payload.files = payload.files.map(cleanInvoiceFile);
+    }
     if (!payload.orderId || !Array.isArray(payload.files) || !payload.files.length) {
       return res.status(400).json({ error: 'Missing orderId or files for restore' });
     }

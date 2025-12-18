@@ -160,9 +160,7 @@ function renderGroupInvoiceSummary(items = []) {
     (st) => st === highest,
   );
   const color = allAtHighest ? "var(--success)" : "var(--danger)";
-  return `<div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-    <span class="tag" style="border-color:${color}; color:${color}; min-width: auto;">Invoices: ${totals.count}</span>
-  </div>`;
+  return `<span class="tag invoice-summary" style="border-color:${color}; color:${color}; min-width:auto;">Invoices: ${totals.count}</span>`;
 }
 
 function createTrackingRow(container, data = {}, partsOptions = []) {
@@ -360,6 +358,10 @@ function formatReimbursementStatus(status) {
   const options = getReimbursementStatusOptions();
   const found = options.find((o) => o.value === status);
   if (found) return found.label || found.value || "Unknown";
+  if (options.length && status === "requested") {
+    const first = options[0];
+    return first.label || first.value || "Unknown";
+  }
   const map = {
     requested: "Reimbursement requested",
     submitted: "Submitted",
@@ -374,6 +376,8 @@ function reimbursementStatusColor(status) {
   const options = getReimbursementStatusOptions();
   const found = options.find((o) => o.value === status);
   if (found?.color) return found.color;
+  if (options.length && status === "requested" && options[0]?.color)
+    return options[0].color;
   switch (status) {
     case "reimbursed":
       return "var(--success)";
@@ -1152,7 +1156,7 @@ function openInvoiceEditor(mode = "create", invoice = null) {
         invoice.amount ?? invoice.detectedTotal ?? "";
     if (invoiceEditorForm.elements.reimbursementRequested)
       invoiceEditorForm.elements.reimbursementRequested.value = String(
-        invoice.reimbursementRequested ?? true,
+        invoice.reimbursementRequested ?? false,
       );
     if (invoiceEditorForm.elements.notes)
       invoiceEditorForm.elements.notes.value = invoice.notes || "";
@@ -1590,9 +1594,9 @@ function renderBoard() {
         <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
           ${vendor ? `<span class="tag supplier">${vendor}</span>` : ""}
           ${statusTagLabel ? `<span class="tag" style="background:${statusTagColor || "var(--panel)"}22; border-color:${statusTagColor || "var(--border)"}; color:${statusTagColor || "var(--text)"};">${escapeHtml(statusTagLabel)}</span>` : ""}
+          ${renderGroupInvoiceSummary(items)}
         </div>
         ${renderTrackingBadges(trackingList)}
-        ${renderGroupInvoiceSummary(items)}
       </div>
       <div class="muted" style="min-width:80px; text-align:right; align-self:flex-end;">${total ? "$" + total.toFixed(2) : ""}</div>
     </div>

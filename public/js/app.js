@@ -119,6 +119,18 @@
       { label: 'Declined', value: 'declined', color: '#ff5565', sortOrder: 4 },
       { label: 'Not requested', value: 'not_requested', color: '#888888', sortOrder: 5 }
     ];
+    const getReimbursementStatuses = () =>
+      (window.__reimbursementTags && window.__reimbursementTags.length
+        ? window.__reimbursementTags
+        : defaultReimbursementStatuses);
+    const defaultReimbursementStatusValue = () => {
+      const list = getReimbursementStatuses();
+      if (!list || !list.length) return 'requested';
+      const sorted = [...list]
+        .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+      return sorted[0]?.value || 'requested';
+    };
     let catalogNavStack = [];
     let currentCatalogCategoryId = 'root';
     let stockItems = [];
@@ -651,8 +663,18 @@ invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', 
   if (invoiceStatusSelect) {
     if (!show) {
       invoiceStatusSelect.value = 'not_requested';
-    } else if (invoiceStatusSelect.value === 'not_requested') {
-      invoiceStatusSelect.value = 'requested';
+    } else {
+      const desired = defaultReimbursementStatusValue();
+      const options = Array.from(invoiceStatusSelect.options || []).map((o) => o.value);
+      const pick = options.includes(desired)
+        ? desired
+        : options[0] || 'requested';
+      if (
+        !options.includes(invoiceStatusSelect.value) ||
+        invoiceStatusSelect.value === 'not_requested'
+      ) {
+        invoiceStatusSelect.value = pick;
+      }
     }
   }
   if (invoiceStatusField) invoiceStatusField.style.display = show ? 'block' : 'none';
