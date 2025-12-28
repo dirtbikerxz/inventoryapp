@@ -401,18 +401,18 @@ function reimbursementStatusColor(status) {
 
 function invoiceDisplayAmount(inv) {
   return (
-    inv?.amount ??
-    inv?.reimbursementAmount ??
-    inv?.detectedTotal ??
-    inv?.files?.find((f) => f?.detectedTotal)?.detectedTotal
+    inv?.amount ?? inv?.reimbursementAmount
   );
 }
 
-function renderInvoiceFiles(files = []) {
+function renderInvoiceFiles(files = [], invoiceId = null) {
   if (!Array.isArray(files) || !files.length) return "";
   return files
     .map((f, idx) => {
-      const url = f.driveWebViewLink || f.driveDownloadLink;
+      const url =
+        f.driveFileId && (invoiceId || window.activeInvoiceId)
+          ? `/api/invoices/${invoiceId || window.activeInvoiceId}/file/${f.driveFileId}`
+          : f.driveWebViewLink || f.driveDownloadLink;
       const label = f.name || `File ${idx + 1}`;
       return url
         ? `<a href="${url}" target="_blank" rel="noopener noreferrer" class="tag" style="padding:4px 8px;">${escapeHtml(label)}</a>`
@@ -469,7 +469,7 @@ function renderInvoiceCards(invoices = []) {
           <div class="small">Recipient: ${escapeHtml(recipient)}</div>
           <div class="small">Status: ${formatReimbursementStatus(inv.reimbursementStatus)}</div>
         </div>
-        <div class="small" style="margin-top:6px;">${renderInvoiceFiles(inv.files)}</div>
+        <div class="small" style="margin-top:6px;">${renderInvoiceFiles(inv.files, inv._id || inv.id)}</div>
       </div>`;
     })
     .join("");
@@ -822,7 +822,7 @@ function renderReimbursementsTable() {
           <div>${escapeHtml(inv.requestedByName || inv.studentName || "")}</div>
           <div>${amt !== undefined ? formatMoney(amt) : ""}</div>
           <div>${statusChip}</div>
-          <div class="small">${renderInvoiceFiles(inv.files)}</div>
+          <div class="small">${renderInvoiceFiles(inv.files, inv._id || inv.id)}</div>
           <div class="small">${fmtDate(inv.requestedAt)}</div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
             <button class="btn ghost" data-action="open-invoice" data-order-id="${inv.orderId}" data-order-number="${escapeHtml(inv.orderNumber || "")}" data-vendor="${escapeHtml(inv.vendor || "")}" style="padding:6px 10px;">Details</button>
@@ -1107,6 +1107,7 @@ function openInvoiceModal(order, orderList = []) {
 
 function openInvoiceEditor(mode = "create", invoice = null) {
   if (!invoiceEditorForm || !invoiceCreateModal) return;
+  window.activeInvoiceId = mode === "edit" && invoice ? invoice._id || invoice.id || invoice.invoiceId : null;
   invoiceEditorForm.reset();
   googleCredentialsFileJson = null;
   if (invoiceEditorForm.elements.mode) invoiceEditorForm.elements.mode.value = mode;
@@ -1172,7 +1173,7 @@ function openInvoiceEditor(mode = "create", invoice = null) {
     }
     if (invoiceEditorForm.elements.amount)
       invoiceEditorForm.elements.amount.value =
-        invoice.amount ?? invoice.detectedTotal ?? "";
+        invoice.amount ?? "";
     if (invoiceEditorForm.elements.reimbursementRequested)
       invoiceEditorForm.elements.reimbursementRequested.value = String(
         invoice.reimbursementRequested ?? false,
