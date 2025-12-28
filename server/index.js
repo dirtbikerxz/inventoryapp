@@ -990,16 +990,11 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       processedFiles.push(await invoiceService.processFile(file));
     }
     const cleanedFiles = processedFiles.map(cleanInvoiceFile);
-    const detectedTotals = processedFiles
-      .map(f => toNumber(f.detectedTotal))
-      .filter(v => v !== undefined)
-      .sort((a, b) => Number(b) - Number(a));
-    const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
-    const amount = toNumber(req.body?.amount) ?? detectedTotal;
+    const amount = toNumber(req.body?.amount);
     const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? false);
     const reimbursementUser = user._id?.toString();
     const reimbursementUserName = user.name;
-    const reimbursementAmount = amount ?? detectedTotal;
+    const reimbursementAmount = amount;
     let reimbursementStatus = reimbursementRequested ? 'requested' : 'not_requested';
     if (reimbursementRequested) {
       try {
@@ -1029,10 +1024,6 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       reimbursementUserName,
       reimbursementRequested,
       reimbursementStatus,
-      detectedTotal,
-      detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
-      detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
-      detectedMerchant: processedFiles.find(f => f.detectedMerchant)?.detectedMerchant,
       notes: req.body?.notes,
       files: cleanedFiles
     };
@@ -1047,34 +1038,8 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
 });
 
 app.post('/api/invoices/preview', upload.array('files', 8), async (req, res) => {
-  const user = await requireAuth(req, res, 'canSubmitInvoices');
-  if (!user) return;
-  const files = Array.isArray(req.files) ? req.files : [];
-  if (!files.length) {
-    return res.status(400).json({ error: 'At least one invoice file is required' });
-  }
-  try {
-    const processedFiles = [];
-    for (const file of files) {
-      processedFiles.push(await invoiceService.processFile(file, { upload: false }));
-    }
-    const cleanedFiles = processedFiles.map(cleanInvoiceFile);
-    const detectedTotals = processedFiles
-      .map(f => toNumber(f.detectedTotal))
-      .filter(v => v !== undefined)
-      .sort((a, b) => Number(b) - Number(a));
-    const detectedTotal = detectedTotals.length ? detectedTotals[0] : undefined;
-    res.json({
-      processedFiles: cleanedFiles,
-      detectedTotal,
-      detectedCurrency: processedFiles.find(f => f.detectedCurrency)?.detectedCurrency,
-      detectedDate: processedFiles.find(f => f.detectedDate)?.detectedDate,
-      detectedMerchant: processedFiles.find(f => f.detectedMerchant)?.detectedMerchant
-    });
-  } catch (error) {
-    logger.error(error, 'Failed to preview invoice');
-    res.status(500).json({ error: 'Unable to process invoice', details: error.message });
-  }
+  // Auto-processing disabled: keep endpoint for compatibility.
+  return res.status(410).json({ error: 'Auto-processing disabled. Enter totals manually.' });
 });
 
 app.patch('/api/invoices/:id', async (req, res) => {

@@ -1117,9 +1117,6 @@ function openInvoiceEditor(mode = "create", invoice = null) {
   if (invoiceFileField) {
     invoiceFileField.style.display = mode === "edit" ? "none" : "block";
   }
-  if (processInvoiceBtn) {
-    processInvoiceBtn.style.display = mode === "edit" ? "none" : "inline-flex";
-  }
   if (invoiceStatusSelect) {
     invoiceStatusSelect.innerHTML = getReimbursementStatusOptions()
       .map(

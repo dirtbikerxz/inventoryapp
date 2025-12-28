@@ -1003,11 +1003,13 @@
             <label class="small">Upload receipts (PDF or images)</label>
             <input id="invoice-files" name="files" class="input" type="file" accept=".pdf,image/*" multiple />
           </div>
-          <button type="button" class="btn ghost" id="process-invoice-btn" style="padding:6px 10px; align-self:flex-end;">Process invoice</button>
+        </div>
+        <div id="invoice-preview" style="grid-column: span 2; border:1px solid var(--border); border-radius:12px; min-height:200px; padding:8px;">
+          <div class="small">Select a file to preview.</div>
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Invoice total</label>
-          <input name="amount" class="input" type="text" inputmode="decimal" placeholder="Auto-detected if left blank" />
+          <input name="amount" class="input" type="text" inputmode="decimal" placeholder="Enter total from invoice" />
         </div>
         <div style="grid-column: span 2;">
           <label class="small">Needs to be Reimbursed?</label>

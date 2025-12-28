@@ -160,11 +160,11 @@ const invoiceEditorSubtitle = document.getElementById("invoice-editor-subtitle")
 const closeInvoiceEditorBtn = document.getElementById("close-invoice-editor");
 const invoiceEditorForm = document.getElementById("invoice-editor-form");
 const invoiceFilesInput = document.getElementById("invoice-files");
-const processInvoiceBtn = document.getElementById("process-invoice-btn");
 const saveInvoiceBtn = document.getElementById("save-invoice-btn");
 const invoiceStatusField = document.getElementById("invoice-status-field");
 const invoiceStatusSelect = invoiceEditorForm?.elements?.reimbursementStatus;
 const invoiceFileField = document.getElementById("invoice-file-field");
+const invoicePreview = document.getElementById("invoice-preview");
 const newInvoiceBtn = document.getElementById("new-invoice-btn");
 const reimbursementStatusFilter = document.getElementById(
   "reimbursement-status-filter",

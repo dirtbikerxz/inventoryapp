@@ -621,42 +621,57 @@ closeInvoiceModalBtn?.addEventListener('click', closeInvoiceModal);
 closeInvoiceEditorBtn?.addEventListener('click', () => {
   if (invoiceCreateModal) invoiceCreateModal.style.display = 'none';
 });
-processInvoiceBtn?.addEventListener('click', async () => {
-  const files = invoiceFilesInput?.files;
+let invoicePreviewUrl = null;
+function updateInvoicePreview(files) {
+  if (!invoicePreview) return;
+  if (invoicePreviewUrl) {
+    URL.revokeObjectURL(invoicePreviewUrl);
+    invoicePreviewUrl = null;
+  }
   if (!files || !files.length) {
-    if (invoiceMessage) {
-      invoiceMessage.textContent = 'Upload at least one file to process';
-      invoiceMessage.className = 'error';
-    }
+    invoicePreview.innerHTML = '<div class="small">Select a file to preview.</div>';
     return;
   }
-  const fd = new FormData();
-  Array.from(files).forEach((f) => fd.append('files', f));
-  if (invoiceMessage) {
-    invoiceMessage.textContent = 'Processing invoice...';
-    invoiceMessage.className = 'small';
+  const file = files[0];
+  invoicePreviewUrl = URL.createObjectURL(file);
+  const isPdf = (file.type || "").toLowerCase().includes("pdf");
+  if (isPdf) {
+    invoicePreview.innerHTML = `<iframe src="${invoicePreviewUrl}" style="width:100%; height:360px; border:1px solid var(--border); border-radius:12px; background:var(--panel);"></iframe>`;
+  } else {
+    invoicePreview.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div class="small">Image preview</div>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="btn ghost" style="padding:4px 8px;" data-zoom="in">+</button>
+          <button type="button" class="btn ghost" style="padding:4px 8px;" data-zoom="out">-</button>
+          <button type="button" class="btn ghost" style="padding:4px 8px;" data-zoom="reset">Reset</button>
+        </div>
+      </div>
+      <div style="overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--panel); max-height:360px; text-align:center;">
+        <img id="invoice-preview-img" src="${invoicePreviewUrl}" alt="Invoice preview" style="max-width:100%; max-height:340px; display:block; margin:0 auto;" />
+      </div>`;
+    const img = invoicePreview.querySelector("#invoice-preview-img");
+    let scale = 1;
+    const applyScale = () => {
+      if (img) img.style.transform = `scale(${scale})`;
+    };
+    invoicePreview.querySelectorAll("button[data-zoom]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-zoom");
+        if (mode === "in") scale = Math.min(scale + 0.2, 5);
+        if (mode === "out") scale = Math.max(scale - 0.2, 0.2);
+        if (mode === "reset") scale = 1;
+        applyScale();
+      });
+    });
+    applyScale();
   }
-  try {
-    const res = await fetch('/api/invoices/preview', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to process invoice');
-    const detected = data.detectedTotal;
-    if (detected && invoiceEditorForm?.elements?.amount && !invoiceEditorForm.elements.amount.value) {
-      invoiceEditorForm.elements.amount.value = detected;
-    }
-    if (detected && invoiceEditorForm?.elements?.reimbursementAmount && !invoiceEditorForm.elements.reimbursementAmount.value) {
-      invoiceEditorForm.elements.reimbursementAmount.value = detected;
-    }
-    if (invoiceMessage) {
-      invoiceMessage.textContent = detected ? `Detected total: ${detected}` : 'Processed invoice';
-      invoiceMessage.className = 'success';
-    }
-  } catch (err) {
-    if (invoiceMessage) {
-      invoiceMessage.textContent = err.message || 'Failed to process invoice';
-      invoiceMessage.className = 'error';
-    }
-  }
+}
+invoiceFilesInput?.addEventListener('change', (e) => {
+  updateInvoicePreview(e.target.files);
+});
+invoiceEditorForm?.addEventListener('reset', () => {
+  updateInvoicePreview(null);
 });
 invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', () => {
   const show = invoiceEditorForm.elements.reimbursementRequested.value === 'true';
