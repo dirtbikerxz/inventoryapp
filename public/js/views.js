@@ -3219,6 +3219,8 @@ function selectSameVendorRequested() {
 
 // Event wiring
 function showOrdersView() {
+  document.body.classList.remove("mode-stock");
+  document.body.classList.toggle("mode-reimbursements", false);
   const layout =
     reimbursementsViewBtn?.classList.contains("active")
       ? "reimbursements"
@@ -3252,6 +3254,8 @@ function showOrdersView() {
 }
 
 function showStockView() {
+  document.body.classList.add("mode-stock");
+  document.body.classList.remove("mode-reimbursements");
   resetAddToOrderMode();
   activePrimaryView = "stock";
   stockViewBtn?.classList.add("active");
