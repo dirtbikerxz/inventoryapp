@@ -131,8 +131,15 @@ function getReimbursementStatusOptions() {
 
 function primaryFileLink(inv) {
   if (!inv || !Array.isArray(inv.files)) return "";
-  const file = inv.files.find((f) => f.driveWebViewLink || f.driveDownloadLink);
-  return file?.driveWebViewLink || file?.driveDownloadLink || "";
+  const file = inv.files.find(
+    (f) => f.driveFileId || f.driveWebViewLink || f.driveDownloadLink,
+  );
+  if (!file) return "";
+  if (file.driveFileId) {
+    const id = inv._id || inv.id || "";
+    return `/api/invoices/${id}/file/${file.driveFileId}`;
+  }
+  return file.driveWebViewLink || file.driveDownloadLink || "";
 }
 
 function renderGroupInvoiceSummary(items = []) {
@@ -1148,6 +1155,21 @@ function openInvoiceEditor(mode = "create", invoice = null) {
       invoice?.groupId || invoice?.group?._id || "";
   }
   if (mode === "edit" && invoice) {
+    const file =
+      (invoice.files || []).find(
+        (f) => f.driveFileId || f.driveWebViewLink || f.driveDownloadLink,
+      ) || invoice.files?.[0];
+    if (typeof updateInvoicePreview === "function") {
+      const proxiedUrl =
+        file?.driveFileId && invoice?._id
+          ? `/api/invoices/${invoice._id}/file/${file.driveFileId}`
+          : file?.driveWebViewLink || file?.driveDownloadLink;
+      updateInvoicePreview(null, {
+        url: proxiedUrl,
+        mime: file?.mimeType || "",
+        name: file?.name || "",
+      });
+    }
     if (invoiceEditorForm.elements.amount)
       invoiceEditorForm.elements.amount.value =
         invoice.amount ?? invoice.detectedTotal ?? "";
@@ -1157,6 +1179,8 @@ function openInvoiceEditor(mode = "create", invoice = null) {
       );
     if (invoiceEditorForm.elements.notes)
       invoiceEditorForm.elements.notes.value = invoice.notes || "";
+  } else if (typeof updateInvoicePreview === "function") {
+    updateInvoicePreview(null);
   }
   // Sync visibility after values are populated
   if (invoiceStatusField && invoiceEditorForm.elements.reimbursementRequested) {

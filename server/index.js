@@ -965,6 +965,40 @@ app.get('/api/invoices', async (req, res) => {
   }
 });
 
+app.get('/api/invoices/:id/file/:fileId', async (req, res) => {
+  const user = await requireAuth(req, res, 'canSubmitInvoices');
+  if (!user) return;
+  const invoiceId = req.params.id;
+  const fileId = req.params.fileId;
+  try {
+    const invoice = await client.query('invoices:get', { invoiceId });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    const isOwner =
+      invoice.requestedBy &&
+      user._id &&
+      invoice.requestedBy.toString() === user._id.toString();
+    const canView =
+      user.permissions?.canManageInvoices ||
+      user.permissions?.canViewInvoices ||
+      isOwner;
+    if (!canView) return res.status(403).json({ error: 'Forbidden' });
+    const download = await invoiceService.downloadFromDrive(fileId);
+    if (!download) return res.status(404).json({ error: 'File not available' });
+    res.setHeader(
+      'Content-Type',
+      download.mimeType || 'application/octet-stream',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(download.name || 'invoice')}"`
+    );
+    download.stream.pipe(res);
+  } catch (error) {
+    logger.error(error, 'Failed to stream invoice file');
+    res.status(500).json({ error: 'Unable to load file' });
+  }
+});
+
 app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
   const user = await requireAuth(req, res, 'canSubmitInvoices');
   if (!user) return;

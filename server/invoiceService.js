@@ -115,6 +115,33 @@ class InvoiceService {
     }
   }
 
+  async downloadFromDrive(fileId) {
+    if (!this.drive || !fileId) return null;
+    try {
+      const meta = await this.drive.files.get({
+        fileId,
+        fields: 'id, name, mimeType',
+        supportsAllDrives: true
+      });
+      const streamResp = await this.drive.files.get(
+        {
+          fileId,
+          alt: 'media',
+          supportsAllDrives: true
+        },
+        { responseType: 'stream' }
+      );
+      return {
+        name: meta.data?.name || 'invoice',
+        mimeType: meta.data?.mimeType || 'application/octet-stream',
+        stream: streamResp.data
+      };
+    } catch (err) {
+      this.logger?.warn(err, 'Drive download failed');
+      return null;
+    }
+  }
+
   async processFile(file, { upload = true } = {}) {
     const uploadMeta = upload ? await this.uploadToDrive(file) : {};
     return {

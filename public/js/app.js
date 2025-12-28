@@ -622,25 +622,34 @@ closeInvoiceEditorBtn?.addEventListener('click', () => {
   if (invoiceCreateModal) invoiceCreateModal.style.display = 'none';
 });
 let invoicePreviewUrl = null;
-function updateInvoicePreview(files) {
+function updateInvoicePreview(files, existing) {
   if (!invoicePreview) return;
   if (invoicePreviewUrl) {
     URL.revokeObjectURL(invoicePreviewUrl);
     invoicePreviewUrl = null;
   }
-  if (!files || !files.length) {
+  const existingUrl = existing?.url;
+  const existingMime = existing?.mime || "";
+  const showName = existing?.name || "";
+  if ((!files || !files.length) && !existingUrl) {
     invoicePreview.innerHTML = '<div class="small">Select a file to preview.</div>';
     return;
   }
-  const file = files[0];
-  invoicePreviewUrl = URL.createObjectURL(file);
-  const isPdf = (file.type || "").toLowerCase().includes("pdf");
+  const file = files && files.length ? files[0] : null;
+  const url = file ? URL.createObjectURL(file) : existingUrl;
+  invoicePreviewUrl = file ? url : null;
+  const mimeType = (file?.type || existingMime || "").toLowerCase();
+  const isPdf = mimeType.includes("pdf");
   if (isPdf) {
-    invoicePreview.innerHTML = `<iframe src="${invoicePreviewUrl}" style="width:100%; height:360px; border:1px solid var(--border); border-radius:12px; background:var(--panel);"></iframe>`;
+    invoicePreview.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div class="small">${showName || "PDF preview"}</div>
+      </div>
+      <iframe src="${url}" style="width:100%; height:360px; border:1px solid var(--border); border-radius:12px; background:var(--panel);"></iframe>`;
   } else {
     invoicePreview.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <div class="small">Image preview</div>
+        <div class="small">${showName || "Image preview"}</div>
         <div style="display:flex; gap:6px;">
           <button type="button" class="btn ghost" style="padding:4px 8px;" data-zoom="in">+</button>
           <button type="button" class="btn ghost" style="padding:4px 8px;" data-zoom="out">-</button>
@@ -648,7 +657,7 @@ function updateInvoicePreview(files) {
         </div>
       </div>
       <div style="overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--panel); max-height:360px; text-align:center;">
-        <img id="invoice-preview-img" src="${invoicePreviewUrl}" alt="Invoice preview" style="max-width:100%; max-height:340px; display:block; margin:0 auto;" />
+        <img id="invoice-preview-img" src="${url}" alt="Invoice preview" style="max-width:100%; max-height:340px; display:block; margin:0 auto;" />
       </div>`;
     const img = invoicePreview.querySelector("#invoice-preview-img");
     let scale = 1;
