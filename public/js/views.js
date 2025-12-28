@@ -790,6 +790,8 @@ function renderReimbursementsTable() {
   if (!rows.length) {
     reimbursementsTable.innerHTML =
       '<div class="small">No invoices found.</div>';
+    reimbursementsSelected.clear();
+    updateReimbursementsSelectionText();
     return;
   }
   reimbursementsTable.innerHTML = `
@@ -871,6 +873,7 @@ function renderReimbursementsTable() {
             if (cb) cb.checked = true;
           }
           updateReimbursementsBulkUI();
+          updateReimbursementsSelectionText();
         };
       });
   }
@@ -889,6 +892,7 @@ function renderReimbursementsTable() {
         );
       };
     });
+  updateReimbursementsSelectionText();
 }
 
 async function loadReimbursements(statusOverride, scopeOverride) {
