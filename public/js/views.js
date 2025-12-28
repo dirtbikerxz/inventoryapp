@@ -956,6 +956,14 @@ function updateReimbursementsSelectionText() {
   const count = reimbursementsSelected.size;
   reimbursementsSelection.textContent =
     count > 0 ? `${count} invoice${count > 1 ? "s" : ""} selected` : "No invoices selected";
+  if (reimbursementsBulk) {
+    reimbursementsBulk.style.display =
+      count > 0 && (currentUser?.permissions?.canManageInvoices || currentUser?.permissions?.canManageOrders)
+        ? "flex"
+        : "none";
+    // Keep controls stacked above delete button for a tighter layout
+    reimbursementsBulk.style.alignItems = "flex-end";
+  }
 }
 
 function renderInvoiceSummary(order) {

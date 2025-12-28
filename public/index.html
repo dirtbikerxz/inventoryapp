@@ -104,11 +104,17 @@
     </section>
 
     <section id="reimbursements-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
-      <div class="selection-bar" style="display:flex; align-items:center; justify-content:space-between;">
+      <div class="selection-bar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
         <div id="reimbursements-selection" class="small">No invoices selected</div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn ghost" id="reimbursements-undo" style="display:none;">Undo delete</button>
-          <button class="btn ghost" id="reimbursements-delete" style="display:none; color: var(--danger);">Delete</button>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-left:auto;">
+          <div id="reimbursements-bulk" style="display:none; align-items:center; gap:8px; flex-wrap:wrap;">
+            <select id="reimbursements-bulk-status" class="input" style="min-width:200px; padding:8px 12px; width:auto; height:38px; display:flex; align-items:center;"></select>
+            <button class="btn ghost" id="reimbursements-bulk-apply" style="padding:8px 12px; height:38px; display:flex; align-items:center;">Set status</button>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button class="btn ghost" id="reimbursements-undo" style="display:none;">Undo delete</button>
+            <button class="btn ghost" id="reimbursements-delete" style="display:none; color: var(--danger); padding:8px 12px; height:38px; display:flex; align-items:center;">Delete</button>
+          </div>
         </div>
       </div>
       <div class="filters" style="align-items:flex-end;">
@@ -123,11 +129,6 @@
         <div>
           <label class="small">Vendor</label>
           <select id="reimbursement-vendor-filter" class="input"></select>
-        </div>
-        <div id="reimbursements-bulk" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; margin-left:auto;">
-          <select id="reimbursements-bulk-status" class="input"></select>
-          <button class="btn ghost" id="reimbursements-bulk-apply">Set status on selected</button>
-          <div id="reimbursements-bulk-count" class="small"></div>
         </div>
       </div>
       <div id="reimbursements-table" class="card" style="background:var(--panel-2); padding:10px; overflow:auto; flex:1; min-height:240px;">Loading reimbursements...</div>
