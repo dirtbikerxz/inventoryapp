@@ -114,11 +114,8 @@ const defaultReimbursementStatusOptions = [
 ];
 
 function getReimbursementStatusOptions() {
-  if (typeof window !== "undefined" && !window.__reimbursementTags) {
-    window.__reimbursementTags = defaultReimbursementStatusOptions;
-  }
   const list =
-    Array.isArray(window.__reimbursementTags) &&
+    Array.isArray(window?.__reimbursementTags) &&
     window.__reimbursementTags.length
       ? window.__reimbursementTags
       : defaultReimbursementStatusOptions;
@@ -660,10 +657,14 @@ function buildFilters() {
 
 function renderReimbursementFilters() {
   if (reimbursementStatusFilter) {
+    const current = reimbursementStatusFilter.value || "";
     reimbursementStatusFilter.innerHTML = [
       '<option value="">All statuses</option>',
       ...getReimbursementStatusOptions().map(
-        (opt) => `<option value="${opt.value}">${opt.label}</option>`,
+        (opt) =>
+          `<option value="${opt.value}" ${
+            opt.value === current ? "selected" : ""
+          }>${opt.label}</option>`,
       ),
     ].join("");
   }
@@ -671,10 +672,9 @@ function renderReimbursementFilters() {
     updateReimbursementScopeOptions(reimbursements);
   }
   if (reimbursementVendorFilter) {
-    const vendorsSet = new Set(
-      (reimbursements || []).map((r) => r.vendor).filter(Boolean),
-    );
+    const vendorsSet = new Set();
     (reimbursements || []).forEach((inv) => {
+      if (inv.vendor) vendorsSet.add(inv.vendor);
       if (inv.orderId) {
         const order = (orders || []).find((o) => o._id === inv.orderId);
         if (order?.vendor) vendorsSet.add(order.vendor);
@@ -722,12 +722,14 @@ function updateReimbursementScopeOptions(list = []) {
     );
   }
   const current = reimbursementScopeFilter.value || reimbursementsScope || "all";
-  const options = [
-    ...(canViewAll ? [{ value: "all", label: "All invoices" }] : []),
-    ...Array.from(userMap.entries())
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-  ];
+  const options = [];
+  if (canViewAll) options.push({ value: "all", label: "All invoices" });
+  const entries = Array.from(userMap.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  entries.forEach((opt) => {
+    options.push(opt);
+  });
   reimbursementScopeFilter.innerHTML = options
     .map(
       (opt) =>
@@ -750,27 +752,34 @@ function filteredReimbursements() {
   const vendorVal = reimbursementVendorFilter?.value || "";
   const scopeVal = reimbursementScopeFilter?.value || reimbursementsScope || "";
   return (reimbursements || [])
-    .filter(
-      (inv) =>
-        (!statusVal || inv.reimbursementStatus === statusVal) &&
-        (!vendorVal || inv.vendor === vendorVal) &&
-        (!scopeVal ||
-          scopeVal === "all" ||
-          inv.requestedBy === scopeVal),
-        (!term ||
-          [
-            inv.orderNumber,
-            inv.studentName,
-            inv.vendor,
-            inv.requestedByName,
-            inv.reimbursementStatus,
-            ...(inv.files || []).map((f) => f?.name || ""),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(term)),
-    )
+    .filter((inv) => {
+      if (statusVal && inv.reimbursementStatus !== statusVal) return false;
+      if (
+        vendorVal &&
+        (inv.vendor || "").trim().toLowerCase() !==
+          vendorVal.trim().toLowerCase()
+      )
+        return false;
+      if (
+        scopeVal &&
+        scopeVal !== "all" &&
+        inv.requestedBy !== scopeVal
+      )
+        return false;
+      if (!term) return true;
+      const haystack = [
+        inv.orderNumber,
+        inv.studentName,
+        inv.vendor,
+        inv.requestedByName,
+        inv.reimbursementStatus,
+        ...(inv.files || []).map((f) => f?.name || ""),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    })
     .sort((a, b) => (b.requestedAt ?? 0) - (a.requestedAt ?? 0));
 }
 
@@ -906,8 +915,6 @@ async function loadReimbursements(statusOverride, scopeOverride) {
   if (!canViewAll) {
     params.set("requestedBy", currentUser?._id || "");
     reimbursementsScope = currentUser?._id || "mine";
-  } else if (scopeRaw && scopeRaw !== "all") {
-    params.set("requestedBy", scopeRaw);
   }
   const res = await fetch(`/api/invoices?${params.toString()}`);
   const data = await res.json();
@@ -918,6 +925,7 @@ async function loadReimbursements(statusOverride, scopeOverride) {
     ),
   );
   updateReimbursementScopeOptions(reimbursements);
+  renderReimbursementFilters();
   renderReimbursementsTable();
   updateReimbursementsBulkUI();
 }

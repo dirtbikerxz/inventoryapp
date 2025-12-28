@@ -924,6 +924,35 @@ app.get('/api/invoices', async (req, res) => {
   }
   try {
     let invoices = (await client.query('invoices:list', args) || []).map(normalizeInvoice);
+    const missingVendorOrderIds = Array.from(
+      new Set(
+        invoices
+          .filter((inv) => !inv.vendor && inv.orderId)
+          .map((inv) => inv.orderId),
+      ),
+    );
+    const orderVendorMap = new Map();
+    for (const oid of missingVendorOrderIds) {
+      try {
+        const order = await client.query('orders:getOne', { orderId: oid });
+        if (order) {
+          orderVendorMap.set(
+            oid,
+            order.supplier || order.vendor || order.group?.supplier || order.group?.title,
+          );
+        }
+      } catch (e) {
+        logger.warn(e, 'Failed to fetch order for vendor fill');
+      }
+    }
+    invoices = invoices.map((inv) =>
+      inv.vendor
+        ? inv
+        : {
+            ...inv,
+            vendor: orderVendorMap.get(inv.orderId) || inv.vendor || null,
+          },
+    );
     if (canManage) {
       const needNames = Array.from(
         new Set(
@@ -1048,7 +1077,7 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       groupId: req.body?.groupId || order.groupId || order.group?._id,
       orderNumber: order.orderNumber,
       groupTitle: order.group?.title || order.group?.supplier,
-      vendor: order.supplier || order.vendor,
+      vendor: order.supplier || order.vendor || order.group?.supplier,
       studentName: order.studentName,
       requestedBy: user._id?.toString(),
       requestedByName: user.name,
@@ -1161,6 +1190,11 @@ app.post('/api/invoices/restore', async (req, res) => {
     }
     payload.requestedBy = payload.requestedBy || user._id?.toString();
     payload.requestedByName = payload.requestedByName || user.name;
+    payload.vendor =
+      payload.vendor ||
+      order.supplier ||
+      order.vendor ||
+      order.group?.supplier;
     payload.requestedAt = payload.requestedAt || Date.now();
     const result = await client.mutation('invoices:create', payload);
     const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });

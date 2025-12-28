@@ -69,8 +69,32 @@ export const list = query({
       filtered = filtered.filter((row) => row.reimbursementStatus === args.status);
     }
 
+    const needsOrderVendor = filtered.filter((row) => !row.vendor && row.orderId);
+    const orderMap = new Map<string, any>();
+    if (needsOrderVendor.length) {
+      const ids = Array.from(new Set(needsOrderVendor.map((r) => r.orderId?.toString()).filter(Boolean)));
+      for (const oid of ids) {
+        const id = ctx.db.normalizeId("orders", oid!);
+        if (!id) continue;
+        const o = await ctx.db.get(id);
+        if (o) orderMap.set(oid!, o);
+      }
+    }
+
     return filtered
-      .map((row) => ({ ...row, _id: row._id }))
+      .map((row) => {
+        const order =
+          row.orderId && orderMap.has(row.orderId.toString())
+            ? orderMap.get(row.orderId.toString())
+            : null;
+        const vendor =
+          row.vendor ||
+          order?.supplier ||
+          order?.vendor ||
+          order?.group?.supplier ||
+          null;
+        return { ...row, vendor, _id: row._id };
+      })
       .sort((a, b) => (b.requestedAt ?? 0) - (a.requestedAt ?? 0));
   }
 });

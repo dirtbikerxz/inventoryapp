@@ -531,6 +531,10 @@ endDate.addEventListener('change', () => { renderBoard(); renderTable(); });
 reimbursementStatusFilter?.addEventListener('change', () => { loadReimbursements(); });
 reimbursementScopeFilter?.addEventListener('change', () => { loadReimbursements(undefined, reimbursementScopeFilter.value); });
 refreshReimbursementsBtn?.addEventListener('click', () => { loadReimbursements(); });
+reimbursementVendorFilter?.addEventListener('change', () => {
+  renderReimbursementsTable();
+  updateReimbursementsBulkUI();
+});
 stockSubteamFilter?.addEventListener('change', () => { selectedStockSubteam = stockSubteamFilter.value; loadStock(); });
   addStockBtn?.addEventListener('click', () => openStockModal());
   manageSubteamsBtn?.addEventListener('click', async () => { await loadSubteams(); openSubteamsModal(); });
