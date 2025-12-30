@@ -216,6 +216,31 @@ function buildInvoiceFileName({ userName, vendor, orderDate, invoiceNumber, orig
   return `${base}${ext}`;
 }
 
+function sortReimbursementTags(tags = []) {
+  return (Array.isArray(tags) ? [...tags] : [])
+    .map((t, idx) => ({ ...t, sort: t.sortOrder ?? idx }))
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+}
+
+async function loadReimbursementTagsSafe() {
+  try {
+    const statuses = await client.query('reimbursementTags:list', {});
+    return Array.isArray(statuses) ? statuses : [];
+  } catch (err) {
+    logger.warn(err, 'Failed to load reimbursement tags');
+    return [];
+  }
+}
+
+function pickDefaultReimbursementStatus(tags = [], { requested }) {
+  const sorted = sortReimbursementTags(tags);
+  if (!sorted.length) return null;
+  if (requested) return sorted[0]?.value || sorted[0]?.label || null;
+  const notRequested = sorted.find((t) => t.value === 'not_requested');
+  const pick = notRequested || sorted[0];
+  return pick?.value || pick?.label || null;
+}
+
 function parseServiceAccountJson(raw) {
   if (!raw) return null;
   const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -917,7 +942,7 @@ app.get('/api/orders', async (req, res) => {
     const ordersWithInvoices = (data.orders || []).map(order => {
       const key = order._id && order._id.toString ? order._id.toString() : order._id || order.id || order.orderId;
       const invoices = key ? (invoiceMap.get(String(key)) || []) : [];
-      const requested = invoices.filter(i => i.reimbursementRequested || i.reimbursementStatus !== 'not_requested');
+      const requested = invoices.filter(i => i.reimbursementRequested);
       const latest = requested[0] || invoices[0] || null;
       const statuses = Array.from(new Set(requested.map(i => i.reimbursementStatus).filter(Boolean)));
       return {
@@ -1102,23 +1127,14 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     const cleanedFiles = processedFiles.map(cleanInvoiceFile);
     const amount = toNumber(req.body?.amount);
     const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? false);
+    const reimbursementTags = await loadReimbursementTagsSafe();
+    const reimbursementStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: reimbursementRequested });
+    if (!reimbursementStatus) {
+      return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before submitting invoices.' });
+    }
     const reimbursementUser = user._id?.toString();
     const reimbursementUserName = user.name;
     const reimbursementAmount = amount;
-    let reimbursementStatus = reimbursementRequested ? 'requested' : 'not_requested';
-    if (reimbursementRequested) {
-      try {
-        const statuses = await client.query('reimbursementTags:list', {});
-        if (Array.isArray(statuses) && statuses.length) {
-          const pick = [...statuses]
-            .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
-            .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))[0];
-          if (pick?.value) reimbursementStatus = pick.value;
-        }
-      } catch (err) {
-        logger.warn(err, 'Failed to load reimbursement tags for default status');
-      }
-    }
     const payload = {
       orderId,
       groupId: req.body?.groupId || order.groupId || order.group?._id,
@@ -1171,17 +1187,33 @@ app.patch('/api/invoices/:id', async (req, res) => {
       reimbursementRequested: req.body?.reimbursementRequested === undefined ? undefined : parseBoolean(req.body?.reimbursementRequested),
       notes: req.body?.notes
     };
-    if (updates.reimbursementRequested === false) {
-      updates.reimbursementStatus = 'not_requested';
-    }
     if (updates.amount !== undefined) {
       updates.reimbursementAmount = updates.amount;
     }
+    const reimbursementTags = await loadReimbursementTagsSafe();
+    if (!reimbursementTags.length) {
+      return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before updating invoices.' });
+    }
     if (req.body?.reimbursementStatus && canManage) {
+      const isValid = reimbursementTags.some(
+        (t) => t.value === req.body.reimbursementStatus || t.label === req.body.reimbursementStatus
+      );
+      if (!isValid) {
+        return res.status(400).json({ error: 'Choose a reimbursement status from Tags > Reimbursements.' });
+      }
       updates.reimbursementStatus = req.body.reimbursementStatus;
       updates.statusNote = req.body?.statusNote;
       updates.changedBy = user._id?.toString();
       updates.changedByName = user.name;
+    }
+    if (typeof updates.reimbursementRequested === 'boolean' && updates.reimbursementStatus === undefined) {
+      const defaultStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: updates.reimbursementRequested === true });
+      if (!defaultStatus) {
+        return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before updating invoices.' });
+      }
+      updates.reimbursementStatus = defaultStatus;
+      updates.changedBy = updates.changedBy || user._id?.toString();
+      updates.changedByName = updates.changedByName || user.name;
     }
     await client.mutation('invoices:update', updates);
     const refreshed = await client.query('invoices:get', { invoiceId: req.params.id });
@@ -1243,6 +1275,18 @@ app.post('/api/invoices/restore', async (req, res) => {
       order.vendor ||
       order.group?.supplier;
     payload.requestedAt = payload.requestedAt || Date.now();
+    payload.reimbursementRequested =
+      payload.reimbursementRequested === undefined
+        ? false
+        : parseBoolean(payload.reimbursementRequested);
+    if (!payload.reimbursementStatus) {
+      const tags = await loadReimbursementTagsSafe();
+      const defaultStatus = pickDefaultReimbursementStatus(tags, { requested: payload.reimbursementRequested === true });
+      if (!defaultStatus) {
+        return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before restoring invoices.' });
+      }
+      payload.reimbursementStatus = defaultStatus;
+    }
     const result = await client.mutation('invoices:create', payload);
     const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });
     res.status(201).json({ invoice: normalizeInvoice(saved) });

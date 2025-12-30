@@ -112,24 +112,15 @@
       { label: 'High', color: '#ff8b55', sortOrder: 3 },
       { label: 'Urgent', color: '#ff5565', sortOrder: 4 }
     ];
-    const defaultReimbursementStatuses = [
-      { label: 'Reimbursement requested', value: 'requested', color: '#fdd023', sortOrder: 1 },
-      { label: 'Reimbursement submitted', value: 'submitted', color: '#5aa0ff', sortOrder: 2 },
-      { label: 'Reimbursed', value: 'reimbursed', color: '#6dd96f', sortOrder: 3 },
-      { label: 'Declined', value: 'declined', color: '#ff5565', sortOrder: 4 },
-      { label: 'Not requested', value: 'not_requested', color: '#888888', sortOrder: 5 }
-    ];
     const getReimbursementStatuses = () =>
-      (window.__reimbursementTags && window.__reimbursementTags.length
-        ? window.__reimbursementTags
-        : defaultReimbursementStatuses);
+      (Array.isArray(window.__reimbursementTags) ? window.__reimbursementTags : []);
     const defaultReimbursementStatusValue = () => {
       const list = getReimbursementStatuses();
-      if (!list || !list.length) return 'requested';
+      if (!list || !list.length) return '';
       const sorted = [...list]
         .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
         .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
-      return sorted[0]?.value || 'requested';
+      return sorted[0]?.value || sorted[0]?.label || '';
     };
     let catalogNavStack = [];
     let currentCatalogCategoryId = 'root';
@@ -146,7 +137,7 @@
     let googleCredentials = null;
     let googleCredentialsFileJson = null;
     let actionBusy = false;
-    let reimbursementTagList = defaultReimbursementStatuses;
+    let reimbursementTagList = [];
 
     function setActionBusy(busy, text) {
       actionBusy = busy;
@@ -690,20 +681,23 @@ invoiceEditorForm?.elements?.reimbursementRequested?.addEventListener('change', 
   const show = invoiceEditorForm.elements.reimbursementRequested.value === 'true';
   if (invoiceStatusSelect) {
     if (!show) {
-      invoiceStatusSelect.value = 'not_requested';
+      invoiceStatusSelect.value = '';
     } else {
       const desired = defaultReimbursementStatusValue();
       const options = Array.from(invoiceStatusSelect.options || []).map((o) => o.value);
       const pick = options.includes(desired)
         ? desired
-        : options[0] || 'requested';
+        : options[0] || '';
       if (
         !options.includes(invoiceStatusSelect.value) ||
-        invoiceStatusSelect.value === 'not_requested'
+        !invoiceStatusSelect.value
       ) {
         invoiceStatusSelect.value = pick;
       }
     }
+  }
+  if (typeof ensureReimbursementStatusWarning === 'function') {
+    ensureReimbursementStatusWarning();
   }
   if (invoiceStatusField) invoiceStatusField.style.display = show ? 'block' : 'none';
 });
@@ -725,6 +719,16 @@ invoiceEditorForm?.addEventListener('submit', async (e) => {
       if (invoiceMessage) {
         invoiceMessage.textContent = 'Upload at least one file';
         invoiceMessage.className = 'error';
+      }
+      return;
+    }
+    if (!getReimbursementStatuses().length) {
+      if (invoiceMessage) {
+        invoiceMessage.textContent = 'Add reimbursement statuses in Tags > Reimbursements before submitting invoices.';
+        invoiceMessage.className = 'error';
+      }
+      if (typeof ensureReimbursementStatusWarning === 'function') {
+        ensureReimbursementStatusWarning();
       }
       return;
     }
@@ -764,6 +768,16 @@ invoiceEditorForm?.addEventListener('submit', async (e) => {
     resetInvoiceForm(true);
   } else if (mode === 'edit') {
     if (!invoiceId) return;
+    if (!getReimbursementStatuses().length) {
+      if (invoiceMessage) {
+        invoiceMessage.textContent = 'Add reimbursement statuses in Tags > Reimbursements before submitting invoices.';
+        invoiceMessage.className = 'error';
+      }
+      if (typeof ensureReimbursementStatusWarning === 'function') {
+        ensureReimbursementStatusWarning();
+      }
+      return;
+    }
     const payload = {
       amount: invoiceEditorForm.elements.amount?.value
         ? Number(invoiceEditorForm.elements.amount.value)
@@ -2144,16 +2158,28 @@ function fetchOrderDetails(configHint) {
       try {
         const res = await fetch('/api/reimbursement-tags');
         const data = await res.json();
-        reimbursementTagList = (data.statuses && data.statuses.length ? data.statuses : defaultReimbursementStatuses) || defaultReimbursementStatuses;
+        reimbursementTagList = (data.statuses && data.statuses.length ? data.statuses : []) || [];
         window.__reimbursementTags = reimbursementTagList;
         renderReimbursementManager();
         renderReimbursementFilters();
+        if (typeof ensureReimbursementStatusWarning === 'function') {
+          ensureReimbursementStatusWarning();
+        }
+        if (!reimbursementTagList.length) {
+          showBoardMessage?.('No reimbursement statuses configured. Add them in Tags > Reimbursements before submitting invoices.', 'error', 6000);
+        }
       } catch (e) {
         console.warn('Failed to load reimbursement tags', e);
-        reimbursementTagList = defaultReimbursementStatuses;
+        reimbursementTagList = [];
         window.__reimbursementTags = reimbursementTagList;
         renderReimbursementManager();
         renderReimbursementFilters();
+        if (typeof ensureReimbursementStatusWarning === 'function') {
+          ensureReimbursementStatusWarning();
+        }
+        if (!reimbursementTagList.length) {
+          showBoardMessage?.('Unable to load reimbursement statuses. Add them in Tags > Reimbursements once connected.', 'error', 6000);
+        }
       }
     }
 

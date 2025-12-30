@@ -23,6 +23,40 @@ const statusEntryArg = v.object({
   note: v.optional(v.string())
 });
 
+async function loadReimbursementTags(ctx: any) {
+  const tags = await ctx.db.query("reimbursementTags").collect();
+  return tags
+    .map((t: any, idx: number) => ({ ...t, sort: t.sortOrder ?? idx }))
+    .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
+}
+
+function pickDefaultReimbursementStatusFromTags(tags: any[], requested: boolean) {
+  const sorted = (Array.isArray(tags) ? [...tags] : [])
+    .map((t: any, idx: number) => ({ ...t, sort: t.sortOrder ?? idx }))
+    .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
+  if (!sorted.length) return null;
+  if (requested) return sorted[0].value || sorted[0].label || null;
+  const notRequested = sorted.find((t: any) => t.value === "not_requested");
+  const pick = notRequested || sorted[0];
+  return pick?.value || pick?.label || null;
+}
+
+async function resolveReimbursementStatus(ctx: any, requested: boolean, provided?: string, tagsArg?: any[]) {
+  const tags = tagsArg ?? (await loadReimbursementTags(ctx));
+  if (provided) {
+    const valid = tags.some((t: any) => t.value === provided || t.label === provided);
+    if (!valid) {
+      throw new Error("Invalid reimbursement status; add it as a tag first");
+    }
+    return provided;
+  }
+  const pick = pickDefaultReimbursementStatusFromTags(tags, requested);
+  if (!pick) {
+    throw new Error("Add reimbursement statuses before submitting invoices");
+  }
+  return pick;
+}
+
 export const list = query({
   args: {
     orderId: v.optional(v.string()),
@@ -63,7 +97,7 @@ export const list = query({
       );
     }
     if (args.reimbursementOnly) {
-      filtered = filtered.filter((row) => row.reimbursementRequested || row.reimbursementStatus !== "not_requested");
+      filtered = filtered.filter((row) => row.reimbursementRequested);
     }
     if (args.status) {
       filtered = filtered.filter((row) => row.reimbursementStatus === args.status);
@@ -157,7 +191,7 @@ export const create = mutation({
     if (!orderId) throw new Error("Invalid order id");
     const groupId = args.groupId ? ctx.db.normalizeId("orderGroups", args.groupId) : undefined;
     const requestedBy = args.requestedBy ? ctx.db.normalizeId("users", args.requestedBy) : undefined;
-    const status = args.reimbursementStatus || (args.reimbursementRequested ? "requested" : "not_requested");
+    const status = await resolveReimbursementStatus(ctx, args.reimbursementRequested, args.reimbursementStatus || undefined);
     const statusHistory = [
       {
         status,
@@ -221,35 +255,46 @@ export const update = mutation({
       if (val !== undefined) updates[key] = val;
     });
     const statusHistory: any[] = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-  if (args.reimbursementStatus) {
-    updates.reimbursementStatus = args.reimbursementStatus;
-    statusHistory.push({
-      status: args.reimbursementStatus,
-      changedAt: updates.updatedAt,
-      changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
-      changedByName: args.changedByName,
-      note: args.statusNote
-    });
-    updates.statusHistory = statusHistory;
+    let tagsCache: any[] | null = null;
+    const getTags = async () => {
+      if (!tagsCache) tagsCache = await loadReimbursementTags(ctx);
+      return tagsCache;
+    };
+    let resolvedStatus: string | undefined = args.reimbursementStatus || undefined;
+    if (resolvedStatus !== undefined) {
+      const tags = await getTags();
+      const valid = tags.some((t: any) => t.value === resolvedStatus || t.label === resolvedStatus);
+      if (!valid) {
+        throw new Error("Invalid reimbursement status; add it as a tag first");
+      }
+    }
+    if (args.reimbursementRequested !== undefined && resolvedStatus === undefined) {
+      const tags = await getTags();
+      resolvedStatus = await resolveReimbursementStatus(
+        ctx,
+        args.reimbursementRequested,
+        resolvedStatus,
+        tags,
+      );
+    }
+    if (resolvedStatus !== undefined) {
+      updates.reimbursementStatus = resolvedStatus;
+      statusHistory.push({
+        status: resolvedStatus,
+        changedAt: updates.updatedAt,
+        changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
+        changedByName: args.changedByName,
+        note: args.statusNote
+      });
+      updates.statusHistory = statusHistory;
+    }
+    if (args.reimbursementUser !== undefined) {
+      updates.reimbursementUser = args.reimbursementUser;
+      updates.reimbursementUserName = args.reimbursementUserName;
+    }
+    await ctx.db.patch(id, updates);
+    return { invoiceId: id };
   }
-  if (args.reimbursementUser !== undefined) {
-    updates.reimbursementUser = args.reimbursementUser;
-    updates.reimbursementUserName = args.reimbursementUserName;
-  }
-  if (args.reimbursementRequested === false) {
-    updates.reimbursementStatus = "not_requested";
-    statusHistory.push({
-      status: "not_requested",
-      changedAt: updates.updatedAt,
-      changedBy: args.changedBy ? ctx.db.normalizeId("users", args.changedBy) : undefined,
-      changedByName: args.changedByName,
-      note: args.statusNote
-    });
-    updates.statusHistory = statusHistory;
-  }
-  await ctx.db.patch(id, updates);
-  return { invoiceId: id };
-}
 });
 
 export const remove = mutation({

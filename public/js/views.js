@@ -105,25 +105,39 @@ let activeInvoiceOrders = [];
 let reimbursementsSelected = new Set();
 let lastDeletedInvoice = null;
 let lastDeletedList = [];
-const defaultReimbursementStatusOptions = [
-  { value: "requested", label: "Reimbursement requested" },
-  { value: "submitted", label: "Reimbursement submitted" },
-  { value: "reimbursed", label: "Reimbursed" },
-  { value: "declined", label: "Declined" },
-  { value: "not_requested", label: "Not requested" },
-];
-
 function getReimbursementStatusOptions() {
-  const list =
-    Array.isArray(window?.__reimbursementTags) &&
-    window.__reimbursementTags.length
-      ? window.__reimbursementTags
-      : defaultReimbursementStatusOptions;
-  return list.map((o) => ({
-    value: o.value || o.label,
-    label: o.label || o.value,
-    color: o.color,
-  }));
+  const list = Array.isArray(window?.__reimbursementTags)
+    ? window.__reimbursementTags
+    : [];
+  return list
+    .filter((o) => o && (o.value || o.label))
+    .map((o) => ({
+      value: o.value || o.label,
+      label: o.label || o.value,
+      color: o.color,
+      sortOrder: o.sortOrder,
+    }));
+}
+
+function hasReimbursementStatuses() {
+  return getReimbursementStatusOptions().length > 0;
+}
+
+function ensureReimbursementStatusWarning() {
+  if (!invoiceMessage) return;
+  if (hasReimbursementStatuses()) {
+    if (invoiceMessage.dataset?.source === "reimbursement-warning") {
+      invoiceMessage.textContent = "";
+      invoiceMessage.className = "small";
+      delete invoiceMessage.dataset.source;
+    }
+    return;
+  }
+  const warn =
+    "No reimbursement statuses configured. Add them under Tags > Reimbursements.";
+  invoiceMessage.textContent = warn;
+  invoiceMessage.className = "error";
+  invoiceMessage.dataset.source = "reimbursement-warning";
 }
 
 function primaryFileLink(inv) {
@@ -159,11 +173,14 @@ function renderGroupInvoiceSummary(items = []) {
   const sorted = statuses
     .map((s, idx) => ({ ...s, sort: s.sortOrder ?? idx }))
     .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
-  const highest = sorted[sorted.length - 1]?.value || "reimbursed";
-  const allAtHighest = Array.from(totals.statuses).every(
-    (st) => st === highest,
-  );
-  const color = allAtHighest ? "var(--success)" : "var(--danger)";
+  const highest = sorted.length ? sorted[sorted.length - 1]?.value : null;
+  const allAtHighest =
+    highest && Array.from(totals.statuses).every((st) => st === highest);
+  const color = highest
+    ? allAtHighest
+      ? "var(--success)"
+      : "var(--danger)"
+    : "var(--muted)";
   return `<span class="tag invoice-summary" style="border-color:${color}; color:${color}; min-width:auto;">Invoices: ${totals.count}</span>`;
 }
 
@@ -360,40 +377,21 @@ function formatMoney(value) {
 
 function formatReimbursementStatus(status) {
   const options = getReimbursementStatusOptions();
-  const found = options.find((o) => o.value === status);
-  if (found) return found.label || found.value || "Unknown";
-  if (options.length && status === "requested") {
-    const first = options[0];
-    return first.label || first.value || "Unknown";
+  if (status) {
+    const found = options.find(
+      (o) => o.value === status || o.label === status,
+    );
+    if (found) return found.label || found.value || "Unknown status";
+    return status;
   }
-  const map = {
-    requested: "Reimbursement requested",
-    submitted: "Submitted",
-    reimbursed: "Reimbursed",
-    declined: "Declined",
-    not_requested: "Not requested",
-  };
-  return map[status] || status || "Unknown";
+  return "Status not set";
 }
 
 function reimbursementStatusColor(status) {
   const options = getReimbursementStatusOptions();
   const found = options.find((o) => o.value === status);
   if (found?.color) return found.color;
-  if (options.length && status === "requested" && options[0]?.color)
-    return options[0].color;
-  switch (status) {
-    case "reimbursed":
-      return "var(--success)";
-    case "submitted":
-      return "var(--accent-2)";
-    case "requested":
-      return "var(--gold)";
-    case "declined":
-      return "var(--danger)";
-    default:
-      return "var(--muted)";
-  }
+  return "var(--muted)";
 }
 
 function invoiceDisplayAmount(inv) {
@@ -438,7 +436,7 @@ function renderInvoiceCards(invoices = []) {
     .map((inv) => {
       const amt = invoiceDisplayAmount(inv);
       const statusChip = renderInvoiceStatusChip(
-        inv.reimbursementStatus || "not_requested",
+        inv.reimbursementStatus || "",
       );
       const fileLink = primaryFileLink(inv);
       const recipient =
@@ -656,16 +654,20 @@ function buildFilters() {
 }
 
 function renderReimbursementFilters() {
+  const statusOptions = getReimbursementStatusOptions();
+  const hasStatuses = statusOptions.length > 0;
   if (reimbursementStatusFilter) {
     const current = reimbursementStatusFilter.value || "";
     reimbursementStatusFilter.innerHTML = [
       '<option value="">All statuses</option>',
-      ...getReimbursementStatusOptions().map(
-        (opt) =>
-          `<option value="${opt.value}" ${
-            opt.value === current ? "selected" : ""
-          }>${opt.label}</option>`,
-      ),
+      ...(hasStatuses
+        ? statusOptions.map(
+            (opt) =>
+              `<option value="${opt.value}" ${
+                opt.value === current ? "selected" : ""
+              }>${opt.label}</option>`,
+          )
+        : ['<option value="" disabled>No reimbursement statuses configured</option>']),
     ].join("");
   }
   if (reimbursementScopeFilter) {
@@ -695,12 +697,17 @@ function renderReimbursementFilters() {
     ].join("");
   }
   if (reimbursementsBulkStatus) {
-    reimbursementsBulkStatus.innerHTML = getReimbursementStatusOptions()
-      .map(
-        (opt) =>
-          `<option value="${opt.value}">${escapeHtml(opt.label || opt.value)}</option>`,
-      )
-      .join("");
+    reimbursementsBulkStatus.innerHTML = hasStatuses
+      ? statusOptions
+          .map(
+            (opt) =>
+              `<option value="${opt.value}">${escapeHtml(opt.label || opt.value)}</option>`,
+          )
+          .join("")
+      : '<option value="">Add reimbursement statuses in Tags</option>';
+    if (typeof reimbursementsBulkApply !== "undefined" && reimbursementsBulkApply) {
+      reimbursementsBulkApply.disabled = !hasStatuses;
+    }
   }
 }
 
@@ -810,7 +817,7 @@ function renderReimbursementsTable() {
         const amt = invoiceDisplayAmount(inv);
         const checked = reimbursementsSelected.has(inv._id);
         const statusChip = renderInvoiceStatusChip(
-          inv.reimbursementStatus || "not_requested",
+          inv.reimbursementStatus || "",
         );
         const order =
           (orders || []).find((o) => o._id === inv.orderId) || null;
@@ -993,10 +1000,16 @@ function resetInvoiceForm(keepSelection = true) {
     }
   }
   if (invoiceMessage) {
-    invoiceMessage.textContent = "";
-    invoiceMessage.className = "small";
+    const wasWarning = invoiceMessage.dataset?.source === "reimbursement-warning";
+    if (!wasWarning) {
+      invoiceMessage.textContent = "";
+      invoiceMessage.className = "small";
+    }
   }
   if (invoiceFilesInput) invoiceFilesInput.value = "";
+  if (typeof ensureReimbursementStatusWarning === "function") {
+    ensureReimbursementStatusWarning();
+  }
 }
 
 function closeInvoiceModal() {
@@ -1146,27 +1159,28 @@ function openInvoiceEditor(mode = "create", invoice = null) {
     invoiceFileField.style.display = mode === "edit" ? "none" : "block";
   }
   if (invoiceStatusSelect) {
-    invoiceStatusSelect.innerHTML = getReimbursementStatusOptions()
-      .map(
-        (opt) =>
-          `<option value="${opt.value}" ${
-            opt.value === (invoice?.reimbursementStatus || "not_requested")
-              ? "selected"
-              : ""
-          }>${opt.label}</option>`,
-      )
-      .join("");
-    if (!currentUser?.permissions?.canManageInvoices) {
-      invoiceStatusSelect.disabled = true;
-      invoiceStatusSelect.style.opacity = "0.6";
-      invoiceStatusSelect.style.pointerEvents = "none";
-      invoiceStatusSelect.title = "You do not have permission to change reimbursement status";
-    } else {
-      invoiceStatusSelect.disabled = false;
-      invoiceStatusSelect.style.opacity = "";
-      invoiceStatusSelect.style.pointerEvents = "";
-      invoiceStatusSelect.title = "";
-    }
+    const options = getReimbursementStatusOptions();
+    const currentStatus = invoice?.reimbursementStatus || "";
+    invoiceStatusSelect.innerHTML = options.length
+      ? options
+          .map(
+            (opt) =>
+              `<option value="${opt.value}" ${
+                opt.value === currentStatus ? "selected" : ""
+              }>${opt.label}</option>`,
+          )
+          .join("")
+      : '<option value="">Add reimbursement statuses in Tags</option>';
+    const canChange =
+      Boolean(currentUser?.permissions?.canManageInvoices) && options.length;
+    invoiceStatusSelect.disabled = !canChange;
+    invoiceStatusSelect.style.opacity = canChange ? "" : "0.6";
+    invoiceStatusSelect.style.pointerEvents = canChange ? "" : "none";
+    invoiceStatusSelect.title = options.length
+      ? canChange
+        ? ""
+        : "You do not have permission to change reimbursement status"
+      : "Add reimbursement statuses under Tags to select a status";
   }
   if (invoiceEditorForm.elements.orderId) {
     invoiceEditorForm.elements.orderId.value = activeInvoiceOrderId || "";
@@ -1202,6 +1216,9 @@ function openInvoiceEditor(mode = "create", invoice = null) {
       invoiceEditorForm.elements.notes.value = invoice.notes || "";
   } else if (typeof updateInvoicePreview === "function") {
     updateInvoicePreview(null);
+  }
+  if (typeof ensureReimbursementStatusWarning === "function") {
+    ensureReimbursementStatusWarning();
   }
   // Sync visibility after values are populated
   if (invoiceStatusField && invoiceEditorForm.elements.reimbursementRequested) {
