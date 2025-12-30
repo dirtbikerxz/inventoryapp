@@ -74,7 +74,7 @@ class InvoiceService {
     this.logger?.info('Google credentials updated for Drive uploads');
   }
 
-  async uploadToDrive(file) {
+  async uploadToDrive(file, { name } = {}) {
     if (!this.drive) return {};
     try {
       const media = {
@@ -82,7 +82,7 @@ class InvoiceService {
         body: Readable.from(file.buffer)
       };
       const requestBody = {
-        name: file.originalname || 'invoice-upload',
+        name: name || file.originalname || 'invoice-upload',
         parents: this.folderId ? [this.folderId] : undefined
       };
       const resp = await this.drive.files.create({
@@ -142,10 +142,11 @@ class InvoiceService {
     }
   }
 
-  async processFile(file, { upload = true } = {}) {
-    const uploadMeta = upload ? await this.uploadToDrive(file) : {};
+  async processFile(file, { upload = true, name } = {}) {
+    const finalName = (name && String(name).trim()) || file.originalname || 'invoice';
+    const uploadMeta = upload ? await this.uploadToDrive(file, { name: finalName }) : {};
     return {
-      name: file.originalname || 'invoice',
+      name: finalName,
       mimeType: file.mimetype || 'application/octet-stream',
       size: file.size,
       ...uploadMeta

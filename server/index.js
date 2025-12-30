@@ -185,6 +185,37 @@ function toNumber(val) {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function sanitizeFileNamePart(part) {
+  if (!part) return '';
+  return String(part)
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatOrderDateForFile(timestamp) {
+  if (!timestamp) return 'unknown-date';
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) return 'unknown-date';
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}-${day}-${year}`;
+}
+
+function buildInvoiceFileName({ userName, vendor, orderDate, invoiceNumber, originalName }) {
+  const parts = [
+    sanitizeFileNamePart(userName) || 'User',
+    sanitizeFileNamePart(vendor) || 'Vendor',
+    formatOrderDateForFile(orderDate),
+    invoiceNumber !== undefined && invoiceNumber !== null ? String(invoiceNumber) : ''
+  ].filter(Boolean);
+  const base = parts.join(' - ') || (originalName ? sanitizeFileNamePart(originalName) : 'invoice');
+  const extMatch = typeof originalName === 'string' ? originalName.match(/(\.[^.]+)$/) : null;
+  const ext = extMatch ? extMatch[1] : '';
+  return `${base}${ext}`;
+}
+
 function parseServiceAccountJson(raw) {
   if (!raw) return null;
   const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -1044,13 +1075,29 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     if (!ownsOrder && !canManage) {
       return res.status(403).json({ error: 'You can only submit invoices for your own requests' });
     }
+    const vendorName = order.supplier || order.vendor || order.group?.supplier;
+    const submitterName = user.name || user.username || '';
+    let invoiceNumber = 1;
+    try {
+      const existingInvoices = await client.query('invoices:list', { orderId });
+      invoiceNumber = (existingInvoices?.length || 0) + 1;
+    } catch (err) {
+      logger.warn(err, 'Failed to count existing invoices for file naming');
+    }
     const files = Array.isArray(req.files) ? req.files : [];
     if (!files.length) {
       return res.status(400).json({ error: 'At least one invoice file is required' });
     }
     const processedFiles = [];
     for (const file of files) {
-      processedFiles.push(await invoiceService.processFile(file));
+      const renamed = buildInvoiceFileName({
+        userName: submitterName,
+        vendor: vendorName,
+        orderDate: order.requestedAt,
+        invoiceNumber,
+        originalName: file.originalname
+      });
+      processedFiles.push(await invoiceService.processFile(file, { name: renamed }));
     }
     const cleanedFiles = processedFiles.map(cleanInvoiceFile);
     const amount = toNumber(req.body?.amount);
@@ -1077,7 +1124,7 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
       groupId: req.body?.groupId || order.groupId || order.group?._id,
       orderNumber: order.orderNumber,
       groupTitle: order.group?.title || order.group?.supplier,
-      vendor: order.supplier || order.vendor || order.group?.supplier,
+      vendor: vendorName,
       studentName: order.studentName,
       requestedBy: user._id?.toString(),
       requestedByName: user.name,
