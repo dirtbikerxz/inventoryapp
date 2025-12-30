@@ -439,12 +439,6 @@ function renderInvoiceCards(invoices = []) {
         inv.reimbursementStatus || "",
       );
       const fileLink = primaryFileLink(inv);
-      const recipient =
-        inv.reimbursementUserName ||
-        userMap[inv.reimbursementUser] ||
-        inv.requestedByName ||
-        inv.studentName ||
-        "";
       return `<div class="card" data-id="${inv._id}" style="margin-bottom:8px;">
         <div class="flex-between" style="align-items:flex-start; gap:8px; flex-wrap:wrap;">
           <div style="display:flex; flex-direction:column; gap:4px;">
@@ -461,7 +455,6 @@ function renderInvoiceCards(invoices = []) {
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px; margin-top:6px;">
           <div class="small">Invoice total: ${amt !== undefined ? formatMoney(amt) : 'n/a'}</div>
           <div class="small">Reimbursement: ${inv.reimbursementRequested ? 'Yes' : 'No'}</div>
-          <div class="small">Recipient: ${escapeHtml(recipient)}</div>
           <div class="small">Status: ${formatReimbursementStatus(inv.reimbursementStatus)}</div>
         </div>
         <div class="small" style="margin-top:6px;">${renderInvoiceFiles(inv.files, inv._id || inv.id)}</div>
