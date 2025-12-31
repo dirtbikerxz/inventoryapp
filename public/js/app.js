@@ -2286,23 +2286,56 @@ function fetchOrderDetails(configHint) {
       tagsList.innerHTML = tagList.map(t => {
         const id = String(t._id || t.id || t.label);
         const color = t.color || '#fdd023';
+        const label = t.label || id;
         return `<div class="tag-manager-item" data-id="${id}">
-          <div class="tag-manager-meta">
-            <input type="color" class="tag-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
-            <div>${escapeHtml(t.label || id)}</div>
+          <div class="tag-manager-meta" style="gap:12px; display:flex; align-items:center; flex-wrap:wrap; column-gap:16px;">
+            <span class="tag-color-display" style="display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid var(--border); background:${color};"></span>
+            <span class="tag-label-display" style="flex:1; min-width:120px;">${escapeHtml(label)}</span>
+            <input type="color" class="tag-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <input type="text" class="tag-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
           </div>
-          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-tag" style="color: var(--danger);">Delete</button>` : ''}
+          ${currentUser?.permissions?.canManageTags ? `<div class="flex" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn ghost" data-action="edit-tag">Edit</button>
+            <button class="btn ghost" data-action="delete-tag" style="color: var(--danger);">Delete</button>
+          </div>` : ''}
         </div>`;
       }).join('');
       if (currentUser?.permissions?.canManageTags) {
-        tagsList.querySelectorAll('.tag-color-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
+        const rows = tagsList.querySelectorAll('.tag-manager-item');
+        rows.forEach((row) => {
+          const id = row.dataset.id;
+          const colorInput = row.querySelector('.tag-color-input');
+          const labelInput = row.querySelector('.tag-label-input');
+          const colorDisplay = row.querySelector('.tag-color-display');
+          const labelDisplay = row.querySelector('.tag-label-display');
+          const editBtn = row.querySelector('button[data-action="edit-tag"]');
+          const setEditing = (editing) => {
+            row.dataset.editing = editing ? 'true' : 'false';
+            [colorInput, labelInput].forEach((inp) => {
+              if (!inp) return;
+              inp.style.display = editing ? 'inline-block' : 'none';
+              inp.disabled = !editing;
+            });
+            if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
+            if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
+            if (editBtn) editBtn.textContent = editing ? 'Save' : 'Edit';
+          };
+          setEditing(false);
+          editBtn?.addEventListener('click', async () => {
+            const editing = row.dataset.editing === 'true';
+            if (!editing) {
+              setEditing(true);
+              labelInput?.focus();
+              return;
+            }
+            const payload = {
+              label: (labelInput?.value || '').trim(),
+              color: colorInput?.value
+            };
             await fetch(`/api/tags/${id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ color: e.target.value })
+              body: JSON.stringify(payload)
             });
             await loadTags();
           });
@@ -2397,37 +2430,63 @@ function fetchOrderDetails(configHint) {
         const id = p._id || p.id || p.label;
         const color = p.color || '#fdd023';
         const sort = p.sortOrder ?? '';
+        const label = p.label || '';
         return `<div class="tag-manager-item" data-id="${id}">
-          <div class="tag-manager-meta" style="gap:12px;">
-            <input type="color" class="priority-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
-            <div style="min-width:140px;">${escapeHtml(p.label || '')}</div>
-            <input type="number" class="priority-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          <div class="tag-manager-meta" style="gap:12px; display:flex; align-items:center; flex-wrap:wrap; column-gap:16px;">
+            <span class="priority-color-display" style="display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid var(--border); background:${color};"></span>
+            <span class="priority-label-display" style="flex:1; min-width:140px;">${escapeHtml(label)}</span>
+            <span class="priority-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
+            <input type="color" class="priority-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <input type="text" class="priority-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:140px; width:140px; display:none;" />
+            <input type="number" class="priority-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
-          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-priority" style="color: var(--danger);">Delete</button>` : ''}
+          ${currentUser?.permissions?.canManageTags ? `<div class="flex" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn ghost" data-action="edit-priority">Edit</button>
+            <button class="btn ghost" data-action="delete-priority" style="color: var(--danger);">Delete</button>
+          </div>` : ''}
         </div>`;
       }).join('');
       if (currentUser?.permissions?.canManageTags) {
-        prioritiesList.querySelectorAll('.priority-color-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            await fetch(`/api/priority-tags/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ color: e.target.value })
+        const rows = prioritiesList.querySelectorAll('.tag-manager-item');
+        rows.forEach((row) => {
+          const id = row.dataset.id;
+          const colorInput = row.querySelector('.priority-color-input');
+          const labelInput = row.querySelector('.priority-label-input');
+          const sortInput = row.querySelector('.priority-sort-input');
+          const colorDisplay = row.querySelector('.priority-color-display');
+          const labelDisplay = row.querySelector('.priority-label-display');
+          const sortDisplay = row.querySelector('.priority-sort-display');
+          const editBtn = row.querySelector('button[data-action="edit-priority"]');
+          const setEditing = (editing) => {
+            [colorInput, labelInput, sortInput].forEach((inp) => {
+              if (!inp) return;
+              inp.disabled = !editing;
+              inp.style.display = editing ? 'inline-block' : 'none';
             });
-            await loadPriorityTags();
-          });
-        });
-        prioritiesList.querySelectorAll('.priority-sort-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            const sort = Number(e.target.value);
+            if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
+            if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
+            if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
+            if (editBtn) editBtn.textContent = editing ? 'Save' : 'Edit';
+            row.dataset.editing = editing ? 'true' : 'false';
+          };
+          setEditing(false);
+          editBtn?.addEventListener('click', async () => {
+            const editing = row.dataset.editing === 'true';
+            if (!editing) {
+              setEditing(true);
+              labelInput?.focus();
+              return;
+            }
+            const sortVal = Number(sortInput?.value);
+            const payload = {
+              label: (labelInput?.value || '').trim(),
+              color: colorInput?.value,
+              sortOrder: Number.isFinite(sortVal) ? sortVal : null
+            };
             await fetch(`/api/priority-tags/${id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+              body: JSON.stringify(payload)
             });
             await loadPriorityTags();
           });
@@ -2456,37 +2515,63 @@ function fetchOrderDetails(configHint) {
         const id = s._id || s.id || s.label;
         const color = s.color || '#fdd023';
         const sort = s.sortOrder ?? '';
+        const label = s.label || '';
         return `<div class="tag-manager-item" data-id="${id}">
-          <div class="tag-manager-meta" style="gap:12px;">
-            <input type="color" class="status-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
-            <div style="min-width:160px;">${escapeHtml(s.label || '')}</div>
-            <input type="number" class="status-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          <div class="tag-manager-meta" style="gap:12px; display:flex; align-items:center; flex-wrap:wrap; column-gap:16px;">
+            <span class="status-color-display" style="display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid var(--border); background:${color};"></span>
+            <span class="status-label-display" style="flex:1; min-width:160px;">${escapeHtml(label)}</span>
+            <span class="status-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
+            <input type="color" class="status-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <input type="text" class="status-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
+            <input type="number" class="status-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
-          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-status" style="color: var(--danger);">Delete</button>` : ''}
+          ${currentUser?.permissions?.canManageTags ? `<div class="flex" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn ghost" data-action="edit-status">Edit</button>
+            <button class="btn ghost" data-action="delete-status" style="color: var(--danger);">Delete</button>
+          </div>` : ''}
         </div>`;
       }).join('');
       if (currentUser?.permissions?.canManageTags) {
-        statusesList.querySelectorAll('.status-color-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            await fetch(`/api/status-tags/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ color: e.target.value })
+        const rows = statusesList.querySelectorAll('.tag-manager-item');
+        rows.forEach((row) => {
+          const id = row.dataset.id;
+          const colorInput = row.querySelector('.status-color-input');
+          const labelInput = row.querySelector('.status-label-input');
+          const sortInput = row.querySelector('.status-sort-input');
+          const colorDisplay = row.querySelector('.status-color-display');
+          const labelDisplay = row.querySelector('.status-label-display');
+          const sortDisplay = row.querySelector('.status-sort-display');
+          const editBtn = row.querySelector('button[data-action="edit-status"]');
+          const setEditing = (editing) => {
+            [colorInput, labelInput, sortInput].forEach((inp) => {
+              if (!inp) return;
+              inp.disabled = !editing;
+              inp.style.display = editing ? 'inline-block' : 'none';
             });
-            await loadStatusTags();
-          });
-        });
-        statusesList.querySelectorAll('.status-sort-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            const sort = Number(e.target.value);
+            if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
+            if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
+            if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
+            if (editBtn) editBtn.textContent = editing ? 'Save' : 'Edit';
+            row.dataset.editing = editing ? 'true' : 'false';
+          };
+          setEditing(false);
+          editBtn?.addEventListener('click', async () => {
+            const editing = row.dataset.editing === 'true';
+            if (!editing) {
+              setEditing(true);
+              labelInput?.focus();
+              return;
+            }
+            const sortVal = Number(sortInput?.value);
+            const payload = {
+              label: (labelInput?.value || '').trim(),
+              color: colorInput?.value,
+              sortOrder: Number.isFinite(sortVal) ? sortVal : null
+            };
             await fetch(`/api/status-tags/${id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+              body: JSON.stringify(payload)
             });
             await loadStatusTags();
           });
@@ -2515,37 +2600,63 @@ function fetchOrderDetails(configHint) {
         const id = s._id || s.id || s.value || s.label;
         const color = s.color || '#fdd023';
         const sort = s.sortOrder ?? '';
+        const label = s.label || '';
         return `<div class="tag-manager-item" data-id="${id}">
-          <div class="tag-manager-meta" style="gap:12px;">
-            <input type="color" class="reimbursement-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
-            <div style="min-width:160px;">${escapeHtml(s.label || '')}</div>
-            <input type="number" class="reimbursement-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px;" ${!currentUser?.permissions?.canManageTags ? 'disabled' : ''}/>
+          <div class="tag-manager-meta" style="gap:12px; display:flex; align-items:center; flex-wrap:wrap; column-gap:16px;">
+            <span class="reimbursement-color-display" style="display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid var(--border); background:${color};"></span>
+            <span class="reimbursement-label-display" style="flex:1; min-width:160px;">${escapeHtml(label)}</span>
+            <span class="reimbursement-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
+            <input type="color" class="reimbursement-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <input type="text" class="reimbursement-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
+            <input type="number" class="reimbursement-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
-          ${currentUser?.permissions?.canManageTags ? `<button class="btn ghost" data-action="delete-reimbursement-tag" style="color: var(--danger);">Delete</button>` : ''}
+          ${currentUser?.permissions?.canManageTags ? `<div class="flex" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn ghost" data-action="edit-reimbursement-tag">Edit</button>
+            <button class="btn ghost" data-action="delete-reimbursement-tag" style="color: var(--danger);">Delete</button>
+          </div>` : ''}
         </div>`;
       }).join('');
       if (currentUser?.permissions?.canManageTags) {
-        reimbursementTagsList.querySelectorAll('.reimbursement-color-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            await fetch(`/api/reimbursement-tags/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ color: e.target.value })
+        const rows = reimbursementTagsList.querySelectorAll('.tag-manager-item');
+        rows.forEach((row) => {
+          const id = row.dataset.id;
+          const colorInput = row.querySelector('.reimbursement-color-input');
+          const labelInput = row.querySelector('.reimbursement-label-input');
+          const sortInput = row.querySelector('.reimbursement-sort-input');
+          const colorDisplay = row.querySelector('.reimbursement-color-display');
+          const labelDisplay = row.querySelector('.reimbursement-label-display');
+          const sortDisplay = row.querySelector('.reimbursement-sort-display');
+          const editBtn = row.querySelector('button[data-action="edit-reimbursement-tag"]');
+          const setEditing = (editing) => {
+            [colorInput, labelInput, sortInput].forEach((inp) => {
+              if (!inp) return;
+              inp.disabled = !editing;
+              inp.style.display = editing ? 'inline-block' : 'none';
             });
-            await loadReimbursementTags();
-          });
-        });
-        reimbursementTagsList.querySelectorAll('.reimbursement-sort-input').forEach(inp => {
-          inp.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            const sort = Number(e.target.value);
+            if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
+            if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
+            if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
+            if (editBtn) editBtn.textContent = editing ? 'Save' : 'Edit';
+            row.dataset.editing = editing ? 'true' : 'false';
+          };
+          setEditing(false);
+          editBtn?.addEventListener('click', async () => {
+            const editing = row.dataset.editing === 'true';
+            if (!editing) {
+              setEditing(true);
+              labelInput?.focus();
+              return;
+            }
+            const sortVal = Number(sortInput?.value);
+            const payload = {
+              label: (labelInput?.value || '').trim(),
+              color: colorInput?.value,
+              sortOrder: Number.isFinite(sortVal) ? sortVal : null
+            };
             await fetch(`/api/reimbursement-tags/${id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sortOrder: Number.isFinite(sort) ? sort : null })
+              body: JSON.stringify(payload)
             });
             await loadReimbursementTags();
           });
