@@ -155,6 +155,13 @@ function normalizePrivateKey(key) {
   return String(key).replace(/\\n/g, '\n');
 }
 
+const baseReimbursementStatus = {
+  label: 'No Reimbursement',
+  value: 'no_reimbursement',
+  color: '#888888',
+  sortOrder: -999
+};
+
 function cleanInvoiceFile(file) {
   if (!file || typeof file !== 'object') return file;
   const allowed = [
@@ -222,6 +229,16 @@ function sortReimbursementTags(tags = []) {
     .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
 }
 
+function mergeReimbursementStatuses(tags = []) {
+  return [baseReimbursementStatus, ...sortReimbursementTags(tags)];
+}
+
+function isValidReimbursementStatus(value, tags = []) {
+  if (!value) return false;
+  const all = mergeReimbursementStatuses(tags);
+  return all.some((s) => s.value === value || s.label === value);
+}
+
 async function loadReimbursementTagsSafe() {
   try {
     const statuses = await client.query('reimbursementTags:list', {});
@@ -233,11 +250,11 @@ async function loadReimbursementTagsSafe() {
 }
 
 function pickDefaultReimbursementStatus(tags = [], { requested }) {
-  const sorted = sortReimbursementTags(tags);
-  if (!sorted.length) return null;
-  if (requested) return sorted[0]?.value || sorted[0]?.label || null;
-  const notRequested = sorted.find((t) => t.value === 'not_requested');
-  const pick = notRequested || sorted[0];
+  const all = mergeReimbursementStatuses(tags);
+  if (!all.length) return null;
+  if (!requested) return baseReimbursementStatus.value;
+  const nonBase = all.filter((s) => s.value !== baseReimbursementStatus.value);
+  const pick = nonBase[0] || baseReimbursementStatus;
   return pick?.value || pick?.label || null;
 }
 
@@ -1126,12 +1143,19 @@ app.post('/api/invoices', upload.array('files', 8), async (req, res) => {
     }
     const cleanedFiles = processedFiles.map(cleanInvoiceFile);
     const amount = toNumber(req.body?.amount);
-    const reimbursementRequested = parseBoolean(req.body?.reimbursementRequested ?? false);
     const reimbursementTags = await loadReimbursementTagsSafe();
-    const reimbursementStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: reimbursementRequested });
+    let reimbursementStatus = req.body?.reimbursementStatus || null;
+    if (reimbursementStatus) {
+      if (!isValidReimbursementStatus(reimbursementStatus, reimbursementTags)) {
+        return res.status(400).json({ error: 'Choose a reimbursement status from Tags > Reimbursements.' });
+      }
+    } else {
+      reimbursementStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: false });
+    }
     if (!reimbursementStatus) {
       return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before submitting invoices.' });
     }
+    const reimbursementRequested = reimbursementStatus !== baseReimbursementStatus.value;
     const reimbursementUser = user._id?.toString();
     const reimbursementUserName = user.name;
     const reimbursementAmount = amount;
@@ -1180,40 +1204,38 @@ app.patch('/api/invoices/:id', async (req, res) => {
     if (!canManage && !(isOwner && canSubmit)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+    const reimbursementTags = await loadReimbursementTagsSafe();
     const updates = {
       invoiceId: req.params.id,
       amount: toNumber(req.body?.amount),
       reimbursementAmount: toNumber(req.body?.reimbursementAmount),
-      reimbursementRequested: req.body?.reimbursementRequested === undefined ? undefined : parseBoolean(req.body?.reimbursementRequested),
       notes: req.body?.notes
     };
     if (updates.amount !== undefined) {
       updates.reimbursementAmount = updates.amount;
     }
-    const reimbursementTags = await loadReimbursementTagsSafe();
-    if (!reimbursementTags.length) {
-      return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before updating invoices.' });
-    }
-    if (req.body?.reimbursementStatus && canManage) {
-      const isValid = reimbursementTags.some(
-        (t) => t.value === req.body.reimbursementStatus || t.label === req.body.reimbursementStatus
-      );
-      if (!isValid) {
+    const incomingStatus = req.body?.reimbursementStatus;
+    const incomingRequested = req.body?.reimbursementRequested;
+    if (incomingStatus) {
+      if (!isValidReimbursementStatus(incomingStatus, reimbursementTags)) {
         return res.status(400).json({ error: 'Choose a reimbursement status from Tags > Reimbursements.' });
       }
-      updates.reimbursementStatus = req.body.reimbursementStatus;
+      updates.reimbursementStatus = incomingStatus;
+      updates.reimbursementRequested = incomingStatus !== baseReimbursementStatus.value;
       updates.statusNote = req.body?.statusNote;
       updates.changedBy = user._id?.toString();
       updates.changedByName = user.name;
-    }
-    if (typeof updates.reimbursementRequested === 'boolean' && updates.reimbursementStatus === undefined) {
-      const defaultStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: updates.reimbursementRequested === true });
+    } else if (incomingRequested !== undefined) {
+      const requestedBool = parseBoolean(incomingRequested);
+      const defaultStatus = pickDefaultReimbursementStatus(reimbursementTags, { requested: requestedBool });
       if (!defaultStatus) {
         return res.status(400).json({ error: 'Add reimbursement statuses in Tags > Reimbursements before updating invoices.' });
       }
       updates.reimbursementStatus = defaultStatus;
-      updates.changedBy = updates.changedBy || user._id?.toString();
-      updates.changedByName = updates.changedByName || user.name;
+      updates.reimbursementRequested = defaultStatus !== baseReimbursementStatus.value;
+      updates.statusNote = req.body?.statusNote;
+      updates.changedBy = user._id?.toString();
+      updates.changedByName = user.name;
     }
     await client.mutation('invoices:update', updates);
     const refreshed = await client.query('invoices:get', { invoiceId: req.params.id });
@@ -1287,6 +1309,7 @@ app.post('/api/invoices/restore', async (req, res) => {
       }
       payload.reimbursementStatus = defaultStatus;
     }
+    payload.reimbursementRequested = payload.reimbursementStatus !== baseReimbursementStatus.value;
     const result = await client.mutation('invoices:create', payload);
     const saved = await client.query('invoices:get', { invoiceId: result.invoiceId });
     res.status(201).json({ invoice: normalizeInvoice(saved) });

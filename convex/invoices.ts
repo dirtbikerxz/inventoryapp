@@ -23,6 +23,13 @@ const statusEntryArg = v.object({
   note: v.optional(v.string())
 });
 
+const baseReimbursementStatus = {
+  label: "No Reimbursement",
+  value: "no_reimbursement",
+  color: "#888888",
+  sortOrder: -999
+};
+
 async function loadReimbursementTags(ctx: any) {
   const tags = await ctx.db.query("reimbursementTags").collect();
   return tags
@@ -34,18 +41,25 @@ function pickDefaultReimbursementStatusFromTags(tags: any[], requested: boolean)
   const sorted = (Array.isArray(tags) ? [...tags] : [])
     .map((t: any, idx: number) => ({ ...t, sort: t.sortOrder ?? idx }))
     .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
-  if (!sorted.length) return null;
-  if (requested) return sorted[0].value || sorted[0].label || null;
-  const notRequested = sorted.find((t: any) => t.value === "not_requested");
-  const pick = notRequested || sorted[0];
+  const merged = [baseReimbursementStatus, ...sorted];
+  if (!merged.length) return null;
+  if (!requested) return baseReimbursementStatus.value;
+  const nonBase = merged.filter((t) => t.value !== baseReimbursementStatus.value);
+  const pick = nonBase[0] || baseReimbursementStatus;
   return pick?.value || pick?.label || null;
+}
+
+function isValidReimbursementStatus(tags: any[], value?: string) {
+  if (!value) return false;
+  const merged = [baseReimbursementStatus, ...tags];
+  return merged.some((t) => t.value === value || t.label === value);
 }
 
 async function resolveReimbursementStatus(ctx: any, requested: boolean, provided?: string, tagsArg?: any[]) {
   const tags = tagsArg ?? (await loadReimbursementTags(ctx));
+  const merged = [baseReimbursementStatus, ...tags];
   if (provided) {
-    const valid = tags.some((t: any) => t.value === provided || t.label === provided);
-    if (!valid) {
+    if (!isValidReimbursementStatus(tags, provided)) {
       throw new Error("Invalid reimbursement status; add it as a tag first");
     }
     return provided;
@@ -192,6 +206,7 @@ export const create = mutation({
     const groupId = args.groupId ? ctx.db.normalizeId("orderGroups", args.groupId) : undefined;
     const requestedBy = args.requestedBy ? ctx.db.normalizeId("users", args.requestedBy) : undefined;
     const status = await resolveReimbursementStatus(ctx, args.reimbursementRequested, args.reimbursementStatus || undefined);
+    const reimbursementRequested = status !== baseReimbursementStatus.value;
     const statusHistory = [
       {
         status,
@@ -212,7 +227,7 @@ export const create = mutation({
       requestedAt: now,
       amount: args.amount,
       reimbursementAmount: args.reimbursementAmount ?? args.amount ?? args.detectedTotal,
-      reimbursementRequested: args.reimbursementRequested,
+      reimbursementRequested,
       reimbursementStatus: status,
       reimbursementUser: args.reimbursementUser,
       reimbursementUserName: args.reimbursementUserName,
@@ -263,8 +278,7 @@ export const update = mutation({
     let resolvedStatus: string | undefined = args.reimbursementStatus || undefined;
     if (resolvedStatus !== undefined) {
       const tags = await getTags();
-      const valid = tags.some((t: any) => t.value === resolvedStatus || t.label === resolvedStatus);
-      if (!valid) {
+      if (!isValidReimbursementStatus(tags, resolvedStatus)) {
         throw new Error("Invalid reimbursement status; add it as a tag first");
       }
     }
@@ -279,6 +293,7 @@ export const update = mutation({
     }
     if (resolvedStatus !== undefined) {
       updates.reimbursementStatus = resolvedStatus;
+      updates.reimbursementRequested = resolvedStatus !== baseReimbursementStatus.value;
       statusHistory.push({
         status: resolvedStatus,
         changedAt: updates.updatedAt,

@@ -97,6 +97,13 @@ function escapeHtml(str = "") {
     .replace(/'/g, "&#39;");
 }
 
+const baseReimbursementStatus =
+  (window.baseReimbursementStatus = window.baseReimbursementStatus || {
+    value: "no_reimbursement",
+    label: "No Reimbursement",
+    color: "#888888",
+    sortOrder: -999,
+  });
 let reimbursements = [];
 let reimbursementsScope = "all";
 let currentOrderInvoices = [];
@@ -109,7 +116,7 @@ function getReimbursementStatusOptions() {
   const list = Array.isArray(window?.__reimbursementTags)
     ? window.__reimbursementTags
     : [];
-  return list
+  return [baseReimbursementStatus, ...list]
     .filter((o) => o && (o.value || o.label))
     .map((o) => ({
       value: o.value || o.label,
@@ -454,7 +461,6 @@ function renderInvoiceCards(invoices = []) {
         </div>
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px; margin-top:6px;">
           <div class="small">Invoice total: ${amt !== undefined ? formatMoney(amt) : 'n/a'}</div>
-          <div class="small">Reimbursement: ${inv.reimbursementRequested ? 'Yes' : 'No'}</div>
           <div class="small">Status: ${formatReimbursementStatus(inv.reimbursementStatus)}</div>
         </div>
         <div class="small" style="margin-top:6px;">${renderInvoiceFiles(inv.files, inv._id || inv.id)}</div>
@@ -1146,14 +1152,14 @@ function openInvoiceEditor(mode = "create", invoice = null) {
   if (invoiceEditorSubtitle)
     invoiceEditorSubtitle.textContent = invoiceTargetSummary?.textContent || "";
   if (invoiceStatusField) {
-    invoiceStatusField.style.display = mode === "edit" ? "block" : "none";
+    invoiceStatusField.style.display = "block";
   }
   if (invoiceFileField) {
     invoiceFileField.style.display = mode === "edit" ? "none" : "block";
   }
   if (invoiceStatusSelect) {
     const options = getReimbursementStatusOptions();
-    const currentStatus = invoice?.reimbursementStatus || "";
+    const currentStatus = invoice?.reimbursementStatus || baseReimbursementStatus.value;
     invoiceStatusSelect.innerHTML = options.length
       ? options
           .map(
@@ -1165,7 +1171,8 @@ function openInvoiceEditor(mode = "create", invoice = null) {
           .join("")
       : '<option value="">Add reimbursement statuses in Tags</option>';
     const canChange =
-      Boolean(currentUser?.permissions?.canManageInvoices) && options.length;
+      Boolean(currentUser?.permissions?.canManageInvoices || currentUser?.permissions?.canSubmitInvoices) &&
+      options.length;
     invoiceStatusSelect.disabled = !canChange;
     invoiceStatusSelect.style.opacity = canChange ? "" : "0.6";
     invoiceStatusSelect.style.pointerEvents = canChange ? "" : "none";
@@ -1201,10 +1208,6 @@ function openInvoiceEditor(mode = "create", invoice = null) {
     if (invoiceEditorForm.elements.amount)
       invoiceEditorForm.elements.amount.value =
         invoice.amount ?? "";
-    if (invoiceEditorForm.elements.reimbursementRequested)
-      invoiceEditorForm.elements.reimbursementRequested.value = String(
-        invoice.reimbursementRequested ?? false,
-      );
     if (invoiceEditorForm.elements.notes)
       invoiceEditorForm.elements.notes.value = invoice.notes || "";
   } else if (typeof updateInvoicePreview === "function") {
@@ -1212,12 +1215,6 @@ function openInvoiceEditor(mode = "create", invoice = null) {
   }
   if (typeof ensureReimbursementStatusWarning === "function") {
     ensureReimbursementStatusWarning();
-  }
-  // Sync visibility after values are populated
-  if (invoiceStatusField && invoiceEditorForm.elements.reimbursementRequested) {
-    const needs =
-      invoiceEditorForm.elements.reimbursementRequested.value === "true";
-    invoiceStatusField.style.display = needs ? "block" : "none";
   }
   if (invoiceCreateModal) invoiceCreateModal.style.display = "flex";
 }
