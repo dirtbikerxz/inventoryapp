@@ -191,7 +191,7 @@ function renderGroupInvoiceSummary(items = []) {
   return `<span class="tag invoice-summary" style="border-color:${color}; color:${color}; min-width:auto;">Invoices: ${totals.count}</span>`;
 }
 
-function createTrackingRow(container, data = {}, partsOptions = []) {
+function createTrackingRow(container, data = {}) {
   if (!container) return;
   const row = document.createElement("div");
   row.className = "tracking-row";
@@ -201,13 +201,6 @@ function createTrackingRow(container, data = {}, partsOptions = []) {
 </select>
 <input class="input tracking-number" placeholder="Tracking number" value="${data.trackingNumber || data.number || ""}" />
 <button type="button" class="btn ghost remove-tracking" style="padding:6px 10px;">Remove</button>
-<div class="small" style="width:100%;">Parts in this shipment (optional)</div>
-<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:6px; width:100%;">
-  <select class="input tracking-parts" multiple size="${Math.min(Math.max(partsOptions.length, 2), 6)}">
-    ${partsOptions.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("")}
-  </select>
-  <button type="button" class="btn ghost select-all-parts" style="padding:6px 10px;">Select all</button>
-</div>
   `;
   const select = row.querySelector(".tracking-carrier");
   const carrier = (data.carrier || "").toLowerCase();
@@ -215,33 +208,21 @@ function createTrackingRow(container, data = {}, partsOptions = []) {
   row.querySelector(".remove-tracking").addEventListener("click", () => {
     row.remove();
     if (!container.querySelector(".tracking-row")) {
-      createTrackingRow(container, {}, partsOptions);
+      createTrackingRow(container, {});
     }
-  });
-  const partsSelect = row.querySelector(".tracking-parts");
-  const selectAllBtn = row.querySelector(".select-all-parts");
-  if (partsSelect && Array.isArray(data.parts)) {
-    Array.from(partsSelect.options).forEach((opt) => {
-      if (data.parts.includes(opt.value)) opt.selected = true;
-    });
-  }
-  selectAllBtn?.addEventListener("click", () => {
-    Array.from(partsSelect.options).forEach((opt) => {
-      opt.selected = true;
-    });
   });
   container.appendChild(row);
 }
 
-function setTrackingRows(container, entries = [], partsOptions = []) {
+function setTrackingRows(container, entries = []) {
   if (!container) return;
   container.innerHTML = "";
   const list = Array.isArray(entries) && entries.length ? entries : [];
   if (!list.length) {
-    createTrackingRow(container, {}, partsOptions);
+    createTrackingRow(container, {});
     return;
   }
-  list.forEach((entry) => createTrackingRow(container, entry, partsOptions));
+  list.forEach((entry) => createTrackingRow(container, entry));
 }
 
 function collectTrackingRows(container) {
@@ -252,14 +233,9 @@ function collectTrackingRows(container) {
       const number = row.querySelector(".tracking-number")?.value.trim();
       const carrier = row.querySelector(".tracking-carrier")?.value || "other";
       if (!number) return null;
-      const partsSel = row.querySelector(".tracking-parts");
-      const parts = partsSel
-        ? Array.from(partsSel.selectedOptions).map((o) => o.value)
-        : undefined;
       return {
         carrier,
         trackingNumber: number,
-        parts: parts && parts.length ? parts : undefined,
       };
     })
     .filter(Boolean);

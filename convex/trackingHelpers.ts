@@ -53,8 +53,7 @@ export function normalizeTracking(input?: TrackingInput[] | null, fallback?: str
         delivered: t.delivered,
         lastCheckedAt: t.lastCheckedAt,
         trackingUrl: t.trackingUrl || buildTrackingUrl(carrier, number),
-        eta: t.eta,
-        parts: (t as any).parts || (t as any).items || undefined
+        eta: t.eta
       };
     })
     .filter(Boolean) as TrackingInput[];

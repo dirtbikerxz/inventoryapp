@@ -73,11 +73,10 @@
       }, ms);
     }
 
-    const emptyParts = [];
-    setTrackingRows(orderTrackingList, [], emptyParts);
-    setTrackingRows(groupModalTrackingList, [], emptyParts);
-    addOrderTracking?.addEventListener('click', () => createTrackingRow(orderTrackingList, {}, emptyParts));
-    addGroupModalTracking?.addEventListener('click', () => createTrackingRow(groupModalTrackingList, {}, emptyParts));
+    setTrackingRows(orderTrackingList, []);
+    setTrackingRows(groupModalTrackingList, []);
+    addOrderTracking?.addEventListener('click', () => createTrackingRow(orderTrackingList, {}));
+    addGroupModalTracking?.addEventListener('click', () => createTrackingRow(groupModalTrackingList, {}));
 
     let orders = [];
     let selected = new Set();
@@ -1513,8 +1512,7 @@ function fetchOrderDetails(configHint) {
       groupForm.elements.title.value = data?.title || '';
       renderStatusTagOptions(data?.statusTag || '');
       if (groupForm.elements.statusTag) groupForm.elements.statusTag.value = data?.statusTag || '';
-      const parts = orders.filter(o => o.groupId === data?.id || o.group?._id === data?.id).map(o => ({ id: o._id, label: o.partName || o.vendorPartNumber || o.productCode || o._id }));
-      setTrackingRows(groupModalTrackingList, data?.tracking?.length ? data.tracking : (data?.trackingNumber ? [{ carrier: 'unknown', trackingNumber: data.trackingNumber }] : []), parts);
+      setTrackingRows(groupModalTrackingList, data?.tracking?.length ? data.tracking : (data?.trackingNumber ? [{ carrier: 'unknown', trackingNumber: data.trackingNumber }] : []));
       groupForm.elements.notes.value = data?.notes || '';
       groupMessage.textContent = '';
       groupModal.style.display = 'flex';
@@ -2398,13 +2396,20 @@ function fetchOrderDetails(configHint) {
       if (!groupStatusTagSelect) return;
       const list = statusTagList && statusTagList.length ? statusTagList : [];
       const currentVal = current !== undefined ? current : groupStatusTagSelect.value;
-      const opts = ['<option value="">No status tag</option>'].concat(
-        list.map(s => `<option value="${escapeHtml(s.label || '')}">${escapeHtml(s.label || '')}</option>`)
-      );
-      groupStatusTagSelect.innerHTML = opts.join('');
-      if (currentVal) {
-        groupStatusTagSelect.value = currentVal;
+      if (!list.length) {
+        groupStatusTagSelect.innerHTML = '<option value="">Add status tags in Tags</option>';
+        groupStatusTagSelect.disabled = true;
+        groupStatusTagSelect.title = 'Add status tags in Tags to select a status';
+        return;
       }
+      groupStatusTagSelect.disabled = false;
+      groupStatusTagSelect.title = '';
+      groupStatusTagSelect.innerHTML = list
+        .map(s => `<option value="${escapeHtml(s.label || '')}">${escapeHtml(s.label || '')}</option>`)
+        .join('');
+      groupStatusTagSelect.value = currentVal && list.some(s => (s.label || '') === currentVal)
+        ? currentVal
+        : list[0].label || '';
     }
 
     function renderCatalogRequestPriorityOptions() {
