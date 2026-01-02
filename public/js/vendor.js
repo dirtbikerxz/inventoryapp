@@ -226,8 +226,9 @@ function setOrderSource(source) {
     orderSourceCatalog.classList.toggle("primary", orderSource === "catalog");
   if (orderSourceImport)
     orderSourceImport.classList.toggle("primary", showImport);
+  const showManualFields = orderSource === "manual";
   orderManualFields?.forEach((el) => {
-    if (el) el.style.display = orderSource === "manual" ? "" : "none";
+    if (el) el.style.display = showManualFields ? "" : "none";
   });
   orderCatalogFields?.forEach((el) => {
     if (el) el.style.display = orderSource === "catalog" ? "" : "none";

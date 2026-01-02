@@ -1100,6 +1100,26 @@ function fetchOrderDetails(configHint) {
       })).slice(0, 40);
     }
 
+    function renderCatalogSelection(match) {
+      if (!catalogLookupSelected) return;
+      if (!match) {
+        catalogLookupSelected.innerHTML = '<div class="small" style="color:var(--muted); padding:6px 0;">No catalog item selected.</div>';
+        return;
+      }
+      const metaParts = [];
+      if (match.path) metaParts.push(match.path);
+      if (match.vendor) metaParts.push(match.vendor);
+      if (match.vendorPartNumber) metaParts.push(match.vendorPartNumber);
+      const meta = metaParts.filter(Boolean).join(' · ');
+      catalogLookupSelected.innerHTML = `
+        <div style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel);">
+          <div class="small" style="color:var(--muted); margin-bottom:4px;">Catalog item</div>
+          <div style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;">${escapeHtml(match.label)}</div>
+          ${meta ? `<div class="small" style="color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(meta)}</div>` : ''}
+        </div>
+      `;
+    }
+
     function renderCatalogLookupList() {
       if (!catalogLookupResults) return;
       if (!catalogLookupMatches.length) {
@@ -1149,8 +1169,15 @@ function fetchOrderDetails(configHint) {
       if (orderForm.elements.partLink && match.supplierLink) orderForm.elements.partLink.value = match.supplierLink;
       if (orderForm.elements.unitCost && match.unitCost !== undefined) orderForm.elements.unitCost.value = match.unitCost;
       if (orderForm.elements.quantityRequested && match.defaultQuantity) orderForm.elements.quantityRequested.value = match.defaultQuantity;
-      if (catalogLookupSelected) catalogLookupSelected.textContent = `Using catalog: ${match.label}${match.path ? ' · ' + match.path : ''}`;
-      if (catalogLookupResults) catalogLookupResults.style.display = 'none';
+      renderCatalogSelection(match);
+      if (catalogLookupResults) {
+        catalogLookupResults.style.display = 'none';
+        catalogLookupResults.innerHTML = '';
+      }
+      if (catalogLookupInput) {
+        catalogLookupInput.value = '';
+        catalogLookupInput.blur();
+      }
       if (catalogSaveCategory && match.path) catalogSaveCategory.value = match.path;
       setOrderSource('catalog');
       catalogAlreadySaved = true;
@@ -1173,7 +1200,7 @@ function fetchOrderDetails(configHint) {
         catalogLookupResults.style.display = 'none';
         catalogLookupResults.innerHTML = '';
       }
-      if (catalogLookupSelected) catalogLookupSelected.textContent = '';
+      renderCatalogSelection(null);
       if (catalogLookupInput) catalogLookupInput.value = '';
       if (catalogVendorSelect) catalogVendorSelect.value = '';
       syncCatalogSaveUI();
@@ -2721,6 +2748,15 @@ function fetchOrderDetails(configHint) {
       const priority = catalogRequestPriority?.value || defaultPriorityLabel();
       const tags = getCatalogRequestTagIds();
       const notes = catalogRequestNotes?.value?.trim();
+      const notesRequired = typeof requiresOrderNotes === 'function' ? requiresOrderNotes() : true;
+      if (notesRequired && !notes) {
+        if (catalogRequestMessage) {
+          catalogRequestMessage.textContent = 'Add notes/justification before submitting.';
+          catalogRequestMessage.className = 'error';
+        }
+        catalogRequestNotes?.focus();
+        return;
+      }
       const payload = {
         partName: item.name,
         vendor: item.vendor,
@@ -2733,7 +2769,7 @@ function fetchOrderDetails(configHint) {
         status: 'Requested',
         priority,
         tags,
-        notes: notes || (item.fullPath ? `From catalog: ${item.fullPath}` : undefined)
+        notes: notes || undefined
       };
       if (catalogRequestMessage) {
         catalogRequestMessage.textContent = 'Creating request...';

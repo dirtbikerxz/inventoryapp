@@ -221,14 +221,14 @@
           </div>
           <div class="order-catalog-fields" style="grid-column: span 2; display:none;">
             <label class="small">Saved catalog</label>
-            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; align-items:center;">
+            <div class="grid" style="grid-template-columns: 1fr; gap:8px; align-items:center;">
               <input id="catalog-lookup" class="input" placeholder="Search saved parts..." />
               <div id="catalog-lookup-selected" class="small"></div>
             </div>
             <div id="catalog-lookup-results" class="tag-picker-options" style="display:none; margin-top:6px; max-height:180px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:6px;"></div>
           </div>
           <div class="order-manual-fields" style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:8px;">
-            <div style="font-weight:700; margin-bottom:6px;">Saved details</div>
+            <div style="font-weight:700; margin-bottom:6px;">Part details</div>
             <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
               <div>
                 <label class="small">Vendor</label>
@@ -251,6 +251,11 @@
                 <label class="small">Unit Cost</label>
                 <input name="unitCost" class="input" type="number" min="0" step="0.01" />
               </div>
+            </div>
+          </div>
+          <div class="order-shared-fields" style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:8px;">
+            <div style="font-weight:700; margin-bottom:6px;">Request details</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px;">
               <div>
                 <label class="small">Quantity</label>
                 <input name="quantityRequested" class="input" type="number" min="1" value="1" required />
@@ -277,11 +282,11 @@
               </div>
               <div class="small" style="margin-top:8px;">Tags categorize requests. Open the Tags panel to view or manage them.</div>
             </div>
-            <!-- Tracking managed at group level; no tracking fields for individual parts -->
-            <div style="margin-top:10px;">
-              <label class="small" id="order-notes-label">Notes</label>
-              <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
-            </div>
+          </div>
+          <!-- Tracking managed at group level; no tracking fields for individual parts -->
+          <div class="order-notes-field" style="margin-top:10px; grid-column: span 2;">
+            <label class="small" id="order-notes-label">Notes</label>
+            <textarea name="notes" class="input" rows="3" placeholder="Justification, sizing details, links, etc."></textarea>
           </div>
           <div id="catalog-save-container" style="grid-column: span 2; display:none;">
             <div class="flex-between" style="align-items:center; gap:6px; flex-wrap:wrap;">
@@ -435,7 +440,7 @@
           </div>
         </div>
         <div style="grid-column: span 2; border:1px solid var(--border); border-radius:10px; padding:10px;">
-          <div style="font-weight:700; margin-bottom:6px;">Saved details</div>
+          <div style="font-weight:700; margin-bottom:6px;">Part details</div>
           <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">
             <div>
               <label class="small">Vendor</label>
