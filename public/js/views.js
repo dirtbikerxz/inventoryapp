@@ -1258,13 +1258,24 @@ function createCard(order) {
     const total =
       order.totalCost ??
       (unit !== undefined ? Number((unit * qty).toFixed(2)) : undefined);
-    return total !== undefined
-      ? "$" + total
-      : unit !== undefined
-        ? "$" + unit
-        : "";
+    const fmt = (val) => {
+      const num = Number(val);
+      return Number.isFinite(num) ? `$${num.toFixed(2)}` : "";
+    };
+    if (unit !== undefined) {
+      const unitLabel = fmt(unit);
+      const qtyLabel = `QTY ${qty}`;
+      const totalLabel = total !== undefined ? fmt(total) : "";
+      return totalLabel
+        ? `${unitLabel} x ${qtyLabel} = ${totalLabel}`
+        : `${unitLabel} x ${qtyLabel}`;
+    }
+    if (total !== undefined) {
+      const totalLabel = fmt(total);
+      return qty ? `${totalLabel} · QTY ${qty}` : totalLabel;
+    }
+    return qty ? `QTY ${qty}` : "";
   })()}
-  ${order.quantityRequested ? " · x" + order.quantityRequested : ""}
 </div>
 ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;">Notes: ${escapeHtml(order.notes)}</div>` : ""}
 <div class="meta" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
