@@ -2045,52 +2045,41 @@ function renderStockGrid() {
   const canAdjustStock =
     currentUser?.permissions?.canEditStock ||
     currentUser?.permissions?.canManageStock;
-  const isGrouped = selectedStockSubteam && selectedStockSubteam !== "all";
-  stockGrid.classList.toggle("grouped", isGrouped);
+  const groupByCategory = true;
+  stockGrid.classList.toggle("grouped", groupByCategory);
 
   const buildCategoryLabel = (item) => {
-    return (item.category || "").trim() || "Uncategorized";
+    const category = (item.category || "").trim() || "Uncategorized";
+    const location = (item.subteam || "").trim();
+    return location ? `${location} / ${category}` : category;
   };
 
-  if (isGrouped) {
-    const groups = new Map();
-    stockItems.forEach((item) => {
-      const label = buildCategoryLabel(item);
-      if (!groups.has(label)) groups.set(label, []);
-      groups.get(label).push(item);
-    });
-    const sortedLabels = Array.from(groups.keys()).sort((a, b) =>
-      a.localeCompare(b),
+  const groups = new Map();
+  stockItems.forEach((item) => {
+    const label = buildCategoryLabel(item);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  });
+  const sortedLabels = Array.from(groups.keys()).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  sortedLabels.forEach((label) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "stock-category-block";
+    const title = document.createElement("div");
+    title.className = "stock-category-title";
+    title.textContent = label;
+    const grid = document.createElement("div");
+    grid.className = "stock-category-grid";
+    const items = groups.get(label) || [];
+    items.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    items.forEach((item) =>
+      grid.appendChild(buildStockCard(item, canAdjustStock)),
     );
-    sortedLabels.forEach((label) => {
-      const wrapper = document.createElement("div");
-      wrapper.className = "stock-category-block";
-      const title = document.createElement("div");
-      title.className = "stock-category-title";
-      title.textContent = label;
-      const grid = document.createElement("div");
-      grid.className = "stock-category-grid";
-      const items = groups.get(label) || [];
-      items.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      items.forEach((item) =>
-        grid.appendChild(buildStockCard(item, canAdjustStock)),
-      );
-      wrapper.appendChild(title);
-      wrapper.appendChild(grid);
-      stockGrid.appendChild(wrapper);
-    });
-  } else {
-    stockItems
-      .slice()
-      .sort(
-        (a, b) =>
-          (a.subteam || "").localeCompare(b.subteam || "") ||
-          (a.name || "").localeCompare(b.name || ""),
-      )
-      .forEach((item) =>
-        stockGrid.appendChild(buildStockCard(item, canAdjustStock)),
-      );
-  }
+    wrapper.appendChild(title);
+    wrapper.appendChild(grid);
+    stockGrid.appendChild(wrapper);
+  });
 
   stockGrid
     .querySelectorAll('button[data-action="adjust-stock"]')
