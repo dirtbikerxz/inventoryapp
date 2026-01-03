@@ -3226,6 +3226,9 @@ function showOrdersView() {
   stockViewBtn?.classList.remove("active");
   if (ordersLayoutRow) ordersLayoutRow.style.display = "flex";
   if (ordersLayoutToggle) ordersLayoutToggle.style.display = "inline-flex";
+  if (ordersActions) ordersActions.style.display = "flex";
+  if (stockActions) stockActions.style.display = "none";
+  if (stockSubteamFilter) stockSubteamFilter.style.display = "none";
   if (selectionBar) selectionBar.style.display = layout === "reimbursements" ? "none" : "";
   if (stockSection) stockSection.style.display = "none";
   if (reimbursementsSection)
@@ -3255,8 +3258,11 @@ function showStockView() {
   stockViewBtn?.classList.add("active");
   reimbursementsViewBtn?.classList.remove("active");
   ordersViewBtn?.classList.remove("active");
-  if (ordersLayoutRow) ordersLayoutRow.style.display = "none";
+  if (ordersLayoutRow) ordersLayoutRow.style.display = "flex";
   if (ordersLayoutToggle) ordersLayoutToggle.style.display = "none";
+  if (ordersActions) ordersActions.style.display = "none";
+  if (stockActions) stockActions.style.display = "flex";
+  if (stockSubteamFilter) stockSubteamFilter.style.display = "inline-flex";
   if (selectionBar) selectionBar.style.display = "none";
   boardSection.style.display = "none";
   tableSection.style.display = "none";

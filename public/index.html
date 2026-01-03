@@ -58,26 +58,28 @@
   </header>
 
   <main>
-    <div class="flex-between" style="align-items:flex-start; gap:12px; flex-wrap:wrap;">
-      <div>
-        <div class="page-title" id="primary-title">Orders</div>
-        <div class="subtitle" id="primary-subtitle">Track parts from request to delivery.</div>
-      </div>
-      <div class="view-toggle" id="primary-view-toggle">
+    <div id="orders-layout-row" class="flex-between" style="align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px;">
+      <div class="view-toggle" id="primary-view-toggle" style="flex-shrink:0;">
         <button id="orders-view-btn" class="active">Orders</button>
         <button id="stock-view-btn">Stock</button>
       </div>
-    </div>
-
-    <div id="orders-layout-row" class="flex-between" style="align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
-      <div class="view-toggle" id="orders-layout-toggle">
-        <button id="board-view-btn" class="active">Board</button>
-        <button id="table-view-btn">Table</button>
-        <button id="reimbursements-view-btn">Invoices</button>
+      <div class="flex-between" style="gap:10px; align-items:center; flex-wrap:wrap; flex:1; justify-content:center;">
+        <div class="view-toggle" id="orders-layout-toggle" style="flex-shrink:0;">
+          <button id="board-view-btn" class="active">Board</button>
+          <button id="table-view-btn">Table</button>
+          <button id="reimbursements-view-btn">Invoices</button>
+        </div>
+        <select id="stock-subteam-filter" class="input" style="min-width:180px; display:none;"></select>
       </div>
       <div class="flex-between" style="gap:8px; flex-wrap:wrap; margin-left:auto;">
-        <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
-        <button class="btn primary" id="new-order-btn">Request Part</button>
+        <div id="orders-actions" class="flex-between" style="gap:8px; flex-wrap:wrap;">
+          <button class="btn ghost" id="tags-btn" style="display:none;">Manage Tags</button>
+          <button class="btn primary" id="new-order-btn">Request Part</button>
+        </div>
+        <div id="stock-actions" class="flex-between" style="gap:8px; flex-wrap:wrap; display:none;">
+          <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage Locations</button>
+          <button class="btn primary" id="add-stock-btn" style="display:none;">Add Stock</button>
+        </div>
       </div>
     </div>
 
@@ -135,15 +137,6 @@
     </section>
 
     <section id="stock-section" style="display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; gap:12px;">
-      <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
-        <div class="flex-between" style="gap:8px; flex-wrap:wrap; align-items:center;">
-          <select id="stock-subteam-filter" class="input" style="min-width:180px;"></select>
-        </div>
-        <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
-          <button class="btn ghost" id="manage-subteams-btn" style="display:none;">Manage Locations</button>
-          <button class="btn primary" id="add-stock-btn" style="display:none;">Add Stock</button>
-        </div>
-      </div>
       <div id="stock-grid" class="stock-grid" style="flex:1; min-height:0; overflow:auto; padding-bottom:12px;"></div>
     </section>
   </main>
