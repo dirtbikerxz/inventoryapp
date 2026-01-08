@@ -1038,25 +1038,42 @@
           </div>
           <button class="btn ghost" id="close-subteams-modal">Close</button>
         </div>
-      <form id="stock-subteam-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:6px;">
-        <input type="hidden" name="id" />
-        <div>
-          <label class="small">Name</label>
-          <input name="name" class="input" placeholder="e.g., Electrical, Drivetrain" required />
-        </div>
-        <div>
-          <label class="small">Description</label>
-          <input name="description" class="input" placeholder="Optional context" />
-        </div>
-        <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
-          <div id="stock-subteam-message" class="small"></div>
-          <div class="flex-between" style="gap:8px;">
-            <button type="button" class="btn ghost" id="clear-subteam-form">New</button>
-            <button type="submit" class="btn primary">Save</button>
-          </div>
-        </div>
-      </form>
+      <div class="flex-between" style="align-items:center; gap:8px; margin-top:6px;">
+        <div id="stock-subteam-message" class="small"></div>
+        <button type="button" class="btn primary" id="new-subteam-btn">New location</button>
+      </div>
       <div id="stock-subteam-list" class="tag-manager-list" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+    <div id="stock-subteam-editor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:64; align-items:center; justify-content:center; padding:16px;">
+      <div class="tag-modal-card">
+        <div class="flex-between" style="align-items:flex-start;">
+          <div>
+            <div class="page-title" id="stock-subteam-editor-title" style="font-size:20px;">New location</div>
+            <div class="subtitle" style="margin-bottom:10px;">Add or edit a stock location.</div>
+          </div>
+          <button class="btn ghost" id="close-subteam-editor">Close</button>
+        </div>
+        <form id="stock-subteam-editor-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:6px;">
+          <input type="hidden" name="id" />
+          <div>
+            <label class="small">Name</label>
+            <input name="name" class="input" placeholder="e.g., Electrical, Drivetrain" required />
+          </div>
+          <div>
+            <label class="small">Description</label>
+            <input name="description" class="input" placeholder="Optional context" />
+          </div>
+          <div class="flex-between" style="grid-column: span 2; margin-top:6px;">
+            <div id="stock-subteam-editor-message" class="small"></div>
+            <div class="flex-between" style="gap:8px;">
+              <button type="button" class="btn ghost" id="cancel-subteam-editor">Cancel</button>
+              <button type="submit" class="btn primary">Save</button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 

@@ -58,9 +58,27 @@ export const list = query({
       });
     }
 
+    const catIds = Array.from(
+      new Set(items.map(i => i.catalogItemId?.toString()).filter(Boolean))
+    );
+    const catMap = new Map<string, any>();
+    await Promise.all(
+      catIds.map(async idStr => {
+        const id = ctx.db.normalizeId("catalogItems", idStr);
+        if (!id) return;
+        const item = await ctx.db.get(id);
+        if (item) catMap.set(id.toString(), { ...item, _id: id });
+      })
+    );
+
     const needle = (args.search || "").toLowerCase().trim();
     if (needle) {
       items = items.filter(i => {
+        const cat = i.catalogItemId ? catMap.get(i.catalogItemId.toString()) : null;
+        const aliasList = Array.isArray(cat?.aliases) ? cat.aliases : [];
+        const pathLabels = Array.isArray(cat?.categoryPathLabels)
+          ? cat.categoryPathLabels
+          : [];
         const hay = [
           i.name,
           i.vendor,
@@ -68,28 +86,43 @@ export const list = query({
           i.catalogFullPath,
           i.location,
           i.subteam,
-          subteamMap.get(i.subteamId?.toString() || "")?.name
-        ].filter(Boolean).join(" ").toLowerCase();
+          subteamMap.get(i.subteamId?.toString() || "")?.name,
+          cat?.name,
+          cat?.vendor,
+          cat?.vendorPartNumber,
+          cat?.fullPath,
+          cat?.supplierLink,
+          cat?.type,
+          cat?.subteam,
+          cat?.description,
+          ...aliasList,
+          ...pathLabels
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         return hay.includes(needle);
       });
     }
 
-    const catIds = Array.from(new Set(items.map(i => i.catalogItemId?.toString()).filter(Boolean)));
-    const catMap = new Map<string, any>();
-    await Promise.all(catIds.map(async idStr => {
-      const id = ctx.db.normalizeId("catalogItems", idStr);
-      if (!id) return;
-      const item = await ctx.db.get(id);
-      if (item) catMap.set(id.toString(), { ...item, _id: id });
-    }));
-
     const hydrated = items.map(i => {
       const subteam = i.subteamId ? subteamMap.get(i.subteamId.toString()) : null;
       const cat = i.catalogItemId ? catMap.get(i.catalogItemId.toString()) : null;
+      const catalogOverrides = cat
+        ? {
+            name: cat.name,
+            vendor: cat.vendor,
+            vendorPartNumber: cat.vendorPartNumber,
+            supplierLink: cat.supplierLink,
+            unitCost: cat.unitCost,
+            catalogFullPath: cat.fullPath
+          }
+        : {};
       return {
         ...i,
+        ...catalogOverrides,
         _id: i._id,
-        subteam: i.subteam || subteam?.name,
+        subteam: subteam?.name || i.subteam,
         subteamId: i.subteamId,
         catalogItem: cat
       };
@@ -138,6 +171,17 @@ export const upsertSubteam = mutation({
         updatedAt: now,
         updatedBy: userId ?? subteam.updatedBy
       });
+      const affected = await ctx.db
+        .query("stockItems")
+        .withIndex("by_subteam", q => q.eq("subteamId", id))
+        .collect();
+      for (const item of affected) {
+        await ctx.db.patch(item._id, {
+          subteam: args.name,
+          updatedAt: now,
+          updatedBy: userId ?? item.updatedBy
+        });
+      }
       return { id };
     }
 

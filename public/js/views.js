@@ -2488,10 +2488,8 @@ function renderSubteamList() {
       btn.addEventListener("click", (e) => {
         const id = e.target.closest(".tag-manager-item")?.dataset.id;
         const st = stockSubteams.find((s) => s._id === id);
-        if (!st || !stockSubteamForm) return;
-        stockSubteamForm.elements.id.value = st._id;
-        stockSubteamForm.elements.name.value = st.name || "";
-        stockSubteamForm.elements.description.value = st.description || "";
+        if (!st) return;
+        openSubteamEditor(st);
       });
     });
   stockSubteamList
@@ -2534,21 +2532,40 @@ function openSubteamsModal() {
     stockSubteamMessage.textContent = "";
     stockSubteamMessage.className = "small";
   }
-  stockSubteamForm?.reset();
   renderSubteamList();
   if (stockSubteamsModal) stockSubteamsModal.style.display = "flex";
 }
 
+function openSubteamEditor(subteam = null) {
+  if (!stockSubteamEditorForm) return;
+  stockSubteamEditorForm.reset();
+  stockSubteamEditorForm.elements.id.value = subteam?._id || "";
+  stockSubteamEditorForm.elements.name.value = subteam?.name || "";
+  stockSubteamEditorForm.elements.description.value =
+    subteam?.description || "";
+  if (stockSubteamEditorMessage) {
+    stockSubteamEditorMessage.textContent = "";
+    stockSubteamEditorMessage.className = "small";
+  }
+  if (stockSubteamEditorTitle) {
+    stockSubteamEditorTitle.textContent = subteam
+      ? "Edit location"
+      : "New location";
+  }
+  if (stockSubteamEditorModal)
+    stockSubteamEditorModal.style.display = "flex";
+}
+
 async function saveSubteam(e) {
   e.preventDefault();
-  if (!stockSubteamForm) return;
-  const id = stockSubteamForm.elements.id.value || null;
-  const name = stockSubteamForm.elements.name.value?.trim();
-  const description = stockSubteamForm.elements.description.value?.trim();
+  if (!stockSubteamEditorForm) return;
+  const id = stockSubteamEditorForm.elements.id.value || null;
+  const name = stockSubteamEditorForm.elements.name.value?.trim();
+  const description = stockSubteamEditorForm.elements.description.value?.trim();
   if (!name) return;
-  if (stockSubteamMessage) {
-    stockSubteamMessage.textContent = "Saving...";
-    stockSubteamMessage.className = "small";
+  if (stockSubteamEditorMessage) {
+    stockSubteamEditorMessage.textContent = "Saving...";
+    stockSubteamEditorMessage.className = "small";
   }
   try {
     const url = id ? `/api/stock/subteams/${id}` : "/api/stock/subteams";
@@ -2560,18 +2577,20 @@ async function saveSubteam(e) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to save location");
-    stockSubteamForm.reset();
+    stockSubteamEditorForm.reset();
     await loadSubteams();
     await loadStock();
-    if (stockSubteamMessage) {
-      stockSubteamMessage.textContent = "Saved.";
-      stockSubteamMessage.className = "success";
+    if (stockSubteamEditorMessage) {
+      stockSubteamEditorMessage.textContent = "Saved.";
+      stockSubteamEditorMessage.className = "success";
     }
+    if (stockSubteamEditorModal)
+      stockSubteamEditorModal.style.display = "none";
   } catch (err) {
-    if (stockSubteamMessage) {
-      stockSubteamMessage.textContent =
+    if (stockSubteamEditorMessage) {
+      stockSubteamEditorMessage.textContent =
         err.message || "Failed to save location";
-      stockSubteamMessage.className = "error";
+      stockSubteamEditorMessage.className = "error";
     }
   }
 }

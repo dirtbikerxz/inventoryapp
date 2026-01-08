@@ -570,8 +570,14 @@ stockCatalogSearch?.addEventListener('input', () => {
   clearTimeout(stockCatalogSearchTimer);
   stockCatalogSearchTimer = setTimeout(() => searchStockCatalog(stockCatalogSearch.value || ''), 220);
 });
-stockSubteamForm?.addEventListener('submit', saveSubteam);
-clearSubteamFormBtn?.addEventListener('click', () => { stockSubteamForm?.reset(); });
+stockSubteamEditorForm?.addEventListener('submit', saveSubteam);
+newSubteamBtn?.addEventListener('click', () => openSubteamEditor());
+closeSubteamEditorBtn?.addEventListener('click', () => {
+  if (stockSubteamEditorModal) stockSubteamEditorModal.style.display = 'none';
+});
+cancelSubteamEditorBtn?.addEventListener('click', () => {
+  if (stockSubteamEditorModal) stockSubteamEditorModal.style.display = 'none';
+});
 closeSubteamsModal?.addEventListener('click', () => { if (stockSubteamsModal) stockSubteamsModal.style.display = 'none'; });
 cancelDeleteStock?.addEventListener('click', () => {
   pendingDeleteStockId = null;
@@ -1874,7 +1880,7 @@ function fetchOrderDetails(configHint) {
       e.preventDefault();
       const id = catalogCategoryEditForm.elements.id.value;
       const name = catalogCategoryEditForm.elements.name.value.trim();
-      const parentId = catalogCategoryEditForm.elements.parentId.value || undefined;
+      const parentId = catalogCategoryEditForm.elements.parentId.value;
       if (!id || !name) return;
       const invalidParents = getDescendantIds(id);
       invalidParents.add(String(id));

@@ -412,11 +412,28 @@ const stockLocationInput = document.getElementById("stock-location");
 const stockCategoryInput = document.getElementById("stock-category");
 const stockNotesInput = document.getElementById("stock-notes");
 const stockSubteamsModal = document.getElementById("stock-subteams-modal");
-const stockSubteamForm = document.getElementById("stock-subteam-form");
 const stockSubteamList = document.getElementById("stock-subteam-list");
 const stockSubteamMessage = document.getElementById("stock-subteam-message");
-const clearSubteamFormBtn = document.getElementById("clear-subteam-form");
+const newSubteamBtn = document.getElementById("new-subteam-btn");
 const closeSubteamsModal = document.getElementById("close-subteams-modal");
+const stockSubteamEditorModal = document.getElementById(
+  "stock-subteam-editor-modal",
+);
+const stockSubteamEditorForm = document.getElementById(
+  "stock-subteam-editor-form",
+);
+const stockSubteamEditorTitle = document.getElementById(
+  "stock-subteam-editor-title",
+);
+const stockSubteamEditorMessage = document.getElementById(
+  "stock-subteam-editor-message",
+);
+const closeSubteamEditorBtn = document.getElementById(
+  "close-subteam-editor",
+);
+const cancelSubteamEditorBtn = document.getElementById(
+  "cancel-subteam-editor",
+);
 const stockDeleteModal = document.getElementById("stock-delete-modal");
 const stockDeleteMessage = document.getElementById("stock-delete-message");
 const cancelDeleteStock = document.getElementById("cancel-delete-stock");
