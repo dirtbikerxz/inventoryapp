@@ -64,6 +64,25 @@ const builtinVendors = [
         placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
       }
     ]
+  },
+  {
+    key: 'shareacart',
+    slug: 'share-a-cart',
+    vendor: 'Share-A-Cart',
+    baseUrl: 'https://share-a-cart.com',
+    productUrlTemplate: 'https://share-a-cart.com/get/{partNumber}',
+    description: 'Import carts shared via Share-A-Cart (Amazon, Walmart, and more).',
+    capabilities: {
+      productLookup: null,
+      quickOrderExport: false,
+      quickOrderImport: true,
+      cartSyncPlanned: false
+    },
+    detectionHints: {
+      vendorNames: ['share-a-cart', 'share a cart', 'shareacart'],
+      domains: ['share-a-cart.com']
+    },
+    integrationFields: []
   }
 ];
 

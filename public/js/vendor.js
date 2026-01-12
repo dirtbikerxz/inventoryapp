@@ -2,6 +2,7 @@ function detectVendor(partNum, link) {
   if (!vendorConfigs?.length) return null;
   const normalizedLink = (link || "").toLowerCase();
   const candidates = vendorConfigs.filter((v) => {
+    if (!isVendorFetchable(v)) return false;
     let regex = null;
     if (v.partNumberPattern) {
       try {
@@ -27,8 +28,19 @@ function detectVendor(partNum, link) {
   return null;
 }
 
+function isVendorFetchable(config) {
+  if (!config) return false;
+  if ((config.source || "").toLowerCase() === "builtin") {
+    return Boolean(config.capabilities?.productLookup);
+  }
+  return true;
+}
+
 function renderVendorOptions() {
-  const supported = vendorConfigs.map((v) => v.vendor).filter(Boolean);
+  const supported = vendorConfigs
+    .filter((v) => isVendorFetchable(v))
+    .map((v) => v.vendor)
+    .filter(Boolean);
   const msg = supported.length
     ? `Supported vendors: ${supported.join(", ")}, Shopify-Based Sites`
     : "Supported vendors: none configured yet; use manual entry";
@@ -69,6 +81,7 @@ function resetManualVendorOverride() {
 
 function renderManualVendorOptions() {
   const options = vendorConfigs
+    .filter((v) => isVendorFetchable(v))
     .slice()
     .sort((a, b) => (a.vendor || "").localeCompare(b.vendor || ""));
   const optionHtml = ['<option value="">Other / manual entry</option>']
@@ -196,6 +209,9 @@ function updateVendorImportInstructions() {
   } else if (isMouserVendor(vendorImportVendor)) {
     vendorImportInstructions.textContent =
       'For Mouser, upload the cart XLS/CSV export or paste lines like "2,595-12345".';
+  } else if (isShareACartVendor(vendorImportVendor)) {
+    vendorImportInstructions.textContent =
+      "Paste a Share-A-Cart link or cart ID (Amazon carts work best).";
   } else {
     vendorImportInstructions.textContent = `Import items from ${vendorImportVendor.vendor || "this vendor"} using a CSV or part number list.`;
   }
@@ -502,8 +518,12 @@ function renderVendorImportPreview() {
       .join("");
   }
   if (vendorImportSummary) {
+    const summaryVendor =
+      vendorImportEntries[0]?.vendorName ||
+      vendorImportVendor?.vendor ||
+      "vendor";
     vendorImportSummary.textContent = vendorImportEntries.length
-      ? `Ready to import ${vendorImportEntries.length} item(s) from ${vendorImportVendor?.vendor || "vendor"}.`
+      ? `Ready to import ${vendorImportEntries.length} item(s) from ${summaryVendor}.`
       : "";
   }
   if (vendorImportActions) {
@@ -540,6 +560,36 @@ function isMouserVendor(vendor) {
   const key = (vendor.key || vendor.slug || "").toLowerCase();
   if (key === "mouser") return true;
   return isMouserVendorName(vendor.vendor || vendor.supplier || "");
+}
+
+function isShareACartVendorName(name = "") {
+  const lower = (name || "").toLowerCase();
+  return (
+    lower.includes("share-a-cart") ||
+    lower.includes("share a cart") ||
+    lower.includes("shareacart")
+  );
+}
+
+function isShareACartVendor(vendor) {
+  if (!vendor) return false;
+  if (typeof vendor === "string") return isShareACartVendorName(vendor);
+  const key = (vendor.key || vendor.slug || "").toLowerCase();
+  if (key === "shareacart" || key === "share-a-cart") return true;
+  return isShareACartVendorName(vendor.vendor || vendor.supplier || "");
+}
+
+function isShareACartLink(link) {
+  if (!link) return false;
+  const raw = String(link).trim();
+  if (!raw) return false;
+  try {
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const url = new URL(normalized);
+    return (url.hostname || "").toLowerCase().includes("share-a-cart.com");
+  } catch (err) {
+    return raw.toLowerCase().includes("share-a-cart.com");
+  }
 }
 
 function supportsVendorExport(order) {
@@ -990,10 +1040,20 @@ function shouldReplaceVendorImportUrl(currentUrl, vendorKey) {
 }
 
 function buildImportPayload(entry, vendor) {
-  const vendorName = vendor?.vendor || vendor?.slug || vendor?.key || "Vendor";
-  const vendorKey = (vendor?.key || vendor?.slug || "").toLowerCase();
+  const vendorName =
+    entry.vendorName ||
+    entry.vendor ||
+    vendor?.vendor ||
+    vendor?.slug ||
+    vendor?.key ||
+    "Vendor";
+  const vendorKey = (entry.vendorKey || vendor?.key || vendor?.slug || "")
+    .toLowerCase()
+    .trim();
   const vendorSku =
     entry.productCode ||
+    entry.asin ||
+    entry.sku ||
     entry.digiKeyPartNumber ||
     entry.mouserPartNumber ||
     "";
@@ -1011,6 +1071,16 @@ function buildImportPayload(entry, vendor) {
   }
   if (vendorKey === "mouser" && (entry.mouserPartNumber || vendorSku)) {
     noteParts.push(`Mouser #: ${entry.mouserPartNumber || vendorSku}`);
+  }
+  if (vendorKey === "shareacart" || entry.shareACartId) {
+    if (entry.shareACartId) {
+      noteParts.push(`Share-A-Cart ID: ${entry.shareACartId}`);
+    }
+    if (vendorSku) {
+      const label =
+        (vendorName || "").toLowerCase().includes("amazon") ? "ASIN" : "SKU";
+      noteParts.push(`${label}: ${vendorSku}`);
+    }
   }
   if (entry.customerReference)
     noteParts.push(`Ref: ${entry.customerReference}`);
@@ -1054,6 +1124,67 @@ function parsePriceNumber(text) {
   if (!text) return undefined;
   const num = parseFloat(String(text).replace(/[^0-9\\.]+/g, ""));
   return Number.isFinite(num) ? num : undefined;
+}
+
+async function parseShareACartImport(input) {
+  const trimmed = (input || "").trim();
+  if (!trimmed) return [];
+  const res = await fetch("/api/vendors/shareacart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input: trimmed }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Share-A-Cart import failed.");
+  }
+  const vendorName = String(data.vendorName || data.vendor || "Share-A-Cart");
+  const cartId = data.cartId || undefined;
+  const entries = (data.entries || [])
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const quantityRaw = Number(entry.quantity);
+      const quantity =
+        Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+      const unitPrice =
+        entry.unitPrice !== undefined
+          ? parsePriceNumber(entry.unitPrice)
+          : undefined;
+      const productCode = entry.productCode || entry.sku || entry.asin || "";
+      const description =
+        entry.description ||
+        entry.title ||
+        entry.name ||
+        productCode ||
+        "Cart item";
+      let productUrl = entry.productUrl || entry.url || entry.link;
+      if (
+        !productUrl &&
+        vendorName.toLowerCase().includes("amazon") &&
+        productCode
+      ) {
+        productUrl = `https://www.amazon.com/dp/${encodeURIComponent(productCode)}`;
+      }
+      return {
+        id: generateId("import"),
+        vendorKey: entry.vendorKey || "shareacart",
+        vendorName: entry.vendorName || vendorName,
+        quantity,
+        productCode: productCode || undefined,
+        manufacturerPartNumber:
+          entry.manufacturerPartNumber || productCode || undefined,
+        description,
+        productUrl,
+        unitPrice,
+        shareACartId: entry.shareACartId || cartId,
+        source: entry.source || "share-a-cart",
+      };
+    })
+    .filter(Boolean);
+  if (!entries.length) {
+    throw new Error("No items were found in that Share-A-Cart cart.");
+  }
+  return entries;
 }
 
 async function enrichVendorImportEntries(entries) {
@@ -1139,7 +1270,13 @@ async function handleVendorImportParse() {
   setActionBusy(true, "Parsing import…");
   try {
     let parsed = [];
-    if (file) {
+    if (isShareACartVendor(vendorImportVendor)) {
+      const input = pasted || (file ? await file.text() : "");
+      if (!input) {
+        throw new Error("Paste a Share-A-Cart link or cart ID first.");
+      }
+      parsed = await parseShareACartImport(input);
+    } else if (file) {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       if (ext === "xls" || ext === "xlsx") {
         const workbook = await readWorkbookFromFile(file);
@@ -1205,6 +1342,10 @@ async function submitVendorImportEntries() {
     vendorImportMessage.textContent = "Adding items...";
     vendorImportMessage.className = "small";
   }
+  const importVendorLabel =
+    vendorImportEntries[0]?.vendorName ||
+    vendorImportVendor?.vendor ||
+    "vendor";
   let success = 0;
   const failed = [];
   for (const entry of vendorImportEntries) {
@@ -1236,7 +1377,7 @@ async function submitVendorImportEntries() {
   vendorImportEntries = [];
   renderVendorImportPreview();
   if (vendorImportMessage) {
-    vendorImportMessage.textContent = `Added ${success} item(s) from ${vendorImportVendor.vendor}.`;
+    vendorImportMessage.textContent = `Added ${success} item(s) from ${importVendorLabel}.`;
     vendorImportMessage.className = "small success";
   }
   modal.style.display = "none";
@@ -1251,7 +1392,7 @@ async function submitVendorImportEntries() {
   setOrderSource("manual");
   fetchOrders();
   showBoardMessage(
-    `Imported ${success} request(s) from ${vendorImportVendor.vendor}.`,
+    `Imported ${success} request(s) from ${importVendorLabel}.`,
     "success",
     2500,
   );

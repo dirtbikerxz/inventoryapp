@@ -1006,6 +1006,12 @@ function fetchOrderDetails(configHint) {
         // Prefer an explicit override, otherwise detect from current fetch inputs, and only then fall back to saved vendor.
         let config = configHint || vendorOverride || detectVendor(partNum, link) || findVendorConfig(vendorName);
         if (!config && vendorName) config = findVendorConfig(vendorName);
+        if (isShareACartLink(link) || isShareACartVendorName(vendorName) || isShareACartVendor(config)) {
+          orderMessage.textContent =
+            'Share-A-Cart carts can only be imported from the Vendor Import tab.';
+          orderMessage.className = 'error';
+          return;
+        }
         const vendorKey = (config?.key || config?.slug || config?.vendor || '').toLowerCase();
         if (!partNum && config && link) {
           const extracted = extractPartNumberFromUrl(config, link);

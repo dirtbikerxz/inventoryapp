@@ -267,6 +267,12 @@ async function fetchCatalogDetails() {
   let partNumber = fetchPartInput?.value?.trim() || "";
   const link = fetchLinkInput?.value?.trim();
   const config = detectVendor(partNumber, link) || findVendorConfig(vendor);
+  if (isShareACartLink(link) || isShareACartVendorName(vendor) || isShareACartVendor(config)) {
+    catalogItemMessage.textContent =
+      "Share-A-Cart carts can only be imported from the Vendor Import tab.";
+    catalogItemMessage.className = "error";
+    return;
+  }
   if (!partNumber && config && link) {
     const extracted = extractPartNumberFromUrl(config, link);
     if (extracted) {

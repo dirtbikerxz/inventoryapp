@@ -2169,6 +2169,187 @@ async function getShopifyVariantPrice(targetUrl) {
   }
 }
 
+function extractShareACartId(input) {
+  if (!input) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    const host = (url.hostname || '').toLowerCase();
+    if (host.includes('share-a-cart.com')) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length) {
+        const prefix = parts[0].toLowerCase();
+        if (['get', 'receive', 'embed', 'review'].includes(prefix)) {
+          if (parts[1]) return parts[1];
+        } else if (parts.length === 1) {
+          return parts[0];
+        }
+      }
+      const queryId =
+        url.searchParams.get('cartId') ||
+        url.searchParams.get('cartid') ||
+        url.searchParams.get('id') ||
+        url.searchParams.get('cart');
+      if (queryId) return queryId.trim();
+    }
+  } catch (err) {
+    // Not a URL; fall back to treating input as a cart ID.
+  }
+  return raw.replace(/\s+/g, '') || null;
+}
+
+function pickShareACartValue(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function parseShareACartPrice(value) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  const parsed = parseFloat(String(value).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseShareACartQuantity(value) {
+  if (value === undefined || value === null) return 1;
+  const parsed = parseFloat(String(value).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+  return Math.max(1, Math.round(parsed));
+}
+
+function findShareACartItems(payload) {
+  const candidates = [
+    payload?.items,
+    payload?.cartItems,
+    payload?.cart?.items,
+    payload?.cart?.cartItems,
+    payload?.cart?.cart?.items,
+    payload?.cart?.cart?.cartItems
+  ];
+  const isLikelyItem = item =>
+    item &&
+    typeof item === 'object' &&
+    (item.asin ||
+      item.sku ||
+      item.productId ||
+      item.title ||
+      item.name ||
+      item.quantity ||
+      item.qty);
+  for (const list of candidates) {
+    if (Array.isArray(list) && list.some(isLikelyItem)) return list;
+  }
+  for (const value of Object.values(payload || {})) {
+    if (Array.isArray(value) && value.some(isLikelyItem)) return value;
+  }
+  return [];
+}
+
+function normalizeShareACartItem(item, vendorName, cartId) {
+  if (!item || typeof item !== 'object') return null;
+  const productCode = pickShareACartValue(item, [
+    'asin',
+    'sku',
+    'productId',
+    'itemId',
+    'id',
+    'variantId',
+    'offerId'
+  ]);
+  const description =
+    pickShareACartValue(item, [
+      'title',
+      'name',
+      'productName',
+      'itemName',
+      'itemTitle',
+      'description',
+      'displayName'
+    ]) ||
+    productCode ||
+    'Cart item';
+  const productUrl = pickShareACartValue(item, [
+    'url',
+    'link',
+    'productUrl',
+    'href',
+    'detailPageUrl',
+    'productLink',
+    'canonicalUrl'
+  ]);
+  const unitPrice = parseShareACartPrice(
+    pickShareACartValue(item, [
+      'unitPrice',
+      'price',
+      'priceValue',
+      'unitPriceValue',
+      'itemPrice',
+      'cost'
+    ])
+  );
+  const quantity = parseShareACartQuantity(
+    pickShareACartValue(item, [
+      'quantity',
+      'qty',
+      'count',
+      'cartQty',
+      'cartQuantity',
+      'quantityOrdered'
+    ])
+  );
+  return {
+    vendorKey: 'shareacart',
+    vendorName,
+    quantity,
+    productCode: productCode || undefined,
+    manufacturerPartNumber: productCode || undefined,
+    description,
+    productUrl,
+    unitPrice,
+    shareACartId: cartId,
+    source: 'share-a-cart'
+  };
+}
+
+app.post('/api/vendors/shareacart', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const input = req.body?.input || req.body?.cartId || req.body?.url || '';
+  const cartId = extractShareACartId(input);
+  if (!cartId) {
+    return res.status(400).json({ error: 'Share-A-Cart link or cart ID is required.' });
+  }
+  try {
+    const endpoint = `https://share-a-cart.com/api/get/r/cart/${encodeURIComponent(cartId)}`;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json', 'User-Agent': 'inventoryapp/1.0' }
+    });
+    const data = await resp.json();
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `Share-A-Cart request failed (${resp.status}).`);
+    }
+    const vendorName =
+      data?.vendorDisplayName || data?.vendor || data?.store || data?.cartVendor || 'Share-A-Cart';
+    const items = findShareACartItems(data);
+    const entries = items
+      .map(item => normalizeShareACartItem(item, vendorName, cartId))
+      .filter(Boolean);
+    if (!entries.length) {
+      return res.status(400).json({ error: 'No items found in the Share-A-Cart cart.' });
+    }
+    res.json({ cartId, vendorName, entries });
+  } catch (error) {
+    logger.error(error, 'Share-A-Cart import failed');
+    res.status(500).json({ error: error.message || 'Share-A-Cart import failed.' });
+  }
+});
+
 app.post('/api/vendors/extract', async (req, res) => {
   const user = await requireAuth(req, res, null);
   if (!user) return;
