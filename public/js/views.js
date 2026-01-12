@@ -1244,6 +1244,65 @@ function createCard(order) {
   card.dataset.vendor = getOrderVendor(order) || "";
   if (selected.has(order._id)) card.classList.add("selected");
 
+  const renderShareACartItems = (entry) => {
+    const items = Array.isArray(entry?.shareACartItems)
+      ? entry.shareACartItems
+      : [];
+    if (!items.length) return "";
+    const formatMoney = (val) => {
+      const num = Number(val);
+      return Number.isFinite(num) ? `$${num.toFixed(2)}` : "";
+    };
+    const lines = items
+      .map((item) => {
+        if (!item || typeof item !== "object") return "";
+        const qty = Number(item.quantity) || 1;
+        const title =
+          item.title || item.productCode || item.sku || "Cart item";
+        const unitPrice =
+          item.unitPrice !== undefined ? formatMoney(item.unitPrice) : "";
+        const totalPrice =
+          item.unitPrice !== undefined
+            ? formatMoney((item.unitPrice || 0) * qty)
+            : "";
+        const qtyLabel = qty ? `QTY ${qty}` : "";
+        const priceLabel = unitPrice ? unitPrice : "";
+        const totalLabel =
+          totalPrice && qty > 1
+            ? ` = ${totalPrice}`
+            : totalPrice
+              ? ` · ${totalPrice}`
+              : "";
+        let linkUrl = item.productUrl || "";
+        if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
+          if (linkUrl.startsWith("//")) {
+            linkUrl = `https:${linkUrl}`;
+          } else if (linkUrl.startsWith("/")) {
+            linkUrl = `https://share-a-cart.com${linkUrl}`;
+          } else {
+            linkUrl = `https://${linkUrl}`;
+          }
+        }
+        const link = linkUrl
+          ? `<a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer">link</a>`
+          : "";
+        const metaParts = [priceLabel, qtyLabel].filter(Boolean).join(" · ");
+        const meta = metaParts || totalLabel ? ` — ${metaParts}${totalLabel}` : "";
+        const linkText = link ? ` (${link})` : "";
+        return `<li>${escapeHtml(title)}${meta}${linkText}</li>`;
+      })
+      .filter(Boolean)
+      .join("");
+    return `
+      <div class="meta" style="margin-top:6px;">
+        <div class="small" style="font-weight:600;">Cart items</div>
+        <ul class="small" style="margin:6px 0 0 16px; padding:0;">
+          ${lines}
+        </ul>
+      </div>
+    `;
+  };
+
   card.innerHTML = `
 <div class="flex-between" style="gap:8px;">
   <div>
@@ -1278,6 +1337,7 @@ function createCard(order) {
   })()}
 </div>
 ${order.notes ? `<div class="meta" style="margin-top:4px; white-space:pre-wrap;">Notes: ${escapeHtml(order.notes)}</div>` : ""}
+${renderShareACartItems(order)}
 <div class="meta" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
   <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:200px;">
     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">

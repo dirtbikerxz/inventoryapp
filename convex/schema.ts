@@ -47,6 +47,14 @@ const invoiceStatusEntry = v.object({
   note: v.optional(v.string())
 });
 
+const shareACartItem = v.object({
+  title: v.optional(v.string()),
+  quantity: v.optional(v.number()),
+  unitPrice: v.optional(v.number()),
+  productCode: v.optional(v.string()),
+  productUrl: v.optional(v.string())
+});
+
 const googleCredentials = defineTable({
   projectId: v.optional(v.string()),
   clientEmail: v.optional(v.string()),
@@ -73,6 +81,7 @@ export default defineSchema({
     partName: v.string(),
     vendorPartNumber: v.optional(v.string()),
     partLink: v.optional(v.string()),
+    shareACartItems: v.optional(v.array(shareACartItem)),
     fetchedName: v.optional(v.string()),
     fetchedPrice: v.optional(v.number()),
     supplier: v.optional(v.string()),

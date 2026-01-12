@@ -3,6 +3,14 @@ import { v } from "convex/values";
 import { generateOrderNumber } from "./utils";
 import { normalizeTracking, trackingArg, trackingKey, TrackingInput } from "./trackingHelpers";
 
+const shareACartItem = v.object({
+  title: v.optional(v.string()),
+  quantity: v.optional(v.number()),
+  unitPrice: v.optional(v.number()),
+  productCode: v.optional(v.string()),
+  productUrl: v.optional(v.string())
+});
+
 export const list = query({
   args: {
     status: v.optional(v.string())
@@ -133,6 +141,7 @@ export const create = mutation({
     vendor: v.optional(v.string()),
     vendorPartNumber: v.optional(v.string()),
     partLink: v.optional(v.string()),
+    shareACartItems: v.optional(v.array(shareACartItem)),
     fetchedName: v.optional(v.string()),
     fetchedPrice: v.optional(v.number()),
     category: v.optional(v.string()),
@@ -285,6 +294,7 @@ export const update = mutation({
     supplier: v.optional(v.string()),
     vendor: v.optional(v.string()),
     partLink: v.optional(v.string()),
+    shareACartItems: v.optional(v.array(shareACartItem)),
     vendorPartNumber: v.optional(v.string()),
     trackingNumber: v.optional(v.string()),
     tracking: v.optional(v.array(trackingArg)),
@@ -302,7 +312,7 @@ export const update = mutation({
     const id = ctx.db.normalizeId("orders", args.orderId);
     if (!id) throw new Error("Invalid order id");
     const updates: Record<string, any> = {};
-    ["partName","quantityRequested","priority","supplier","vendor","partLink","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","productCode","notes","approvalStatus","approvedBy","approvedAt","tags"].forEach(k => {
+    ["partName","quantityRequested","priority","supplier","vendor","partLink","shareACartItems","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","productCode","notes","approvalStatus","approvedBy","approvedAt","tags"].forEach(k => {
       const val = (args as any)[k];
       if (val !== undefined) updates[k] = val;
     });

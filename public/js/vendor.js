@@ -1101,6 +1101,9 @@ function buildImportPayload(entry, vendor) {
     tags: [],
     notes: noteParts.join(" · "),
     partLink,
+    shareACartItems: Array.isArray(entry.shareACartItems)
+      ? entry.shareACartItems
+      : undefined,
   };
 }
 
@@ -1131,6 +1134,18 @@ function parsePriceNumber(text) {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function normalizeShareACartUrl(url) {
+  if (!url) return undefined;
+  const raw = String(url).trim();
+  if (!raw) return undefined;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("/")) return `https://share-a-cart.com${raw}`;
+  if (/^share-a-cart\.com/i.test(raw)) return `https://${raw}`;
+  if (/^www\./i.test(raw)) return `https://${raw}`;
+  return `https://${raw}`;
+}
+
 async function parseShareACartImport(input) {
   const trimmed = (input || "").trim();
   if (!trimmed) return [];
@@ -1148,15 +1163,57 @@ async function parseShareACartImport(input) {
   const vendorLabel = vendorName
     ? `Share-A-Cart (${vendorName})`
     : "Share-A-Cart";
+  const rawEntries = Array.isArray(data.entries) ? data.entries : [];
+  const shareItems = rawEntries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const qtyRaw = Number(entry.quantity);
+      const quantity =
+        Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.round(qtyRaw) : 1;
+      const unitPrice =
+        entry.unitPrice !== undefined
+          ? parsePriceNumber(entry.unitPrice)
+          : undefined;
+      const productCode = entry.productCode || entry.sku || entry.asin || "";
+      const title =
+        entry.description ||
+        entry.title ||
+        entry.name ||
+        productCode ||
+        "Cart item";
+      const productUrl = normalizeShareACartUrl(
+        entry.productUrl || entry.url || entry.link,
+      );
+      return {
+        title,
+        quantity,
+        unitPrice,
+        productCode: productCode || undefined,
+        productUrl,
+      };
+    })
+    .filter(Boolean);
   const itemCountRaw = Number(data.itemCount ?? data.cartTotalQty);
   const itemCount = Number.isFinite(itemCountRaw) && itemCountRaw > 0
     ? Math.round(itemCountRaw)
-    : (Array.isArray(data.entries) ? data.entries.length : 0);
+    : shareItems.length;
   const countLabel = itemCount ? ` · ${itemCount} item(s)` : "";
   const description = `Share-A-Cart cart${vendorName ? ` (${vendorName})` : ""}${countLabel}`;
   const cartLink = cartId
     ? `https://share-a-cart.com/get/${encodeURIComponent(cartId)}`
     : trimmed;
+  const totalFromCart = parsePriceNumber(data.cartTotalPrice);
+  const totalFromItems = shareItems.reduce((sum, item) => {
+    if (item.unitPrice === undefined) return sum;
+    const qty = item.quantity || 1;
+    return sum + item.unitPrice * qty;
+  }, 0);
+  const total =
+    totalFromCart !== undefined
+      ? totalFromCart
+      : totalFromItems > 0
+        ? Number(totalFromItems.toFixed(2))
+        : undefined;
   return [
     {
       id: generateId("import"),
@@ -1165,8 +1222,9 @@ async function parseShareACartImport(input) {
       quantity: 1,
       description,
       productUrl: cartLink,
-      unitPrice: undefined,
+      unitPrice: total,
       shareACartId: cartId,
+      shareACartItems: shareItems,
       source: "share-a-cart",
     },
   ];
