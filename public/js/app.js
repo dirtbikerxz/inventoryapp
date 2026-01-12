@@ -110,6 +110,33 @@
       { label: 'High', color: '#ff8b55', sortOrder: 3 },
       { label: 'Urgent', color: '#ff5565', sortOrder: 4 }
     ];
+    const readableColorPalette = [
+      '#F44336',
+      '#E91E63',
+      '#9C27B0',
+      '#673AB7',
+      '#3F51B5',
+      '#2196F3',
+      '#03A9F4',
+      '#00BCD4',
+      '#009688',
+      '#4CAF50',
+      '#8BC34A',
+      '#FFEB3B',
+      '#FFC107',
+      '#FF9800',
+      '#FF5722',
+      '#795548',
+      '#607D8B'
+    ];
+    function pickReadableColor(current) {
+      const normalized = (current || '').toLowerCase();
+      const options = readableColorPalette.filter(
+        (c) => c.toLowerCase() !== normalized
+      );
+      const list = options.length ? options : readableColorPalette;
+      return list[Math.floor(Math.random() * list.length)];
+    }
     const BASE_REIMBURSEMENT_STATUS =
       window.baseReimbursementStatus ||
       (window.baseReimbursementStatus = {
@@ -2323,6 +2350,7 @@ function fetchOrderDetails(configHint) {
             <span class="tag-color-display" style="display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid var(--border); background:${color};"></span>
             <span class="tag-label-display" style="flex:1; min-width:120px;">${escapeHtml(label)}</span>
             <input type="color" class="tag-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <button type="button" class="btn ghost tag-color-random" style="display:none; padding:4px 8px;">Random</button>
             <input type="text" class="tag-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
           </div>
           ${currentUser?.permissions?.canManageTags ? `<div class="flex" style="gap:8px; flex-wrap:wrap;">
@@ -2339,6 +2367,7 @@ function fetchOrderDetails(configHint) {
           const labelInput = row.querySelector('.tag-label-input');
           const colorDisplay = row.querySelector('.tag-color-display');
           const labelDisplay = row.querySelector('.tag-label-display');
+          const randomBtn = row.querySelector('.tag-color-random');
           const editBtn = row.querySelector('button[data-action="edit-tag"]');
           const setEditing = (editing) => {
             row.dataset.editing = editing ? 'true' : 'false';
@@ -2347,11 +2376,17 @@ function fetchOrderDetails(configHint) {
               inp.style.display = editing ? 'inline-block' : 'none';
               inp.disabled = !editing;
             });
+            if (randomBtn) randomBtn.style.display = editing ? 'inline-flex' : 'none';
             if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
             if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
             if (editBtn) editBtn.textContent = editing ? 'Save' : 'Edit';
           };
           setEditing(false);
+          randomBtn?.addEventListener('click', () => {
+            if (!colorInput) return;
+            colorInput.value = pickReadableColor(colorInput.value);
+            if (colorDisplay) colorDisplay.style.background = colorInput.value;
+          });
           editBtn?.addEventListener('click', async () => {
             const editing = row.dataset.editing === 'true';
             if (!editing) {
@@ -2384,7 +2419,11 @@ function fetchOrderDetails(configHint) {
       });
     }
 
-      refreshTagsBtn?.addEventListener('click', () => loadTags());
+    refreshTagsBtn?.addEventListener('click', () => loadTags());
+    tagColorRandomBtn?.addEventListener('click', () => {
+      if (!tagColorInput) return;
+      tagColorInput.value = pickReadableColor(tagColorInput.value);
+    });
     createTagForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!currentUser?.permissions?.canManageTags) return;
@@ -2445,6 +2484,23 @@ function fetchOrderDetails(configHint) {
         : list[0].label || '';
     }
 
+    priorityColorRandomBtn?.addEventListener('click', () => {
+      if (!priorityColorInput) return;
+      priorityColorInput.value = pickReadableColor(priorityColorInput.value);
+    });
+
+    statusColorRandomBtn?.addEventListener('click', () => {
+      if (!statusColorInput) return;
+      statusColorInput.value = pickReadableColor(statusColorInput.value);
+    });
+
+    reimbursementTagColorRandomBtn?.addEventListener('click', () => {
+      if (!reimbursementTagColorInput) return;
+      reimbursementTagColorInput.value = pickReadableColor(
+        reimbursementTagColorInput.value
+      );
+    });
+
     function renderCatalogRequestPriorityOptions() {
       if (!catalogRequestPriority) return;
       const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
@@ -2475,6 +2531,7 @@ function fetchOrderDetails(configHint) {
             <span class="priority-label-display" style="flex:1; min-width:140px;">${escapeHtml(label)}</span>
             <span class="priority-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
             <input type="color" class="priority-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <button type="button" class="btn ghost priority-color-random" style="display:none; padding:4px 8px;">Random</button>
             <input type="text" class="priority-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:140px; width:140px; display:none;" />
             <input type="number" class="priority-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
@@ -2494,6 +2551,7 @@ function fetchOrderDetails(configHint) {
           const colorDisplay = row.querySelector('.priority-color-display');
           const labelDisplay = row.querySelector('.priority-label-display');
           const sortDisplay = row.querySelector('.priority-sort-display');
+          const randomBtn = row.querySelector('.priority-color-random');
           const editBtn = row.querySelector('button[data-action="edit-priority"]');
           const setEditing = (editing) => {
             [colorInput, labelInput, sortInput].forEach((inp) => {
@@ -2501,6 +2559,7 @@ function fetchOrderDetails(configHint) {
               inp.disabled = !editing;
               inp.style.display = editing ? 'inline-block' : 'none';
             });
+            if (randomBtn) randomBtn.style.display = editing ? 'inline-flex' : 'none';
             if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
             if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
             if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
@@ -2508,6 +2567,11 @@ function fetchOrderDetails(configHint) {
             row.dataset.editing = editing ? 'true' : 'false';
           };
           setEditing(false);
+          randomBtn?.addEventListener('click', () => {
+            if (!colorInput) return;
+            colorInput.value = pickReadableColor(colorInput.value);
+            if (colorDisplay) colorDisplay.style.background = colorInput.value;
+          });
           editBtn?.addEventListener('click', async () => {
             const editing = row.dataset.editing === 'true';
             if (!editing) {
@@ -2560,6 +2624,7 @@ function fetchOrderDetails(configHint) {
             <span class="status-label-display" style="flex:1; min-width:160px;">${escapeHtml(label)}</span>
             <span class="status-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
             <input type="color" class="status-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <button type="button" class="btn ghost status-color-random" style="display:none; padding:4px 8px;">Random</button>
             <input type="text" class="status-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
             <input type="number" class="status-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
@@ -2579,6 +2644,7 @@ function fetchOrderDetails(configHint) {
           const colorDisplay = row.querySelector('.status-color-display');
           const labelDisplay = row.querySelector('.status-label-display');
           const sortDisplay = row.querySelector('.status-sort-display');
+          const randomBtn = row.querySelector('.status-color-random');
           const editBtn = row.querySelector('button[data-action="edit-status"]');
           const setEditing = (editing) => {
             [colorInput, labelInput, sortInput].forEach((inp) => {
@@ -2586,6 +2652,7 @@ function fetchOrderDetails(configHint) {
               inp.disabled = !editing;
               inp.style.display = editing ? 'inline-block' : 'none';
             });
+            if (randomBtn) randomBtn.style.display = editing ? 'inline-flex' : 'none';
             if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
             if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
             if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
@@ -2593,6 +2660,11 @@ function fetchOrderDetails(configHint) {
             row.dataset.editing = editing ? 'true' : 'false';
           };
           setEditing(false);
+          randomBtn?.addEventListener('click', () => {
+            if (!colorInput) return;
+            colorInput.value = pickReadableColor(colorInput.value);
+            if (colorDisplay) colorDisplay.style.background = colorInput.value;
+          });
           editBtn?.addEventListener('click', async () => {
             const editing = row.dataset.editing === 'true';
             if (!editing) {
@@ -2645,6 +2717,7 @@ function fetchOrderDetails(configHint) {
             <span class="reimbursement-label-display" style="flex:1; min-width:160px;">${escapeHtml(label)}</span>
             <span class="reimbursement-sort-display small" style="min-width:40px; text-align:right; opacity:0.8;">${sort !== '' ? `Sort: ${escapeHtml(String(sort))}` : ''}</span>
             <input type="color" class="reimbursement-color-input inline-color" value="${color}" data-id="${id}" title="Pick color" style="display:none; width:32px; height:32px; padding:0; border:none; background:transparent;" />
+            <button type="button" class="btn ghost reimbursement-color-random" style="display:none; padding:4px 8px;">Random</button>
             <input type="text" class="reimbursement-label-input input" data-id="${id}" value="${escapeHtml(label)}" placeholder="Label" style="min-width:160px; width:160px; display:none;" />
             <input type="number" class="reimbursement-sort-input input" data-id="${id}" value="${sort}" placeholder="Sort" style="width:80px; display:none;" />
           </div>
@@ -2664,6 +2737,7 @@ function fetchOrderDetails(configHint) {
           const colorDisplay = row.querySelector('.reimbursement-color-display');
           const labelDisplay = row.querySelector('.reimbursement-label-display');
           const sortDisplay = row.querySelector('.reimbursement-sort-display');
+          const randomBtn = row.querySelector('.reimbursement-color-random');
           const editBtn = row.querySelector('button[data-action="edit-reimbursement-tag"]');
           const setEditing = (editing) => {
             [colorInput, labelInput, sortInput].forEach((inp) => {
@@ -2671,6 +2745,7 @@ function fetchOrderDetails(configHint) {
               inp.disabled = !editing;
               inp.style.display = editing ? 'inline-block' : 'none';
             });
+            if (randomBtn) randomBtn.style.display = editing ? 'inline-flex' : 'none';
             if (colorDisplay) colorDisplay.style.display = editing ? 'none' : 'inline-block';
             if (labelDisplay) labelDisplay.style.display = editing ? 'none' : 'inline';
             if (sortDisplay) sortDisplay.style.display = editing ? 'none' : 'inline';
@@ -2678,6 +2753,11 @@ function fetchOrderDetails(configHint) {
             row.dataset.editing = editing ? 'true' : 'false';
           };
           setEditing(false);
+          randomBtn?.addEventListener('click', () => {
+            if (!colorInput) return;
+            colorInput.value = pickReadableColor(colorInput.value);
+            if (colorDisplay) colorDisplay.style.background = colorInput.value;
+          });
           editBtn?.addEventListener('click', async () => {
             const editing = row.dataset.editing === 'true';
             if (!editing) {
