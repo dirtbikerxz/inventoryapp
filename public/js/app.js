@@ -1107,6 +1107,8 @@ function fetchOrderDetails(configHint) {
           if (productCodeInput) {
             if (vendorKey === 'digikey') {
               productCodeInput.value = meta.digiKeyProductNumber || resolvedPN || '';
+            } else if (vendorKey === 'amazon') {
+              productCodeInput.value = meta.asin || meta.partNumber || resolvedPN || '';
             } else {
               productCodeInput.value = '';
             }

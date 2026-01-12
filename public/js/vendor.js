@@ -324,6 +324,7 @@ function extractPartNumberFromUrl(config, link) {
     vendorName.includes("digi-key") ||
     vendorName.includes("digikey");
   const isMouser = vendorKey === "mouser" || vendorName.includes("mouser");
+  const isAmazon = vendorKey === "amazon" || vendorName.includes("amazon");
   const normalized = /^https?:\/\//i.test(link) ? link : `https://${link}`;
   if (isDigikey) {
     try {
@@ -361,6 +362,31 @@ function extractPartNumberFromUrl(config, link) {
       if (partParam) return partParam;
     } catch (err) {
       // ignore parse issues
+    }
+    return null;
+  }
+  if (isAmazon) {
+    try {
+      const urlObj = new URL(normalized);
+      const paramKeys = ["asin", "ASIN", "asin.0", "asin.1", "pd_rd_i"];
+      for (const key of paramKeys) {
+        const val = urlObj.searchParams.get(key);
+        if (val && /^[A-Za-z0-9]{10}$/.test(val)) {
+          return val.toUpperCase();
+        }
+      }
+      const path = urlObj.pathname || "";
+      const pathMatch = path.match(
+        /(?:dp|gp\/product|gp\/aw\/d|gp\/offer-listing|exec\/obidos\/ASIN|o\/ASIN|product)\/([A-Za-z0-9]{10})(?:[/?]|$)/i,
+      );
+      if (pathMatch && pathMatch[1]) return pathMatch[1].toUpperCase();
+      const segments = path.split("/").filter(Boolean);
+      const asinSegment = segments.find((segment) =>
+        /^[A-Za-z0-9]{10}$/.test(segment),
+      );
+      if (asinSegment) return asinSegment.toUpperCase();
+    } catch (err) {
+      // ignore parse issues; fall through to returning null
     }
     return null;
   }

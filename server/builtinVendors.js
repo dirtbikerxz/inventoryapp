@@ -83,6 +83,26 @@ const builtinVendors = [
       domains: ['share-a-cart.com']
     },
     integrationFields: []
+  },
+  {
+    key: 'amazon',
+    slug: 'amazon',
+    vendor: 'Amazon',
+    baseUrl: 'https://www.amazon.com',
+    productUrlTemplate: 'https://www.amazon.com/dp/{partNumber}',
+    partNumberPattern: '^[A-Za-z0-9]{10}$',
+    description: 'Amazon product lookup using page scraping.',
+    capabilities: {
+      productLookup: 'scrape',
+      quickOrderExport: false,
+      quickOrderImport: false,
+      cartSyncPlanned: false
+    },
+    detectionHints: {
+      vendorNames: ['amazon'],
+      domains: ['amazon.com', 'amzn.to', 'a.co']
+    },
+    integrationFields: []
   }
 ];
 

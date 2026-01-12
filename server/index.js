@@ -2010,6 +2010,10 @@ app.post('/api/vendors/resolve', async (req, res) => {
       const result = await mouserService.resolveProductUrl(url);
       return res.json(result);
     }
+    if (def.key === 'amazon') {
+      const result = await resolveAmazonProductUrl(url);
+      return res.json(result);
+    }
     return res.status(501).json({ error: `Resolver not implemented for ${def.vendor}` });
   } catch (error) {
     logger.error(error, 'Vendor URL resolve failed');
@@ -2167,6 +2171,248 @@ async function getShopifyVariantPrice(targetUrl) {
     logger.warn(e, 'Shopify variant fetch failed');
     return null;
   }
+}
+
+const AMAZON_ASIN_REGEX = /^[A-Z0-9]{10}$/i;
+
+function normalizeAmazonAsin(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim().toUpperCase();
+  if (!AMAZON_ASIN_REGEX.test(trimmed)) return null;
+  return trimmed;
+}
+
+function normalizeAmazonUrl(raw) {
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+function buildAmazonProductUrl(asin) {
+  const normalized = normalizeAmazonAsin(asin);
+  if (!normalized) return null;
+  return `https://www.amazon.com/dp/${normalized}`;
+}
+
+function extractAmazonAsinFromUrl(rawUrl) {
+  if (!rawUrl) return null;
+  let parsed;
+  try {
+    parsed = new URL(normalizeAmazonUrl(rawUrl));
+  } catch (err) {
+    return null;
+  }
+  const paramKeys = ['asin', 'ASIN', 'asin.0', 'asin.1', 'pd_rd_i'];
+  for (const key of paramKeys) {
+    const val = parsed.searchParams.get(key);
+    const normalized = normalizeAmazonAsin(val);
+    if (normalized) return normalized;
+  }
+  const path = parsed.pathname || '';
+  const pathMatch = path.match(
+    /(?:dp|gp\/product|gp\/aw\/d|gp\/offer-listing|exec\/obidos\/ASIN|o\/ASIN|product)\/([A-Z0-9]{10})(?:[/?]|$)/i
+  );
+  if (pathMatch) return normalizeAmazonAsin(pathMatch[1]);
+  const segments = path.split('/').filter(Boolean);
+  for (const segment of segments) {
+    const normalized = normalizeAmazonAsin(segment);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function extractAmazonAsinFromHtml(html) {
+  if (!html) return null;
+  const directMatches = [
+    html.match(/data-asin="([A-Z0-9]{10})"/i),
+    html.match(/"asin"\s*:\s*"([A-Z0-9]{10})"/i)
+  ].filter(Boolean);
+  for (const match of directMatches) {
+    const normalized = normalizeAmazonAsin(match[1]);
+    if (normalized) return normalized;
+  }
+  const $ = cheerio.load(html);
+  const inputCandidates = [
+    $('#ASIN').attr('value'),
+    $('input[name="ASIN"]').attr('value'),
+    $('input[name="ASIN.0"]').attr('value'),
+    $('input[name="asin"]').attr('value'),
+    $('input[id="ASIN"]').attr('value')
+  ];
+  for (const candidate of inputCandidates) {
+    const normalized = normalizeAmazonAsin(candidate);
+    if (normalized) return normalized;
+  }
+  const metaCandidates = [
+    $('meta[name="ASIN"]').attr('content'),
+    $('meta[property="og:asin"]').attr('content')
+  ];
+  for (const candidate of metaCandidates) {
+    const normalized = normalizeAmazonAsin(candidate);
+    if (normalized) return normalized;
+  }
+  const canonical =
+    $('link[rel="canonical"]').attr('href') ||
+    $('meta[property="og:url"]').attr('content');
+  const fromCanonical = extractAmazonAsinFromUrl(canonical);
+  if (fromCanonical) return fromCanonical;
+  return null;
+}
+
+function pickAmazonText($, selectors) {
+  for (const selector of selectors) {
+    if (!selector) continue;
+    const text = $(selector).first().text().trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function pickAmazonAttr($, selectors, attr) {
+  for (const selector of selectors) {
+    if (!selector) continue;
+    const value = $(selector).first().attr(attr);
+    if (value) return String(value).trim();
+  }
+  return '';
+}
+
+function cleanAmazonTitle(title) {
+  if (!title) return '';
+  let cleaned = String(title).replace(/\s+/g, ' ').trim();
+  cleaned = cleaned.replace(/^Amazon\.com:\s*/i, '');
+  cleaned = cleaned.replace(/\s*-\s*Amazon\.com$/i, '');
+  cleaned = cleaned.replace(/\s*:\s*Amazon\.com$/i, '');
+  return cleaned;
+}
+
+function extractAmazonTitle($) {
+  const title = pickAmazonText($, [
+    '#productTitle',
+    '#title #productTitle',
+    'span#productTitle',
+    '#title',
+    'h1 span#productTitle'
+  ]);
+  if (title) return cleanAmazonTitle(title);
+  const metaTitle = pickAmazonAttr($, [
+    'meta[property="og:title"]',
+    'meta[name="twitter:title"]',
+    'meta[name="title"]'
+  ], 'content');
+  return cleanAmazonTitle(metaTitle);
+}
+
+function extractAmazonPrice($) {
+  const metaPrice = pickAmazonAttr($, [
+    'meta[property="product:price:amount"]',
+    'meta[property="og:price:amount"]'
+  ], 'content');
+  if (metaPrice) return metaPrice;
+  const textPrice = pickAmazonText($, [
+    '#priceblock_ourprice',
+    '#priceblock_dealprice',
+    '#priceblock_saleprice',
+    '#price_inside_buybox',
+    '#corePriceDisplay_desktop_feature_div .a-price .a-offscreen',
+    '#corePriceDisplay_mobile_feature_div .a-price .a-offscreen',
+    '#apex_desktop_newAccordionRow .a-price .a-offscreen',
+    '.a-price .a-offscreen'
+  ]);
+  if (textPrice) return textPrice;
+  const whole = $('#corePriceDisplay_desktop_feature_div .a-price-whole')
+    .first()
+    .text()
+    .trim();
+  if (whole) {
+    const fraction = $('#corePriceDisplay_desktop_feature_div .a-price-fraction')
+      .first()
+      .text()
+      .trim();
+    return fraction ? `${whole}.${fraction}` : whole;
+  }
+  return '';
+}
+
+function amazonRequestHeaders() {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36'
+  };
+}
+
+async function resolveAmazonProductUrl(rawUrl) {
+  const normalized = normalizeAmazonUrl(rawUrl);
+  let asin = extractAmazonAsinFromUrl(normalized);
+  if (asin) {
+    return {
+      partNumber: asin,
+      productUrl: buildAmazonProductUrl(asin) || normalized
+    };
+  }
+  try {
+    const resp = await fetch(normalized, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: amazonRequestHeaders()
+    });
+    const finalUrl = resp.url || normalized;
+    asin = extractAmazonAsinFromUrl(finalUrl);
+    let html = '';
+    if (!asin) {
+      html = await resp.text();
+      asin = extractAmazonAsinFromHtml(html);
+    }
+    return {
+      partNumber: asin,
+      productUrl: buildAmazonProductUrl(asin) || finalUrl
+    };
+  } catch (error) {
+    logger.warn(error, 'Failed to resolve Amazon URL');
+    return { partNumber: null, productUrl: normalized };
+  }
+}
+
+async function lookupAmazonPart(partNumber) {
+  const asin = normalizeAmazonAsin(partNumber) || extractAmazonAsinFromUrl(partNumber);
+  if (!asin) {
+    throw new Error('ASIN is required for Amazon lookup.');
+  }
+  const targetUrl = buildAmazonProductUrl(asin);
+  const resp = await fetch(targetUrl, {
+    headers: amazonRequestHeaders()
+  });
+  if (!resp.ok) {
+    throw new Error(`Amazon request failed (${resp.status}).`);
+  }
+  const html = await resp.text();
+  const finalUrl = resp.url || targetUrl;
+  const $ = cheerio.load(html);
+  const parsedAsin =
+    extractAmazonAsinFromHtml(html) ||
+    extractAmazonAsinFromUrl(finalUrl) ||
+    asin;
+  const title = extractAmazonTitle($);
+  const price = extractAmazonPrice($);
+  const picks = {
+    name: title || '',
+    price: price || undefined
+  };
+  const meta = {
+    asin: parsedAsin,
+    partNumber: parsedAsin
+  };
+  const productUrl = buildAmazonProductUrl(parsedAsin) || finalUrl;
+  if (!title && !price) {
+    return {
+      picks,
+      productUrl,
+      meta,
+      message: 'Amazon page did not return product details.'
+    };
+  }
+  return { picks, productUrl, meta };
 }
 
 function extractShareACartId(input) {
@@ -2388,6 +2634,17 @@ app.post('/api/vendors/extract', async (req, res) => {
           return res.status(400).json({ error: 'partNumber is required for Mouser lookup' });
         }
         const result = await mouserService.lookupPart(partNumber, settings);
+        return res.json({
+          ...result,
+          vendor: def.vendor,
+          vendorKey: def.key
+        });
+      }
+      if (def.key === 'amazon') {
+        if (!partNumber) {
+          return res.status(400).json({ error: 'partNumber is required for Amazon lookup' });
+        }
+        const result = await lookupAmazonPart(partNumber);
         return res.json({
           ...result,
           vendor: def.vendor,

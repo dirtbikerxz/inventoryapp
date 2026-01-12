@@ -3072,6 +3072,64 @@ function hideGroupDetailModal() {
 function openGroupDetailModal(groupInfo, items) {
   if (!groupDetailModal) return;
   const gid = groupInfo?.id;
+  const renderShareACartItems = (entry) => {
+    const list = Array.isArray(entry?.shareACartItems)
+      ? entry.shareACartItems
+      : [];
+    if (!list.length) return "";
+    const formatMoney = (val) => {
+      const num = Number(val);
+      return Number.isFinite(num) ? `$${num.toFixed(2)}` : "";
+    };
+    const rows = list
+      .map((item) => {
+        if (!item || typeof item !== "object") return "";
+        const qty = Number(item.quantity) || 1;
+        const title =
+          item.title || item.productCode || item.sku || "Cart item";
+        const unitPrice =
+          item.unitPrice !== undefined ? formatMoney(item.unitPrice) : "";
+        const totalPrice =
+          item.unitPrice !== undefined
+            ? formatMoney((item.unitPrice || 0) * qty)
+            : "";
+        let linkUrl = item.productUrl || "";
+        if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
+          if (linkUrl.startsWith("//")) {
+            linkUrl = `https:${linkUrl}`;
+          } else if (linkUrl.startsWith("/")) {
+            linkUrl = `https://share-a-cart.com${linkUrl}`;
+          } else {
+            linkUrl = `https://${linkUrl}`;
+          }
+        }
+        const link = linkUrl
+          ? `<a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer">link</a>`
+          : "";
+        const qtyLabel = qty ? `QTY ${qty}` : "";
+        const priceLabel = unitPrice ? unitPrice : "";
+        const totalLabel =
+          totalPrice && qty > 1
+            ? ` = ${totalPrice}`
+            : totalPrice
+              ? ` · ${totalPrice}`
+              : "";
+        const metaParts = [priceLabel, qtyLabel].filter(Boolean).join(" · ");
+        const meta = metaParts || totalLabel ? ` — ${metaParts}${totalLabel}` : "";
+        const linkText = link ? ` (${link})` : "";
+        return `<li>${escapeHtml(title)}${meta}${linkText}</li>`;
+      })
+      .filter(Boolean)
+      .join("");
+    return `
+      <div class="small" style="margin-top:6px;">
+        <div style="font-weight:600;">Cart items</div>
+        <ul style="margin:6px 0 0 16px; padding:0;">
+          ${rows}
+        </ul>
+      </div>
+    `;
+  };
   if (groupDetailTitle) groupDetailTitle.textContent = groupInfo?.title || "Grouped order";
   const statusTagLabel = groupInfo?.statusTag || "";
   const statusTagColor = statusTagLabel ? getStatusTagColor(statusTagLabel) : null;
@@ -3112,6 +3170,7 @@ function openGroupDetailModal(groupInfo, items) {
             ${o.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(o.priority)}; color:${getPriorityColor(o.priority)};">${o.priority}</span>` : ""}
             ${renderTagChips(o.tags || [])}
           </div>
+          ${renderShareACartItems(o)}
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
           ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
