@@ -2343,7 +2343,18 @@ app.post('/api/vendors/shareacart', async (req, res) => {
     if (!entries.length) {
       return res.status(400).json({ error: 'No items found in the Share-A-Cart cart.' });
     }
-    res.json({ cartId, vendorName, entries });
+    const itemCount = Number.isFinite(Number(data?.cartTotalQty))
+      ? Number(data.cartTotalQty)
+      : entries.length;
+    res.json({
+      cartId,
+      vendorName,
+      entries,
+      itemCount,
+      cartTotalQty: data?.cartTotalQty,
+      cartTotalPrice: data?.cartTotalPrice,
+      cartCurrency: data?.cartCCY
+    });
   } catch (error) {
     logger.error(error, 'Share-A-Cart import failed');
     res.status(500).json({ error: error.message || 'Share-A-Cart import failed.' });

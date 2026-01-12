@@ -500,6 +500,8 @@ function renderVendorImportPreview() {
           vendorTags.push(`Digi-Key: ${escapeHtml(entry.digiKeyPartNumber)}`);
         if (entry.mouserPartNumber)
           vendorTags.push(`Mouser: ${escapeHtml(entry.mouserPartNumber)}`);
+        if (entry.shareACartId)
+          vendorTags.push(`Share-A-Cart: ${escapeHtml(entry.shareACartId)}`);
         if (entry.manufacturerPartNumber)
           vendorTags.push(`MPN: ${escapeHtml(entry.manufacturerPartNumber)}`);
         return `
@@ -595,6 +597,8 @@ function isShareACartLink(link) {
 function supportsVendorExport(order) {
   if (!order) return false;
   const vendorName = order.vendor || order.supplier || "";
+  const link = order.partLink || order.supplierLink || "";
+  if (isShareACartVendorName(vendorName) || isShareACartLink(link)) return true;
   if (isDigikeyVendorName(vendorName) || isMouserVendorName(vendorName))
     return true;
   const config = findVendorConfig(vendorName);
@@ -603,6 +607,7 @@ function supportsVendorExport(order) {
 
 function supportsVendorExportByName(name) {
   if (!name) return false;
+  if (isShareACartVendorName(name)) return true;
   if (isDigikeyVendorName(name) || isMouserVendorName(name)) return true;
   const config = findVendorConfig(name);
   return Boolean(config?.capabilities?.quickOrderExport);
@@ -1138,53 +1143,33 @@ async function parseShareACartImport(input) {
   if (!res.ok) {
     throw new Error(data.error || "Share-A-Cart import failed.");
   }
-  const vendorName = String(data.vendorName || data.vendor || "Share-A-Cart");
+  const vendorName = String(data.vendorName || data.vendor || "");
   const cartId = data.cartId || undefined;
-  const entries = (data.entries || [])
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return null;
-      const quantityRaw = Number(entry.quantity);
-      const quantity =
-        Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
-      const unitPrice =
-        entry.unitPrice !== undefined
-          ? parsePriceNumber(entry.unitPrice)
-          : undefined;
-      const productCode = entry.productCode || entry.sku || entry.asin || "";
-      const description =
-        entry.description ||
-        entry.title ||
-        entry.name ||
-        productCode ||
-        "Cart item";
-      let productUrl = entry.productUrl || entry.url || entry.link;
-      if (
-        !productUrl &&
-        vendorName.toLowerCase().includes("amazon") &&
-        productCode
-      ) {
-        productUrl = `https://www.amazon.com/dp/${encodeURIComponent(productCode)}`;
-      }
-      return {
-        id: generateId("import"),
-        vendorKey: entry.vendorKey || "shareacart",
-        vendorName: entry.vendorName || vendorName,
-        quantity,
-        productCode: productCode || undefined,
-        manufacturerPartNumber:
-          entry.manufacturerPartNumber || productCode || undefined,
-        description,
-        productUrl,
-        unitPrice,
-        shareACartId: entry.shareACartId || cartId,
-        source: entry.source || "share-a-cart",
-      };
-    })
-    .filter(Boolean);
-  if (!entries.length) {
-    throw new Error("No items were found in that Share-A-Cart cart.");
-  }
-  return entries;
+  const vendorLabel = vendorName
+    ? `Share-A-Cart (${vendorName})`
+    : "Share-A-Cart";
+  const itemCountRaw = Number(data.itemCount ?? data.cartTotalQty);
+  const itemCount = Number.isFinite(itemCountRaw) && itemCountRaw > 0
+    ? Math.round(itemCountRaw)
+    : (Array.isArray(data.entries) ? data.entries.length : 0);
+  const countLabel = itemCount ? ` · ${itemCount} item(s)` : "";
+  const description = `Share-A-Cart cart${vendorName ? ` (${vendorName})` : ""}${countLabel}`;
+  const cartLink = cartId
+    ? `https://share-a-cart.com/get/${encodeURIComponent(cartId)}`
+    : trimmed;
+  return [
+    {
+      id: generateId("import"),
+      vendorKey: "shareacart",
+      vendorName: vendorLabel,
+      quantity: 1,
+      description,
+      productUrl: cartLink,
+      unitPrice: undefined,
+      shareACartId: cartId,
+      source: "share-a-cart",
+    },
+  ];
 }
 
 async function enrichVendorImportEntries(entries) {
@@ -1473,6 +1458,28 @@ function exportOrdersForVendor(orderList, vendorNameHint) {
   }
   const vendorName =
     vendorNameHint || orderList[0]?.vendor || orderList[0]?.supplier || "";
+  const shareLinks = orderList
+    .map((o) => o.partLink || o.supplierLink || "")
+    .filter((link) => isShareACartLink(link));
+  if (isShareACartVendorName(vendorName) || shareLinks.length) {
+    const uniqueLinks = [...new Set(shareLinks.map((l) => l.trim()).filter(Boolean))];
+    const cartLink = uniqueLinks[0] || "";
+    if (!cartLink) {
+      showBoardMessage("No Share-A-Cart link found to export.", "error", 2500);
+      return;
+    }
+    openVendorExportModal({
+      vendorName: "Share-A-Cart",
+      description: "Copy the Share-A-Cart link to load the cart for ordering.",
+      text: cartLink,
+      message:
+        uniqueLinks.length > 1
+          ? "Multiple Share-A-Cart links detected; using the first one."
+          : "Copy the Share-A-Cart link to place the order.",
+      messageType: uniqueLinks.length > 1 ? "error" : undefined,
+    });
+    return;
+  }
   if (isDigikeyVendorName(vendorName)) {
     const csv = buildDigikeyCartCsv(orderList);
     downloadTextFile(
