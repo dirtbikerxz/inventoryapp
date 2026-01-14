@@ -1109,6 +1109,8 @@ function fetchOrderDetails(configHint) {
               productCodeInput.value = meta.digiKeyProductNumber || resolvedPN || '';
             } else if (vendorKey === 'amazon') {
               productCodeInput.value = meta.asin || meta.partNumber || resolvedPN || '';
+            } else if (vendorKey === 'revrobotics') {
+              productCodeInput.value = meta.sku || meta.partNumber || resolvedPN || '';
             } else {
               productCodeInput.value = '';
             }

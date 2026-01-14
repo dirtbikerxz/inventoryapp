@@ -325,6 +325,11 @@ function extractPartNumberFromUrl(config, link) {
     vendorName.includes("digikey");
   const isMouser = vendorKey === "mouser" || vendorName.includes("mouser");
   const isAmazon = vendorKey === "amazon" || vendorName.includes("amazon");
+  const isRevRobotics =
+    vendorKey === "revrobotics" ||
+    vendorKey === "rev-robotics" ||
+    vendorName.includes("rev robotics") ||
+    vendorName.includes("revrobotics");
   const normalized = /^https?:\/\//i.test(link) ? link : `https://${link}`;
   if (isDigikey) {
     try {
@@ -387,6 +392,27 @@ function extractPartNumberFromUrl(config, link) {
       if (asinSegment) return asinSegment.toUpperCase();
     } catch (err) {
       // ignore parse issues; fall through to returning null
+    }
+    return null;
+  }
+  if (isRevRobotics) {
+    try {
+      const urlObj = new URL(normalized);
+      const searchKeys = ["search_query", "search", "sku", "product"];
+      for (const key of searchKeys) {
+        const val = urlObj.searchParams.get(key);
+        if (val && /^REV-[A-Za-z0-9-]+$/.test(val)) {
+          return val.toUpperCase();
+        }
+      }
+      const parts = (urlObj.pathname || "").split("/").filter(Boolean);
+      for (const part of parts) {
+        if (/^REV-[A-Za-z0-9-]+$/.test(part)) {
+          return part.toUpperCase();
+        }
+      }
+    } catch (err) {
+      // ignore parse issues
     }
     return null;
   }

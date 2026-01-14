@@ -2014,6 +2014,10 @@ app.post('/api/vendors/resolve', async (req, res) => {
       const result = await resolveAmazonProductUrl(url);
       return res.json(result);
     }
+    if (def.key === 'revrobotics') {
+      const result = await resolveRevRoboticsProductUrl(url);
+      return res.json(result);
+    }
     return res.status(501).json({ error: `Resolver not implemented for ${def.vendor}` });
   } catch (error) {
     logger.error(error, 'Vendor URL resolve failed');
@@ -2415,6 +2419,362 @@ async function lookupAmazonPart(partNumber) {
   return { picks, productUrl, meta };
 }
 
+const REV_ROBOTICS_SKU_REGEX = /^REV-[A-Z0-9-]+$/i;
+
+function normalizeRevRoboticsSku(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim().toUpperCase();
+  if (!REV_ROBOTICS_SKU_REGEX.test(trimmed)) return null;
+  return trimmed;
+}
+
+function normalizeRevRoboticsUrl(raw) {
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+function buildRevRoboticsProductUrl(sku) {
+  const normalized = normalizeRevRoboticsSku(sku);
+  if (!normalized) return null;
+  return `https://www.revrobotics.com/${normalized}/`;
+}
+
+function cleanRevRoboticsTitle(title) {
+  if (!title) return '';
+  let cleaned = String(title).replace(/\s+/g, ' ').trim();
+  cleaned = cleaned.replace(/\s*-\s*REV Robotics$/i, '');
+  cleaned = cleaned.replace(/\s*\|\s*REV Robotics$/i, '');
+  return cleaned;
+}
+
+function extractRevRoboticsSkuFromUrl(rawUrl) {
+  if (!rawUrl) return null;
+  let parsed;
+  try {
+    parsed = new URL(normalizeRevRoboticsUrl(rawUrl));
+  } catch (err) {
+    return null;
+  }
+  const searchKeys = ['search_query', 'search', 'sku', 'product'];
+  for (const key of searchKeys) {
+    const val = parsed.searchParams.get(key);
+    const normalized = normalizeRevRoboticsSku(val);
+    if (normalized) return normalized;
+  }
+  const parts = (parsed.pathname || '').split('/').filter(Boolean);
+  for (const part of parts) {
+    const normalized = normalizeRevRoboticsSku(part);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function extractRevRoboticsSkuFromHtml(html) {
+  if (!html) return null;
+  const directMatch = html.match(/data-product-sku[^>]*>([^<]+)</i);
+  if (directMatch) {
+    const normalized = normalizeRevRoboticsSku(directMatch[1]);
+    if (normalized) return normalized;
+  }
+  const $ = cheerio.load(html);
+  const skuText =
+    $('[data-product-sku]').first().text().trim() ||
+    $('.productView-info-value--sku').first().text().trim() ||
+    $('meta[itemprop="sku"]').attr('content');
+  return normalizeRevRoboticsSku(skuText);
+}
+
+function pickRevRoboticsText($, selectors) {
+  for (const selector of selectors) {
+    if (!selector) continue;
+    const text = $(selector).first().text().trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function pickRevRoboticsAttr($, selectors, attr) {
+  for (const selector of selectors) {
+    if (!selector) continue;
+    const value = $(selector).first().attr(attr);
+    if (value) return String(value).trim();
+  }
+  return '';
+}
+
+function extractRevRoboticsTitle($) {
+  const title = pickRevRoboticsText($, ['h1.productView-title', 'h1']);
+  if (title) return cleanRevRoboticsTitle(title);
+  const metaTitle = pickRevRoboticsAttr($, [
+    'meta[property="og:title"]',
+    'meta[name="twitter:title"]',
+    'meta[name="title"]'
+  ], 'content');
+  return cleanRevRoboticsTitle(metaTitle);
+}
+
+function extractRevRoboticsPrice($) {
+  const metaPrice = pickRevRoboticsAttr($, [
+    'meta[property="product:price:amount"]',
+    'meta[property="og:price:amount"]',
+    'meta[itemprop="price"]'
+  ], 'content');
+  if (metaPrice) return metaPrice;
+  const priceText = pickRevRoboticsText($, [
+    '[data-product-price-without-tax]',
+    '.productView-price .price--main',
+    '.price--withoutTax',
+    '.price--main'
+  ]);
+  return priceText;
+}
+
+function extractRevRoboticsGraphQLToken(html) {
+  if (!html) return null;
+  const escapedMatch = html.match(/graphQLToken\\":\\"([^\\"]+)\\"/);
+  if (escapedMatch?.[1]) return escapedMatch[1];
+  const plainMatch = html.match(/graphQLToken":"([^"]+)"/);
+  if (plainMatch?.[1]) return plainMatch[1];
+  return null;
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function cleanRevRoboticsVariantLabel(label, sku) {
+  if (!label) return '';
+  let cleaned = String(label).replace(/\s+/g, ' ').trim();
+  if (sku) {
+    const escaped = escapeRegex(sku);
+    cleaned = cleaned.replace(new RegExp(`^\\(?${escaped}\\)?\\s*[-:]*\\s*`, 'i'), '');
+  }
+  return cleaned.trim();
+}
+
+function buildRevRoboticsVariantTitle(productName, labels, sku) {
+  const baseName = productName ? cleanRevRoboticsTitle(productName) : '';
+  const cleanedLabels = (labels || [])
+    .map(label => cleanRevRoboticsVariantLabel(label, sku))
+    .filter(Boolean);
+  const uniqueLabels = [...new Set(cleanedLabels)];
+  const labelText = uniqueLabels.join(' · ').trim();
+  if (baseName && labelText) {
+    if (!labelText.toLowerCase().includes(baseName.toLowerCase())) {
+      return `${baseName} - ${labelText}`;
+    }
+    return labelText;
+  }
+  return labelText || baseName;
+}
+
+async function fetchRevRoboticsVariantDetails(sku, token) {
+  if (!sku || !token) return null;
+  const query = `query RevSkuLookup {
+    site {
+      product(sku: "${sku}") {
+        name
+        path
+        variants(first: 100) {
+          edges {
+            node {
+              sku
+              prices { price { value currencyCode } }
+              options {
+                edges {
+                  node {
+                    values { edges { node { label } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }`;
+  try {
+    const resp = await fetch('https://www.revrobotics.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ query })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data?.errors?.length) {
+      logger.warn({ status: resp.status, errors: data?.errors }, 'REV Robotics GraphQL lookup failed');
+      return null;
+    }
+    const product = data?.data?.site?.product;
+    if (!product) return null;
+    const variants = (product.variants?.edges || []).map(edge => edge?.node).filter(Boolean);
+    const match = variants.find(node => (node?.sku || '').toUpperCase() === sku);
+    const optionLabels = [];
+    if (match?.options?.edges?.length) {
+      match.options.edges.forEach(edge => {
+        const values = edge?.node?.values?.edges || [];
+        values.forEach(valueEdge => {
+          const label = valueEdge?.node?.label;
+          if (label) optionLabels.push(label);
+        });
+      });
+    }
+    const priceValue = match?.prices?.price?.value;
+    return {
+      productName: product.name,
+      productPath: product.path,
+      optionLabels,
+      priceValue
+    };
+  } catch (error) {
+    logger.warn(error, 'REV Robotics GraphQL lookup failed');
+    return null;
+  }
+}
+
+function revRoboticsRequestHeaders() {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36'
+  };
+}
+
+function normalizeRevRoboticsLink(link) {
+  if (!link) return null;
+  const trimmed = String(link).trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('/')) return `https://www.revrobotics.com${trimmed}`;
+  return `https://www.revrobotics.com/${trimmed.replace(/^\//, '')}`;
+}
+
+function extractRevRoboticsProductLinkFromSearch($, sku) {
+  const desired = normalizeRevRoboticsSku(sku);
+  const cards = $('.productGrid .product');
+  for (const card of cards.toArray()) {
+    const skuText = $(card).find('[data-test-info-type="sku"], .card-text--sku').text().trim();
+    if (desired && skuText && skuText.toUpperCase() === desired) {
+      const link = $(card).find('h3.card-title a').attr('href');
+      if (link) return normalizeRevRoboticsLink(link);
+    }
+  }
+  const firstLink =
+    $('.productGrid h3.card-title a').first().attr('href') ||
+    $('.productGrid a').first().attr('href');
+  return normalizeRevRoboticsLink(firstLink);
+}
+
+async function resolveRevRoboticsProductUrl(rawUrl) {
+  const normalized = normalizeRevRoboticsUrl(rawUrl);
+  let sku = extractRevRoboticsSkuFromUrl(normalized);
+  if (sku) {
+    return {
+      partNumber: sku,
+      productUrl: normalized
+    };
+  }
+  try {
+    const resp = await fetch(normalized, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: revRoboticsRequestHeaders()
+    });
+    const finalUrl = resp.url || normalized;
+    sku = extractRevRoboticsSkuFromUrl(finalUrl);
+    let html = '';
+    if (!sku) {
+      html = await resp.text();
+      sku = extractRevRoboticsSkuFromHtml(html);
+    }
+    return {
+      partNumber: sku,
+      productUrl: finalUrl
+    };
+  } catch (error) {
+    logger.warn(error, 'Failed to resolve REV Robotics URL');
+    return { partNumber: null, productUrl: normalized };
+  }
+}
+
+async function lookupRevRoboticsPart(partNumber) {
+  const sku = normalizeRevRoboticsSku(partNumber) || extractRevRoboticsSkuFromUrl(partNumber);
+  if (!sku) {
+    throw new Error('REV Robotics part number is required.');
+  }
+  const productUrl = buildRevRoboticsProductUrl(sku);
+  let resp = await fetch(productUrl, {
+    headers: revRoboticsRequestHeaders()
+  });
+  if (!resp.ok) {
+    const searchUrl = `https://www.revrobotics.com/search.php?search_query=${encodeURIComponent(sku)}`;
+    const searchResp = await fetch(searchUrl, {
+      headers: revRoboticsRequestHeaders()
+    });
+    if (!searchResp.ok) {
+      throw new Error(`REV Robotics request failed (${resp.status}).`);
+    }
+    const searchHtml = await searchResp.text();
+    const $search = cheerio.load(searchHtml);
+    const link = extractRevRoboticsProductLinkFromSearch($search, sku);
+    if (!link) {
+      return {
+        picks: {},
+        productUrl: searchUrl,
+        meta: { sku, partNumber: sku },
+        message: 'No REV Robotics results found for that part number.'
+      };
+    }
+    resp = await fetch(link, { headers: revRoboticsRequestHeaders() });
+    if (!resp.ok) {
+      throw new Error(`REV Robotics request failed (${resp.status}).`);
+    }
+  }
+  const html = await resp.text();
+  const finalUrl = resp.url || productUrl;
+  const $ = cheerio.load(html);
+  let title = extractRevRoboticsTitle($);
+  let price = extractRevRoboticsPrice($);
+  const pageSku = extractRevRoboticsSkuFromHtml(html) || sku;
+  const token = extractRevRoboticsGraphQLToken(html);
+  const variantDetails = await fetchRevRoboticsVariantDetails(sku, token);
+  const variantTitle = buildRevRoboticsVariantTitle(
+    variantDetails?.productName,
+    variantDetails?.optionLabels,
+    sku
+  );
+  if (variantTitle) title = variantTitle;
+  if (variantDetails?.priceValue !== undefined && variantDetails.priceValue !== null) {
+    const priceNum = Number(variantDetails.priceValue);
+    if (Number.isFinite(priceNum)) price = priceNum.toFixed(2);
+  }
+  const graphPath = variantDetails?.productPath;
+  const graphUrl = graphPath ? `https://www.revrobotics.com${graphPath}` : null;
+  const resolvedUrl = graphUrl || finalUrl;
+  const picks = {
+    name: title || '',
+    price: price || undefined
+  };
+  const meta = {
+    sku: pageSku,
+    partNumber: pageSku,
+    productName: variantDetails?.productName || undefined
+  };
+  if (!title && !price) {
+    return {
+      picks,
+      productUrl: resolvedUrl,
+      meta,
+      message: 'REV Robotics page did not return product details.'
+    };
+  }
+  return { picks, productUrl: resolvedUrl, meta };
+}
+
 function extractShareACartId(input) {
   if (!input) return null;
   const raw = String(input).trim();
@@ -2645,6 +3005,17 @@ app.post('/api/vendors/extract', async (req, res) => {
           return res.status(400).json({ error: 'partNumber is required for Amazon lookup' });
         }
         const result = await lookupAmazonPart(partNumber);
+        return res.json({
+          ...result,
+          vendor: def.vendor,
+          vendorKey: def.key
+        });
+      }
+      if (def.key === 'revrobotics') {
+        if (!partNumber) {
+          return res.status(400).json({ error: 'partNumber is required for REV Robotics lookup' });
+        }
+        const result = await lookupRevRoboticsPart(partNumber);
         return res.json({
           ...result,
           vendor: def.vendor,

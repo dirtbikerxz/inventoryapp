@@ -103,6 +103,26 @@ const builtinVendors = [
       domains: ['amazon.com', 'amzn.to', 'a.co']
     },
     integrationFields: []
+  },
+  {
+    key: 'revrobotics',
+    slug: 'rev-robotics',
+    vendor: 'REV Robotics',
+    baseUrl: 'https://www.revrobotics.com',
+    productUrlTemplate: 'https://www.revrobotics.com/{partNumber}/',
+    partNumberPattern: '^REV-[A-Za-z0-9\\-]+$',
+    description: 'REV Robotics product lookup using BigCommerce page scraping.',
+    capabilities: {
+      productLookup: 'scrape',
+      quickOrderExport: false,
+      quickOrderImport: false,
+      cartSyncPlanned: false
+    },
+    detectionHints: {
+      vendorNames: ['rev robotics', 'revrobotics'],
+      domains: ['revrobotics.com']
+    },
+    integrationFields: []
   }
 ];
 
