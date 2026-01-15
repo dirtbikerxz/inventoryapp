@@ -1993,6 +1993,7 @@ function fetchOrderDetails(configHint) {
         const path = escapeHtml((item.fullPath || (item.categoryPathLabels || []).join(' / ')) || '');
         const vendor = escapeHtml(item.vendor || '');
         const sku = escapeHtml(item.vendorPartNumber || '');
+        const link = item.supplierLink ? escapeHtml(item.supplierLink) : '';
         return `<div class="card" data-id="${item._id || item.id}" style="margin-bottom:8px;">
           <div class="flex-between" style="gap:8px; align-items:flex-start;">
             <div>
@@ -2001,6 +2002,7 @@ function fetchOrderDetails(configHint) {
               <div class="small">${vendor || ''} ${sku ? '· ' + sku : ''}</div>
             </div>
             <div class="flex-between" style="gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+              ${link ? `<a class="btn ghost" href="${link}" target="_blank" rel="noopener noreferrer">Link</a>` : ''}
               ${canEdit ? `<button class="btn ghost" data-action="edit">Edit</button>` : ''}
               ${canEdit ? `<button class="btn ghost" data-action="delete" style="color:var(--danger);">Delete</button>` : ''}
               <button class="btn primary" data-action="request">Request</button>
