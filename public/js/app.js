@@ -2474,6 +2474,7 @@ function fetchOrderDetails(configHint) {
         select.value = list[0].label;
       }
       renderCatalogRequestPriorityOptions();
+      renderVendorImportPriorityOptions();
     }
 
     function renderStatusTagOptions(current) {
@@ -2522,6 +2523,20 @@ function fetchOrderDetails(configHint) {
         catalogRequestPriority.value = current;
       } else if (list.length) {
         catalogRequestPriority.value = list[0].label;
+      }
+    }
+
+    function renderVendorImportPriorityOptions() {
+      if (!vendorImportPrioritySelect) return;
+      const list = priorityList && priorityList.length ? priorityList : defaultPriorities;
+      const current = vendorImportPrioritySelect.value || defaultPriorityLabel();
+      vendorImportPrioritySelect.innerHTML = list
+        .map(p => `<option value="${p.label}">${p.label}</option>`)
+        .join('');
+      if (list.some(p => p.label === current)) {
+        vendorImportPrioritySelect.value = current;
+      } else if (list.length) {
+        vendorImportPrioritySelect.value = list[0].label;
       }
     }
 

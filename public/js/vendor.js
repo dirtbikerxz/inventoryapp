@@ -1232,6 +1232,11 @@ function shouldReplaceVendorImportUrl(currentUrl, vendorKey) {
   return false;
 }
 
+function getVendorImportPriority() {
+  const selected = vendorImportPrioritySelect?.value;
+  return selected || defaultPriorityLabel();
+}
+
 function buildImportPayload(entry, vendor) {
   const vendorName =
     entry.vendorName ||
@@ -1289,7 +1294,7 @@ function buildImportPayload(entry, vendor) {
     partName,
     quantityRequested: entry.quantity || 1,
     unitCost: entry.unitPrice !== undefined ? entry.unitPrice : undefined,
-    priority: defaultPriorityLabel(),
+    priority: getVendorImportPriority(),
     tags: [],
     notes: noteParts.join(" · "),
     partLink,

@@ -479,6 +479,9 @@ const orderImportFields = document.getElementById("order-import-fields");
 const orderStandardFields = document.getElementById("order-standard-fields");
 const orderSubmitBar = document.getElementById("order-submit-bar");
 const vendorImportSelect = document.getElementById("vendor-import-vendor");
+const vendorImportPrioritySelect = document.getElementById(
+  "vendor-import-priority",
+);
 const vendorImportInstructions = document.getElementById(
   "vendor-import-instructions",
 );
