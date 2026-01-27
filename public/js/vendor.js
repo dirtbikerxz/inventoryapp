@@ -209,6 +209,9 @@ function updateVendorImportInstructions() {
   } else if (isMouserVendor(vendorImportVendor)) {
     vendorImportInstructions.textContent =
       'For Mouser, upload the cart XLS/CSV export or paste lines like "2,595-12345".';
+  } else if (isWcpVendor(vendorImportVendor)) {
+    vendorImportInstructions.textContent =
+      'For WCP, upload the cart CSV (columns SKU and QTY) or paste lines like "WCP-0921,1".';
   } else if (isShareACartVendor(vendorImportVendor)) {
     vendorImportInstructions.textContent =
       "Paste a Share-A-Cart link or cart ID (Amazon carts work best).";
@@ -552,9 +555,13 @@ function renderVendorImportPreview() {
           vendorTags.push(`Digi-Key: ${escapeHtml(entry.digiKeyPartNumber)}`);
         if (entry.mouserPartNumber)
           vendorTags.push(`Mouser: ${escapeHtml(entry.mouserPartNumber)}`);
+        const wcpSku =
+          entry.wcpSku ||
+          (entry.vendorKey === "wcp" ? entry.productCode || entry.sku : "");
+        if (wcpSku) vendorTags.push(`WCP SKU: ${escapeHtml(wcpSku)}`);
         if (entry.shareACartId)
           vendorTags.push(`Share-A-Cart: ${escapeHtml(entry.shareACartId)}`);
-        if (entry.manufacturerPartNumber)
+        if (entry.manufacturerPartNumber && !wcpSku)
           vendorTags.push(`MPN: ${escapeHtml(entry.manufacturerPartNumber)}`);
         return `
       <div class="card" data-import-id="${entry.id}" style="margin-bottom:8px; padding:10px;">
@@ -616,6 +623,23 @@ function isMouserVendor(vendor) {
   return isMouserVendorName(vendor.vendor || vendor.supplier || "");
 }
 
+function isWcpVendorName(name = "") {
+  const lower = (name || "").toLowerCase();
+  return (
+    lower.includes("wcp") ||
+    lower.includes("wcproducts") ||
+    lower.includes("west coast products")
+  );
+}
+
+function isWcpVendor(vendor) {
+  if (!vendor) return false;
+  if (typeof vendor === "string") return isWcpVendorName(vendor);
+  const key = (vendor.key || vendor.slug || "").toLowerCase();
+  if (key === "wcp") return true;
+  return isWcpVendorName(vendor.vendor || vendor.supplier || "");
+}
+
 function isShareACartVendorName(name = "") {
   const lower = (name || "").toLowerCase();
   return (
@@ -651,7 +675,11 @@ function supportsVendorExport(order) {
   const vendorName = order.vendor || order.supplier || "";
   const link = order.partLink || order.supplierLink || "";
   if (isShareACartVendorName(vendorName) || isShareACartLink(link)) return true;
-  if (isDigikeyVendorName(vendorName) || isMouserVendorName(vendorName))
+  if (
+    isDigikeyVendorName(vendorName) ||
+    isMouserVendorName(vendorName) ||
+    isWcpVendorName(vendorName)
+  )
     return true;
   const config = findVendorConfig(vendorName);
   return Boolean(config?.capabilities?.quickOrderExport);
@@ -661,6 +689,7 @@ function supportsVendorExportByName(name) {
   if (!name) return false;
   if (isShareACartVendorName(name)) return true;
   if (isDigikeyVendorName(name) || isMouserVendorName(name)) return true;
+  if (isWcpVendorName(name)) return true;
   const config = findVendorConfig(name);
   return Boolean(config?.capabilities?.quickOrderExport);
 }
@@ -669,6 +698,7 @@ function parseVendorCsv(vendor, text) {
   if (!text) return [];
   if (isDigikeyVendor(vendor)) return parseDigikeyCartCsv(text);
   if (isMouserVendor(vendor)) return parseMouserCartCsv(text);
+  if (isWcpVendor(vendor)) return parseWcpCartCsv(text);
   throw new Error(
     `CSV import is not implemented for ${vendor.vendor || "this vendor"}.`,
   );
@@ -678,6 +708,7 @@ function parseVendorQuickText(vendor, text) {
   if (!text) return [];
   if (isDigikeyVendor(vendor)) return parseDigikeyQuickText(text);
   if (isMouserVendor(vendor)) return parseMouserQuickText(text);
+  if (isWcpVendor(vendor)) return parseWcpQuickText(text);
   throw new Error(
     `Quick entry import is not implemented for ${vendor.vendor || "this vendor"}.`,
   );
@@ -1040,6 +1071,104 @@ function parseMouserQuickText(text) {
     .filter(Boolean);
 }
 
+function parseWcpCartCsv(text) {
+  const rows = parseCsvText(text);
+  if (!rows.length) return [];
+  const normalizeHeader = (cell = "") =>
+    cell
+      .replace(/\ufeff/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  const headerRow = rows.shift().map(normalizeHeader);
+  const headerMap = {};
+  headerRow.forEach((name, idx) => {
+    if (name) headerMap[name] = idx;
+  });
+  const skuIdx =
+    headerMap.sku ??
+    headerMap.partnumber ??
+    headerMap.part ??
+    headerMap.product ??
+    headerMap.item;
+  const qtyIdx =
+    headerMap.qty ??
+    headerMap.quantity ??
+    headerMap.orderqty ??
+    headerMap.orderquantity;
+  if (skuIdx === undefined || qtyIdx === undefined) {
+    throw new Error("Unrecognized WCP cart CSV format.");
+  }
+  const entries = [];
+  rows.forEach((row) => {
+    const qtyRaw = row[qtyIdx];
+    const quantity = Number((qtyRaw || "").replace(/[^0-9.]/g, "")) || 0;
+    if (!quantity) return;
+    const sku = (row[skuIdx] || "").trim();
+    if (!sku) return;
+    entries.push({
+      id: generateId("import"),
+      vendorKey: "wcp",
+      quantity,
+      wcpSku: sku,
+      sku,
+      productCode: sku,
+      manufacturerPartNumber: sku,
+      description: sku,
+      customerReference: "",
+      unitPrice: undefined,
+      productUrl: buildWcpProductUrl(sku),
+      source: "csv",
+    });
+  });
+  if (!entries.length) throw new Error("No items found in the CSV file.");
+  return entries;
+}
+
+function parseWcpQuickText(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const tokens = line.split(/[\s,;\t]+/).filter(Boolean);
+      if (!tokens.length) return null;
+      const firstIsQty = /^[0-9]+$/.test(tokens[0]);
+      const lastIsQty = /^[0-9]+$/.test(tokens[tokens.length - 1]);
+      let quantity = 1;
+      let partNumber = "";
+      if (firstIsQty && tokens.length > 1) {
+        quantity = Number(tokens[0]) || 1;
+        partNumber = tokens.slice(1).join(" ");
+      } else if (lastIsQty && tokens.length > 1) {
+        quantity = Number(tokens[tokens.length - 1]) || 1;
+        partNumber = tokens.slice(0, -1).join(" ");
+      } else if (tokens.length >= 2) {
+        partNumber = tokens[0];
+        quantity = Number(tokens[1]) || 1;
+      } else {
+        partNumber = tokens[0];
+      }
+      partNumber = partNumber.trim();
+      if (!partNumber) return null;
+      return {
+        id: generateId("import"),
+        vendorKey: "wcp",
+        quantity: quantity || 1,
+        wcpSku: partNumber,
+        sku: partNumber,
+        productCode: partNumber,
+        manufacturerPartNumber: partNumber,
+        description: partNumber,
+        customerReference: "",
+        unitPrice: undefined,
+        productUrl: buildWcpProductUrl(partNumber),
+        source: "text",
+      };
+    })
+    .filter(Boolean);
+}
+
 function buildDigikeySearchUrl(partNumber) {
   if (!partNumber) return undefined;
   return `https://www.digikey.com/en/products/search?keywords=${encodeURIComponent(partNumber)}`;
@@ -1050,10 +1179,16 @@ function buildMouserSearchUrl(partNumber) {
   return `https://www.mouser.com/ProductDetail/${encodeURIComponent(partNumber)}`;
 }
 
+function buildWcpProductUrl(partNumber) {
+  if (!partNumber) return undefined;
+  return `https://wcproducts.com/products/${encodeURIComponent(partNumber)}`;
+}
+
 function buildVendorProductSearchUrl(vendorKey, partNumber) {
   const key = (vendorKey || "").toLowerCase();
   if (key === "digikey") return buildDigikeySearchUrl(partNumber);
   if (key === "mouser") return buildMouserSearchUrl(partNumber);
+  if (key === "wcp") return buildWcpProductUrl(partNumber);
   return undefined;
 }
 
@@ -1093,6 +1228,7 @@ function shouldReplaceVendorImportUrl(currentUrl, vendorKey) {
   const key = (vendorKey || "").toLowerCase();
   if (key === "digikey") return isDigikeySearchUrl(currentUrl);
   if (key === "mouser") return isMouserSearchUrl(currentUrl);
+  if (key === "wcp") return true;
   return false;
 }
 
@@ -1111,6 +1247,7 @@ function buildImportPayload(entry, vendor) {
     entry.productCode ||
     entry.asin ||
     entry.sku ||
+    entry.wcpSku ||
     entry.digiKeyPartNumber ||
     entry.mouserPartNumber ||
     "";
@@ -1128,6 +1265,9 @@ function buildImportPayload(entry, vendor) {
   }
   if (vendorKey === "mouser" && (entry.mouserPartNumber || vendorSku)) {
     noteParts.push(`Mouser #: ${entry.mouserPartNumber || vendorSku}`);
+  }
+  if (vendorKey === "wcp" && vendorSku) {
+    noteParts.push(`WCP SKU: ${vendorSku}`);
   }
   if (vendorKey === "shareacart" || entry.shareACartId) {
     if (entry.shareACartId) {
@@ -1290,10 +1430,12 @@ async function enrichVendorImportEntries(entries) {
     vendorImportVendor.vendor ||
     ""
   ).toLowerCase();
-  if (!vendorKey || !["digikey", "mouser"].includes(vendorKey)) return;
+  if (!vendorKey || !["digikey", "mouser", "wcp"].includes(vendorKey)) return;
   for (const entry of entries) {
     const candidatePart =
       entry.productCode ||
+      entry.wcpSku ||
+      entry.sku ||
       entry.digiKeyPartNumber ||
       entry.mouserPartNumber ||
       entry.manufacturerPartNumber;
@@ -1302,6 +1444,9 @@ async function enrichVendorImportEntries(entries) {
     if (!details) continue;
     if (!entry.description && details.picks?.name)
       entry.description = details.picks.name;
+    if (vendorKey === "wcp" && details.picks?.name) {
+      entry.description = details.picks.name;
+    }
     if (
       details.productUrl &&
       shouldReplaceVendorImportUrl(entry.productUrl, vendorKey)
@@ -1533,6 +1678,17 @@ function buildMouserQuickOrderCsv(orders) {
   );
 }
 
+function buildWcpCartCsv(orders) {
+  const header = ["SKU", "QTY"];
+  const rows = orders.map((order) => {
+    const quantity = Number(order.quantityRequested) || 1;
+    const sku = String(order.vendorPartNumber || order.productCode || "").trim();
+    return [sku, quantity];
+  });
+  const lines = [header].concat(rows);
+  return lines.map((row) => row.map(csvQuote).join(",")).join("\r\n");
+}
+
 function buildMouserQuickOrderLines(orders) {
   return orders
     .map((order) => {
@@ -1616,6 +1772,16 @@ function exportOrdersForVendor(orderList, vendorNameHint) {
         : undefined,
       messageType: skipped ? "error" : undefined,
     });
+    return;
+  }
+  if (isWcpVendorName(vendorName)) {
+    const csv = buildWcpCartCsv(orderList);
+    downloadTextFile(
+      `wcp-cart-${formatFilenameDate()}.csv`,
+      csv,
+      "text/csv;charset=utf-8;",
+    );
+    showBoardMessage("WCP cart CSV downloaded.", "info", 2200);
     return;
   }
   showBoardMessage("Export not available for this vendor yet.", "error", 2500);
