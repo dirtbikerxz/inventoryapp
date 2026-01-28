@@ -861,7 +861,7 @@
       <div class="flex-between" style="align-items:flex-start;">
         <div>
           <div class="page-title" id="stock-modal-title" style="font-size:20px;">Add Stock</div>
-        <div class="subtitle" id="stock-modal-subtitle" style="margin-bottom:10px;">Pick a catalog part to track and set the starting quantity and location.</div>
+        <div class="subtitle" id="stock-modal-subtitle" style="margin-bottom:10px;">Pick a catalog part to track and set the starting quantities and location.</div>
         </div>
         <button class="btn ghost" id="close-stock-modal">Close</button>
       </div>
@@ -880,6 +880,17 @@
         <div>
           <label class="small">Quantity on hand</label>
           <input id="stock-quantity" class="input" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label class="small">Track used stock</label>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+            <input id="stock-used-toggle" type="checkbox" />
+            <span class="small" style="margin:0;">Enable used counter</span>
+          </label>
+        </div>
+        <div id="stock-used-wrap" style="display:none;">
+          <label class="small">Used stock</label>
+          <input id="stock-used" class="input" type="number" min="0" value="0" />
         </div>
         <div>
           <label class="small">Low stock alert at</label>

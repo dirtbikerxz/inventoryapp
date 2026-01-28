@@ -841,7 +841,17 @@ app.get('/api/stock', async (req, res) => {
 app.post('/api/stock', async (req, res) => {
   const user = await requireAuth(req, res, 'canManageStock');
   if (!user) return;
-  const { catalogItemId, subteamId, quantityOnHand, lowStockThreshold, location, category, notes } = req.body || {};
+  const {
+    catalogItemId,
+    subteamId,
+    quantityOnHand,
+    usedQuantity,
+    trackUsedStock,
+    lowStockThreshold,
+    location,
+    category,
+    notes
+  } = req.body || {};
   if (!catalogItemId || quantityOnHand === undefined) {
     return res.status(400).json({ error: 'catalogItemId and quantityOnHand are required' });
   }
@@ -850,6 +860,8 @@ app.post('/api/stock', async (req, res) => {
       catalogItemId,
       subteamId,
       quantityOnHand,
+      usedQuantity,
+      trackUsedStock,
       lowStockThreshold,
       location,
       category,
@@ -870,7 +882,7 @@ app.post('/api/stock', async (req, res) => {
 app.patch('/api/stock/:id', async (req, res) => {
   const user = await requireAuth(req, res, 'canManageStock');
   if (!user) return;
-  const { subteamId, lowStockThreshold, location, category, notes, quantityOnHand } = req.body || {};
+  const { subteamId, lowStockThreshold, location, category, notes, quantityOnHand, usedQuantity, trackUsedStock } = req.body || {};
   try {
     const result = await client.mutation('stock:update', {
       id: req.params.id,
@@ -880,6 +892,8 @@ app.patch('/api/stock/:id', async (req, res) => {
       category,
       notes,
       quantityOnHand,
+      usedQuantity,
+      trackUsedStock,
       userId: user._id?.toString()
     });
     res.json(result);
@@ -895,12 +909,14 @@ app.post('/api/stock/:id/adjust', async (req, res) => {
   if (!user.permissions?.canEditStock && !user.permissions?.canManageStock) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  const { delta, quantityOnHand } = req.body || {};
+  const { delta, quantityOnHand, usedDelta, usedQuantity } = req.body || {};
   try {
     const result = await client.mutation('stock:adjustQuantity', {
       id: req.params.id,
       delta,
       quantityOnHand,
+      usedDelta,
+      usedQuantity,
       userId: user._id?.toString()
     });
     res.json(result);

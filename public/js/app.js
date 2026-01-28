@@ -597,6 +597,9 @@ stockCatalogSearch?.addEventListener('input', () => {
   clearTimeout(stockCatalogSearchTimer);
   stockCatalogSearchTimer = setTimeout(() => searchStockCatalog(stockCatalogSearch.value || ''), 220);
 });
+stockUsedToggle?.addEventListener('change', () => {
+  setUsedStockTracking(stockUsedToggle.checked);
+});
 stockSubteamEditorForm?.addEventListener('submit', saveSubteam);
 newSubteamBtn?.addEventListener('click', () => openSubteamEditor());
 closeSubteamEditorBtn?.addEventListener('click', () => {

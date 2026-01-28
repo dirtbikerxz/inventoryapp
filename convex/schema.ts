@@ -313,6 +313,8 @@ export default defineSchema({
   location: v.optional(v.string()),
   category: v.optional(v.string()),
   quantityOnHand: v.number(),
+  usedQuantity: v.optional(v.number()),
+  trackUsedStock: v.optional(v.boolean()),
   lowStockThreshold: v.optional(v.number()),
   notes: v.optional(v.string()),
   createdAt: v.number(),

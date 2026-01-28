@@ -1964,13 +1964,21 @@ function setSelectedStockCatalogItem(item) {
   }
 }
 
+function setUsedStockTracking(enabled) {
+  if (stockUsedWrap) stockUsedWrap.style.display = enabled ? "block" : "none";
+  if (stockUsedInput && !enabled) stockUsedInput.value = 0;
+}
+
 function buildStockCard(item, canAdjustStock) {
   const qty = item.quantityOnHand ?? 0;
+  const usedQty = item.usedQuantity ?? 0;
+  const showUsed = Boolean(item.trackUsedStock);
   const low = item.lowStockThreshold;
   const isEmpty = qty <= 0;
   const isLow = !isEmpty && low !== undefined && qty <= low;
   const card = document.createElement("div");
   card.className = "card stock-card";
+  if (showUsed) card.classList.add("stock-has-used");
   if (isLow) card.classList.add("stock-low");
   if (isEmpty) card.classList.add("stock-empty");
   card.dataset.id = item._id;
@@ -1980,6 +1988,16 @@ function buildStockCard(item, canAdjustStock) {
     : isLow
       ? '<span class="stock-low-text">Low</span>'
       : "";
+  const usedRow = showUsed
+    ? `
+      <div class="stock-adjust stock-adjust-inline">
+        <span class="stock-label">Used</span>
+        ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" data-field="used" style="padding:6px 10px;">-</button>` : ""}
+        <div class="stock-level">${usedQty}</div>
+        ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" data-field="used" style="padding:6px 10px;">+</button>` : ""}
+      </div>
+    `
+    : "";
   card.innerHTML = `
   <div class="flex-between" style="gap:8px; align-items:flex-start;">
     <div>
@@ -1995,13 +2013,18 @@ function buildStockCard(item, canAdjustStock) {
       </div>
     </div>
   </div>
-  <div class="stock-row">
-    <div class="stock-adjust">
-      ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" style="padding:6px 10px;">-</button>` : ""}
-      <div class="stock-level">${qty}</div>
-      ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" style="padding:6px 10px;">+</button>` : ""}
-      ${statusText ? `<div style="display:flex; align-items:center; gap:6px; margin-left:4px;">${statusText}</div>` : ""}
+  <div class="stock-row stock-row-counts">
+    <div class="stock-counts">
+      <div class="stock-adjust stock-adjust-inline">
+        ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="-1" data-field="onHand" style="padding:6px 10px;">-</button>` : ""}
+        <div class="stock-level">${qty}</div>
+        ${canAdjustStock ? `<button class="btn ghost" data-action="adjust-stock" data-id="${item._id}" data-delta="1" data-field="onHand" style="padding:6px 10px;">+</button>` : ""}
+      </div>
+      ${usedRow}
     </div>
+  </div>
+  <div class="stock-row stock-row-meta">
+    <div class="stock-status-line">${statusText || ""}</div>
     <div class="stock-actions" style="margin-left:auto;">
       ${item.supplierLink ? `<a class="btn ghost" href="${escapeHtml(item.supplierLink)}" target="_blank" style="padding:4px 8px;">Link</a>` : ""}
       ${currentUser?.permissions?.canManageStock ? `<button class="btn ghost" data-action="edit-stock" data-id="${item._id}" style="padding:4px 8px;">Edit</button>` : ""}
@@ -2147,8 +2170,9 @@ function renderStockGrid() {
       btn.addEventListener("click", async (e) => {
         const id = e.target.dataset.id;
         const delta = Number(e.target.dataset.delta);
+        const field = e.target.dataset.field || "onHand";
         if (!id || !Number.isFinite(delta)) return;
-        await adjustStockQuantity(id, delta);
+        await adjustStockQuantity(id, delta, undefined, field);
       });
     });
   stockGrid
@@ -2250,8 +2274,10 @@ function resetStockModal() {
   if (stockModalTitle) stockModalTitle.textContent = "Add Stock";
   if (stockModalSubtitle)
     stockModalSubtitle.textContent =
-      "Pick a catalog part to track and set the starting quantity.";
+      "Pick a catalog part to track and set the starting quantities.";
   if (stockCategoryInput) stockCategoryInput.value = "";
+  if (stockUsedToggle) stockUsedToggle.checked = false;
+  setUsedStockTracking(false);
   if (stockCatalogSelected)
     stockCatalogSelected.textContent = "Search for a catalog item to track.";
 }
@@ -2275,6 +2301,9 @@ function openStockModal(item = null) {
   if (item) {
     stockForm.elements.id.value = item._id || "";
     if (stockQuantityInput) stockQuantityInput.value = item.quantityOnHand ?? 0;
+    if (stockUsedInput) stockUsedInput.value = item.usedQuantity ?? 0;
+    if (stockUsedToggle) stockUsedToggle.checked = Boolean(item.trackUsedStock);
+    setUsedStockTracking(Boolean(item.trackUsedStock));
     if (stockLowInput) stockLowInput.value = item.lowStockThreshold ?? "";
     if (stockLocationInput) stockLocationInput.value = item.location || "";
     if (stockCategoryInput) stockCategoryInput.value = item.category || "";
@@ -2306,6 +2335,8 @@ async function saveStockForm(e) {
   if (!stockForm) return;
   const id = stockForm.elements.id.value || null;
   const quantity = Number(stockQuantityInput?.value || 0);
+  const usedQuantity = Number(stockUsedInput?.value || 0);
+  const trackUsedStock = Boolean(stockUsedToggle?.checked);
   const low =
     stockLowInput?.value === "" ? undefined : Number(stockLowInput?.value);
   const subteamId = stockSubteamSelect ? stockSubteamSelect.value : "";
@@ -2338,6 +2369,11 @@ async function saveStockForm(e) {
         body: JSON.stringify({
           subteamId: subteamId === "" ? null : subteamId,
           quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
+          usedQuantity:
+            trackUsedStock && Number.isFinite(usedQuantity)
+              ? usedQuantity
+              : undefined,
+          trackUsedStock,
           lowStockThreshold: Number.isFinite(low) ? low : undefined,
           location,
           category,
@@ -2362,6 +2398,11 @@ async function saveStockForm(e) {
           subteamId: subteamId || undefined,
           subteam: subteamId ? subteamName || undefined : "Common Stock",
           quantityOnHand: Number.isFinite(quantity) ? quantity : undefined,
+          usedQuantity:
+            trackUsedStock && Number.isFinite(usedQuantity)
+              ? usedQuantity
+              : undefined,
+          trackUsedStock,
           lowStockThreshold: Number.isFinite(low) ? low : undefined,
           location,
           category,
@@ -2382,6 +2423,11 @@ async function saveStockForm(e) {
           selectedStockCatalogItem?._id || selectedStockCatalogItem?.id,
         subteamId: subteamId === "" ? undefined : subteamId,
         quantityOnHand: Number.isFinite(quantity) ? quantity : 0,
+        usedQuantity:
+          trackUsedStock && Number.isFinite(usedQuantity)
+            ? usedQuantity
+            : undefined,
+        trackUsedStock,
         lowStockThreshold: Number.isFinite(low) ? low : undefined,
         location,
         category,
@@ -2457,7 +2503,7 @@ async function saveStockForm(e) {
   }
 }
 
-async function adjustStockQuantity(id, delta, absolute) {
+async function adjustStockQuantity(id, delta, absolute, field = "onHand") {
   if (
     !currentUser?.permissions?.canEditStock &&
     !currentUser?.permissions?.canManageStock
@@ -2466,18 +2512,29 @@ async function adjustStockQuantity(id, delta, absolute) {
     return;
   }
   try {
+    const payload =
+      field === "used"
+        ? {
+            usedDelta: absolute === undefined ? delta : undefined,
+            usedQuantity: absolute,
+          }
+        : {
+            delta: absolute === undefined ? delta : undefined,
+            quantityOnHand: absolute,
+          };
     const res = await fetch(`/api/stock/${id}/adjust`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        delta: absolute === undefined ? delta : undefined,
-        quantityOnHand: absolute,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to update stock");
-    const nextQty = data.quantityOnHand;
-    if (!mergeStockItem(id, { quantityOnHand: nextQty })) {
+    const updates = {};
+    if (data.quantityOnHand !== undefined)
+      updates.quantityOnHand = data.quantityOnHand;
+    if (data.usedQuantity !== undefined)
+      updates.usedQuantity = data.usedQuantity;
+    if (!mergeStockItem(id, updates)) {
       await loadStock();
     }
   } catch (err) {

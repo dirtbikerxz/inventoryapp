@@ -225,6 +225,8 @@ export const create = mutation({
     catalogItemId: v.string(),
     subteamId: v.optional(v.string()),
     quantityOnHand: v.number(),
+    usedQuantity: v.optional(v.number()),
+    trackUsedStock: v.optional(v.boolean()),
     lowStockThreshold: v.optional(v.number()),
     location: v.optional(v.string()),
     category: v.optional(v.string()),
@@ -251,6 +253,7 @@ export const create = mutation({
       throw new Error("Item already exists in location");
     }
 
+    const trackUsedStock = Boolean(args.trackUsedStock);
     const id = await ctx.db.insert("stockItems", {
       catalogItemId: catalogId,
       name: catalogItem.name,
@@ -264,6 +267,8 @@ export const create = mutation({
       location: args.location,
       category: args.category,
       quantityOnHand: normalizeQuantity(args.quantityOnHand, 0),
+      usedQuantity: trackUsedStock ? normalizeQuantity(args.usedQuantity, 0) : undefined,
+      trackUsedStock,
       lowStockThreshold: args.lowStockThreshold !== undefined ? normalizeQuantity(args.lowStockThreshold, 0) : undefined,
       notes: args.notes,
       createdAt: now,
@@ -284,6 +289,8 @@ export const update = mutation({
     category: v.optional(v.string()),
     notes: v.optional(v.string()),
     quantityOnHand: v.optional(v.number()),
+    usedQuantity: v.optional(v.number()),
+    trackUsedStock: v.optional(v.boolean()),
     userId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
@@ -317,6 +324,17 @@ export const update = mutation({
     if (args.quantityOnHand !== undefined) {
       updates.quantityOnHand = normalizeQuantity(args.quantityOnHand, item.quantityOnHand);
     }
+    const nextTrackUsed =
+      args.trackUsedStock !== undefined ? Boolean(args.trackUsedStock) : Boolean(item.trackUsedStock);
+    if (args.trackUsedStock !== undefined) {
+      updates.trackUsedStock = nextTrackUsed;
+      if (!nextTrackUsed) {
+        updates.usedQuantity = undefined;
+      }
+    }
+    if (args.usedQuantity !== undefined && nextTrackUsed) {
+      updates.usedQuantity = normalizeQuantity(args.usedQuantity, item.usedQuantity ?? 0);
+    }
     await ctx.db.patch(id, updates);
     return { id };
   }
@@ -327,6 +345,8 @@ export const adjustQuantity = mutation({
     id: v.string(),
     delta: v.optional(v.number()),
     quantityOnHand: v.optional(v.number()),
+    usedDelta: v.optional(v.number()),
+    usedQuantity: v.optional(v.number()),
     userId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
@@ -335,17 +355,38 @@ export const adjustQuantity = mutation({
     const item = await ctx.db.get(id);
     if (!item) throw new Error("Stock item not found");
 
-    const current = item.quantityOnHand ?? 0;
-    const next = args.quantityOnHand !== undefined
-      ? normalizeQuantity(args.quantityOnHand, current)
-      : normalizeQuantity(current + (args.delta ?? 0), current);
-
-    await ctx.db.patch(id, {
-      quantityOnHand: next,
+    const updates: any = {
       updatedAt: Date.now(),
       updatedBy: args.userId ? ctx.db.normalizeId("users", args.userId) ?? undefined : item.updatedBy
-    });
-    return { id, quantityOnHand: next };
+    };
+
+    let nextOnHand: number | undefined;
+    if (args.quantityOnHand !== undefined || args.delta !== undefined) {
+      const current = item.quantityOnHand ?? 0;
+      nextOnHand = args.quantityOnHand !== undefined
+        ? normalizeQuantity(args.quantityOnHand, current)
+        : normalizeQuantity(current + (args.delta ?? 0), current);
+      updates.quantityOnHand = nextOnHand;
+    }
+
+    let nextUsed: number | undefined;
+    if (item.trackUsedStock && (args.usedQuantity !== undefined || args.usedDelta !== undefined)) {
+      const currentUsed = item.usedQuantity ?? 0;
+      nextUsed = args.usedQuantity !== undefined
+        ? normalizeQuantity(args.usedQuantity, currentUsed)
+        : normalizeQuantity(currentUsed + (args.usedDelta ?? 0), currentUsed);
+      updates.usedQuantity = nextUsed;
+    }
+
+    if (nextOnHand !== undefined || nextUsed !== undefined) {
+      await ctx.db.patch(id, updates);
+    }
+
+    return {
+      id,
+      quantityOnHand: nextOnHand ?? item.quantityOnHand ?? 0,
+      usedQuantity: item.trackUsedStock ? nextUsed ?? item.usedQuantity ?? 0 : undefined
+    };
   }
 });
 
