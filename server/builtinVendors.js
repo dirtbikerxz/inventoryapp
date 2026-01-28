@@ -85,6 +85,26 @@ const builtinVendors = [
     integrationFields: []
   },
   {
+    key: 'wcp',
+    slug: 'wcp',
+    vendor: 'WCP',
+    baseUrl: 'https://wcproducts.com',
+    productUrlTemplate: 'https://wcproducts.com/products/{partNumber}',
+    partNumberPattern: '^WCP-[A-Za-z0-9\\-]+$',
+    description: 'WCP (wcproducts.com) Shopify catalog lookup.',
+    capabilities: {
+      productLookup: 'scrape',
+      quickOrderExport: true,
+      quickOrderImport: true,
+      cartSyncPlanned: false
+    },
+    detectionHints: {
+      vendorNames: ['wcp', 'wcp products', 'west coast products', 'wcproducts'],
+      domains: ['wcproducts.com']
+    },
+    integrationFields: []
+  },
+  {
     key: 'amazon',
     slug: 'amazon',
     vendor: 'Amazon',

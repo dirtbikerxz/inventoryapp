@@ -2018,6 +2018,10 @@ app.post('/api/vendors/resolve', async (req, res) => {
       const result = await resolveRevRoboticsProductUrl(url);
       return res.json(result);
     }
+    if (def.key === 'wcp') {
+      const result = await resolveWcpProductUrl(url);
+      return res.json(result);
+    }
     return res.status(501).json({ error: `Resolver not implemented for ${def.vendor}` });
   } catch (error) {
     logger.error(error, 'Vendor URL resolve failed');
@@ -2175,6 +2179,107 @@ async function getShopifyVariantPrice(targetUrl) {
     logger.warn(e, 'Shopify variant fetch failed');
     return null;
   }
+}
+
+async function extractVendorProductFromUrl({ url, selectors = {}, headers = {} }) {
+  if (!url) throw new Error('url is required');
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
+  const html = await resp.text();
+  const finalUrl = resp.url || url;
+  const $ = cheerio.load(html);
+
+  const shopifyMeta = parseShopifyMeta(html);
+  let shopifyVariant = null;
+  if (shopifyMeta?.variants?.length) {
+    const u = new URL(finalUrl);
+    const variantId = u.searchParams.get('variant');
+    shopifyVariant =
+      shopifyMeta.variants.find(v => String(v.id) === String(variantId)) ||
+      shopifyMeta.variants[0];
+  }
+
+  const picks = {};
+  const safePick = (sel) => {
+    if (!sel) return '';
+    try {
+      return $(sel).first().text().trim();
+    } catch (err) {
+      logger.warn({ selector: sel, err }, 'Invalid selector during extraction');
+      return '';
+    }
+  };
+
+  picks.name = safePick(selectors.nameSelector);
+  picks.price = safePick(selectors.priceSelector);
+
+  const shopifyPrice = await getShopifyVariantPrice(finalUrl);
+  if (shopifyPrice?.priceText) {
+    picks.price = shopifyPrice.priceText;
+  }
+  if (shopifyPrice?.title && !picks.name) {
+    picks.name = shopifyPrice.title;
+  }
+  if (shopifyVariant?.price !== undefined) {
+    picks.price = shopifyVariant.price.toFixed(2);
+  }
+  if (shopifyVariant?.name && !picks.name) {
+    picks.name = shopifyVariant.name;
+  }
+
+  const candidates = collectCandidates($);
+  return {
+    picks,
+    candidates,
+    productUrl: finalUrl,
+    shopify: shopifyMeta
+      ? { vendor: shopifyMeta.vendor, variant: shopifyVariant, variants: shopifyMeta.variants }
+      : null
+  };
+}
+
+function normalizeWcpUrl(raw) {
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+function buildWcpProductUrl(partNumber) {
+  if (!partNumber) return null;
+  return `https://wcproducts.com/products/${encodeURIComponent(partNumber)}`;
+}
+
+function extractWcpPartFromUrl(urlString) {
+  if (!urlString) return null;
+  try {
+    const url = new URL(urlString);
+    const parts = (url.pathname || '').split('/').filter(Boolean);
+    const productsIndex = parts.findIndex(part => part.toLowerCase() === 'products');
+    if (productsIndex !== -1 && parts[productsIndex + 1]) {
+      return decodeURIComponent(parts[productsIndex + 1]);
+    }
+    return parts.length ? decodeURIComponent(parts[parts.length - 1]) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function resolveWcpProductUrl(rawUrl) {
+  if (!rawUrl) throw new Error('url is required');
+  const trimmed = String(rawUrl).trim();
+  if (!/^https?:\/\//i.test(trimmed) && !trimmed.includes('/') && !trimmed.includes('.')) {
+    const partNumber = trimmed;
+    return {
+      partNumber,
+      productUrl: buildWcpProductUrl(partNumber)
+    };
+  }
+  const normalized = normalizeWcpUrl(trimmed);
+  const partNumber = extractWcpPartFromUrl(normalized);
+  return {
+    partNumber,
+    productUrl: buildWcpProductUrl(partNumber) || normalized
+  };
 }
 
 const AMAZON_ASIN_REGEX = /^[A-Z0-9]{10}$/i;
@@ -3022,6 +3127,19 @@ app.post('/api/vendors/extract', async (req, res) => {
           vendorKey: def.key
         });
       }
+      if (def.key === 'wcp') {
+        if (!partNumber) {
+          return res.status(400).json({ error: 'partNumber is required for WCP lookup' });
+        }
+        const template = def.productUrlTemplate || `${def.baseUrl.replace(/\/$/, '')}/products/{partNumber}`;
+        const targetUrl = template.replace('{partNumber}', encodeURIComponent(partNumber));
+        const details = await extractVendorProductFromUrl({ url: targetUrl });
+        return res.json({
+          ...details,
+          vendor: def.vendor,
+          vendorKey: def.key
+        });
+      }
       return res.status(501).json({ error: `Integration for ${def.vendor} is not implemented yet.` });
     } catch (error) {
       logger.error(error, `Failed built-in vendor lookup ${builtinKey}`);
@@ -3030,50 +3148,12 @@ app.post('/api/vendors/extract', async (req, res) => {
   }
   if (!url) return res.status(400).json({ error: 'url is required' });
   try {
-    const resp = await fetch(url, { headers });
-    if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
-    const html = await resp.text();
-    const finalUrl = resp.url || url;
-    const $ = cheerio.load(html);
-
-    const shopifyMeta = parseShopifyMeta(html);
-    let shopifyVariant = null;
-    if (shopifyMeta?.variants?.length) {
-      const u = new URL(finalUrl);
-      const variantId = u.searchParams.get('variant');
-      shopifyVariant = shopifyMeta.variants.find(v => String(v.id) === String(variantId)) || shopifyMeta.variants[0];
-    }
-
-    const picks = {};
-    const safePick = (sel) => {
-      if (!sel) return '';
-      try {
-        return $(sel).first().text().trim();
-      } catch (err) {
-        logger.warn({ selector: sel, err }, 'Invalid selector during extraction');
-        return '';
-      }
-    };
-
-    picks.name = safePick(selectors.nameSelector);
-    picks.price = safePick(selectors.priceSelector);
-
-    const shopifyPrice = await getShopifyVariantPrice(finalUrl);
-    if (shopifyPrice?.priceText) {
-      picks.price = shopifyPrice.priceText;
-    }
-    if (shopifyPrice?.title && !picks.name) {
-      picks.name = shopifyPrice.title;
-    }
-    if (shopifyVariant?.price !== undefined) {
-      picks.price = shopifyVariant.price.toFixed(2);
-    }
-    if (shopifyVariant?.name && !picks.name) {
-      picks.name = shopifyVariant.name;
-    }
-
-    const candidates = collectCandidates($);
-    res.json({ picks, candidates, shopify: shopifyMeta ? { vendor: shopifyMeta.vendor, variant: shopifyVariant, variants: shopifyMeta.variants } : null });
+    const { picks, candidates, shopify } = await extractVendorProductFromUrl({
+      url,
+      selectors,
+      headers
+    });
+    res.json({ picks, candidates, shopify });
   } catch (error) {
     logger.error(error, 'Failed to extract vendor product');
     res.status(500).json({ error: 'Extraction failed', details: error.message });
