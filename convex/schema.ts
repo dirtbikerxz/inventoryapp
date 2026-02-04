@@ -226,6 +226,25 @@ export default defineSchema({
     expiresAt: v.number()
   }).index("by_token", ["token"])
   ,
+  auditLogs: defineTable({
+    timestamp: v.number(),
+    action: v.string(),
+    userId: v.optional(v.id("users")),
+    userName: v.optional(v.string()),
+    userRole: v.optional(v.string()),
+    entityType: v.optional(v.string()),
+    entityId: v.optional(v.string()),
+    entityLabel: v.optional(v.string()),
+    method: v.optional(v.string()),
+    path: v.optional(v.string()),
+    status: v.optional(v.number()),
+    ip: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    metadata: v.optional(v.any())
+  }).index("by_timestamp", ["timestamp"])
+    .index("by_user_timestamp", ["userId", "timestamp"])
+    .index("by_action_timestamp", ["action", "timestamp"])
+    .index("by_entity_timestamp", ["entityType", "timestamp"]),
   trackingCache: defineTable({
     carrier: v.string(),
     trackingNumber: v.string(),

@@ -1,8 +1,8 @@
     let activeAdminTab = null;
     const ROLE_DEFAULT_PERMS = {
-      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true },
-      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false },
-      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false }
+      admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true, canViewAuditLog: true },
+      mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false, canViewAuditLog: false },
+      student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canManageGoogleCredentials: false, canViewAuditLog: false }
     };
     function computePerms(user) {
       const role = (user?.role || 'student').toLowerCase();
@@ -173,6 +173,10 @@
     let googleCredentialsFileJson = null;
     let actionBusy = false;
     let reimbursementTagList = [];
+    let auditLogs = [];
+    let auditNextBefore = null;
+    let auditLoading = false;
+    let auditSearchTimer = null;
 
     function setActionBusy(busy, text) {
       actionBusy = busy;
@@ -3467,7 +3471,7 @@ function fetchOrderDetails(configHint) {
       const perms = computePerms(currentUser);
       if (currentUser) currentUser.permissions = perms;
       newOrderBtn.disabled = !perms.canPlacePartRequests;
-      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings || perms.canManageGoogleCredentials) ? 'inline-flex' : 'none';
+      adminBtn.style.display = (perms.canManageUsers || perms.canManageVendors || perms.canEditTrackingSettings || perms.canManageGoogleCredentials || perms.canViewAuditLog) ? 'inline-flex' : 'none';
       if (addStockBtn) addStockBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       if (manageSubteamsBtn) manageSubteamsBtn.style.display = perms.canManageStock ? 'inline-flex' : 'none';
       updateAdminTabsVisibility();
@@ -3628,9 +3632,9 @@ function fetchOrderDetails(configHint) {
         const data = await res.json();
         const roles = data.roles || [];
         const combined = {
-          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true },
-          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false },
-          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false }
+          admin: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: true, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: true, canSubmitInvoices: true, canViewInvoices: true, canManageInvoices: true, canManageGoogleCredentials: true, canViewAuditLog: true },
+          mentor: { canPlacePartRequests: true, canManageOwnPartRequests: true, canManagePartRequests: true, canManageOrders: true, canManageVendors: true, canManageUsers: false, canManageTags: true, canEditInventoryCatalog: true, canEditTrackingSettings: true, canManageStock: true, canEditStock: true, notesNotRequired: true, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canViewAuditLog: false },
+          student: { canPlacePartRequests: true, canManageOwnPartRequests: false, canManagePartRequests: false, canManageOrders: false, canManageVendors: false, canManageUsers: false, canManageTags: false, canEditInventoryCatalog: false, canEditTrackingSettings: false, canManageStock: false, canEditStock: false, notesNotRequired: false, canImportBulkOrders: false, canSubmitInvoices: true, canViewInvoices: false, canManageInvoices: false, canViewAuditLog: false }
         };
         roles.forEach(r => { combined[r.role] = { ...(combined[r.role] || {}), ...(r.permissions || {}) }; });
 
@@ -3660,6 +3664,7 @@ function fetchOrderDetails(configHint) {
               ${renderToggle(role, 'canManageStock', 'Manage Tracked Stock & Locations')}
               ${renderToggle(role, 'canManageVendors', 'Manage Vendors')}
               ${renderToggle(role, 'canManageUsers', 'Manage Users')}
+              ${renderToggle(role, 'canViewAuditLog', 'View Audit Log')}
               ${renderToggle(role, 'canEditTrackingSettings', 'Edit Tracking Settings')}
               ${renderToggle(role, 'notesNotRequired', 'Notes/Justification Not Required')}
               ${renderToggle(role, 'canImportBulkOrders', 'Can Import Bulk Orders')}
@@ -3710,6 +3715,247 @@ function fetchOrderDetails(configHint) {
         }
       }
     }
+
+    const AUDIT_ACTION_PRESETS = [
+      { value: '', label: 'All actions' },
+      { value: 'app.visit', label: 'App Visit' },
+      { value: 'auth.login', label: 'Login' },
+      { value: 'auth.login_failed', label: 'Login Failed' },
+      { value: 'auth.logout', label: 'Logout' },
+      { value: 'auth.password_change', label: 'Password Change' },
+      { value: 'orders.create', label: 'Order Created' },
+      { value: 'orders.update', label: 'Order Updated' },
+      { value: 'orders.status', label: 'Order Status Changed' },
+      { value: 'orders.approval', label: 'Order Approval' },
+      { value: 'orders.group', label: 'Order Grouping' },
+      { value: 'orders.delete', label: 'Order Deleted' },
+      { value: 'orderGroups.create', label: 'Order Group Created' },
+      { value: 'orderGroups.update', label: 'Order Group Updated' },
+      { value: 'orderGroups.delete', label: 'Order Group Deleted' },
+      { value: 'catalog.item.create', label: 'Catalog Item Created' },
+      { value: 'catalog.item.update', label: 'Catalog Item Updated' },
+      { value: 'catalog.item.delete', label: 'Catalog Item Deleted' },
+      { value: 'catalog.category.create', label: 'Catalog Category Created' },
+      { value: 'catalog.category.update', label: 'Catalog Category Updated' },
+      { value: 'catalog.category.delete', label: 'Catalog Category Deleted' },
+      { value: 'stock.item.create', label: 'Stock Item Created' },
+      { value: 'stock.item.update', label: 'Stock Item Updated' },
+      { value: 'stock.item.adjust', label: 'Stock Adjusted' },
+      { value: 'stock.item.delete', label: 'Stock Item Deleted' },
+      { value: 'stock.subteam.create', label: 'Stock Location Created' },
+      { value: 'stock.subteam.update', label: 'Stock Location Updated' },
+      { value: 'stock.subteam.delete', label: 'Stock Location Deleted' },
+      { value: 'invoices.create', label: 'Invoice Created' },
+      { value: 'invoices.update', label: 'Invoice Updated' },
+      { value: 'invoices.delete', label: 'Invoice Deleted' },
+      { value: 'invoices.restore', label: 'Invoice Restored' },
+      { value: 'users.create', label: 'User Created' },
+      { value: 'users.update', label: 'User Updated' },
+      { value: 'users.delete', label: 'User Deleted' },
+      { value: 'roles.update', label: 'Role Updated' },
+      { value: 'tags.create', label: 'Tag Created' },
+      { value: 'tags.update', label: 'Tag Updated' },
+      { value: 'tags.delete', label: 'Tag Deleted' },
+      { value: 'reimbursementTags.create', label: 'Reimbursement Tag Created' },
+      { value: 'reimbursementTags.update', label: 'Reimbursement Tag Updated' },
+      { value: 'reimbursementTags.delete', label: 'Reimbursement Tag Deleted' },
+      { value: 'vendors.config.create', label: 'Vendor Config Created' },
+      { value: 'vendors.config.update', label: 'Vendor Config Updated' },
+      { value: 'vendors.config.delete', label: 'Vendor Config Deleted' },
+      { value: 'vendors.integration.update', label: 'Vendor Integration Updated' },
+      { value: 'tracking.settings.update', label: 'Tracking Settings Updated' },
+      { value: 'tracking.refresh', label: 'Tracking Refresh' },
+      { value: 'google.credentials.update', label: 'Google Credentials Updated' },
+      { value: 'api.post', label: 'Other POST Requests' },
+      { value: 'api.patch', label: 'Other PATCH Requests' },
+      { value: 'api.delete', label: 'Other DELETE Requests' }
+    ];
+
+    function renderAuditActionOptions(extraActions = []) {
+      if (!auditActionFilter) return;
+      const map = new Map();
+      AUDIT_ACTION_PRESETS.forEach(opt => map.set(opt.value, opt.label));
+      extraActions
+        .filter(Boolean)
+        .forEach(action => {
+          if (!map.has(action)) map.set(action, action);
+        });
+      const selected = auditActionFilter.value || '';
+      if (selected && !map.has(selected)) map.set(selected, selected);
+      const presetValues = new Set(AUDIT_ACTION_PRESETS.map(opt => opt.value));
+      const options = AUDIT_ACTION_PRESETS.map(opt => ({ value: opt.value, label: map.get(opt.value) || opt.label }))
+        .concat(
+          Array.from(map.keys())
+            .filter((value) => !presetValues.has(value))
+            .sort()
+            .map((value) => ({ value, label: map.get(value) }))
+        );
+      auditActionFilter.innerHTML = options
+        .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+        .join('');
+      if (selected && map.has(selected)) auditActionFilter.value = selected;
+    }
+
+    function renderAuditUserOptions() {
+      if (!auditUserFilter) return;
+      const selected = auditUserFilter.value || '';
+      const map = new Map();
+      map.set('', 'All users');
+      auditLogs.forEach((log) => {
+        if (!log.userId) return;
+        const label = [log.userName || 'User', log.userRole ? `(${log.userRole})` : '']
+          .filter(Boolean)
+          .join(' ');
+        if (!map.has(log.userId)) map.set(log.userId, label);
+      });
+      if (selected && !map.has(selected)) map.set(selected, 'Selected user');
+      auditUserFilter.innerHTML = Array.from(map.entries())
+        .map(([value, label]) => `<option value="${value}">${label}</option>`)
+        .join('');
+      if (map.has(selected)) auditUserFilter.value = selected;
+    }
+
+    function parseDateInput(value, endOfDay = false) {
+      if (!value) return undefined;
+      const parts = String(value).split('-').map(Number);
+      if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) return undefined;
+      const [year, month, day] = parts;
+      if (endOfDay) return new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+      return new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+    }
+
+    function summarizeAuditBody(body) {
+      if (!body || typeof body !== 'object') return '';
+      const keys = ['name', 'username', 'label', 'partName', 'orderNumber', 'status', 'priority', 'quantityRequested', 'vendor'];
+      const entries = keys
+        .filter((key) => body[key] !== undefined && body[key] !== '')
+        .map((key) => `${key}: ${body[key]}`);
+      return entries.slice(0, 4).join(', ');
+    }
+
+    function formatAuditTimestamp(ts) {
+      if (!ts) return '';
+      try {
+        return new Date(ts).toLocaleString();
+      } catch (e) {
+        return String(ts);
+      }
+    }
+
+    function renderAuditLogs() {
+      if (!auditList) return;
+      if (!auditLogs.length) {
+        const hasMore = Boolean(auditNextBefore);
+        auditList.innerHTML = hasMore
+          ? '<div class="empty">No matches yet. Load more to continue searching.</div>'
+          : '<div class="empty">No audit entries found.</div>';
+        if (auditLoadMoreBtn) auditLoadMoreBtn.style.display = hasMore ? 'inline-flex' : 'none';
+        if (auditSummary) auditSummary.textContent = hasMore
+          ? 'No matches in the current window.'
+          : 'No activity for the selected filters.';
+        return;
+      }
+      auditList.innerHTML = auditLogs
+        .map((log) => {
+          const when = formatAuditTimestamp(log.timestamp);
+          const user = log.userName || log.userId || 'Unknown user';
+          const role = log.userRole ? ` · ${log.userRole}` : '';
+          const action = log.action || 'event';
+          const entity = log.entityType
+            ? `${log.entityType}${log.entityLabel ? ` · ${log.entityLabel}` : ''}${log.entityId ? ` (${String(log.entityId).slice(0, 8)}...)` : ''}`
+            : '';
+          const summaryParts = [];
+          if (log.method || log.path) summaryParts.push(`${log.method || ''} ${log.path || ''}`.trim());
+          if (log.status) summaryParts.push(`status ${log.status}`);
+          const metaSummary = summarizeAuditBody(log.metadata?.body);
+          if (metaSummary) summaryParts.push(metaSummary);
+          const summary = summaryParts.filter(Boolean).join(' · ');
+          return `
+          <div style="display:grid; grid-template-columns: 160px 1fr; gap:10px; padding:8px 6px; border-bottom:1px solid var(--border);">
+            <div class="small" style="color: var(--muted);">${when}</div>
+            <div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <span class="pill" style="background:var(--panel); border:1px solid var(--border);">${action}</span>
+                <span class="small">${user}${role}</span>
+                ${entity ? `<span class="small" style="color:var(--muted);">${entity}</span>` : ''}
+              </div>
+              ${summary ? `<div class="small" style="color:var(--muted); margin-top:4px;">${summary}</div>` : ''}
+            </div>
+          </div>`;
+        })
+        .join('');
+      if (auditSummary) {
+        const suffix = auditNextBefore ? 'More available.' : 'End of results.';
+        auditSummary.textContent = `Showing ${auditLogs.length} entries. ${suffix}`;
+      }
+      if (auditLoadMoreBtn) {
+        auditLoadMoreBtn.style.display = auditNextBefore ? 'inline-flex' : 'none';
+      }
+    }
+
+    async function loadAuditLogs({ reset = false } = {}) {
+      if (!auditList || !currentUser?.permissions?.canViewAuditLog) return;
+      if (auditLoading) return;
+      auditLoading = true;
+      if (reset) {
+        auditLogs = [];
+        auditNextBefore = null;
+        auditList.textContent = 'Loading audit log...';
+      }
+      const params = new URLSearchParams();
+      const search = auditSearch?.value?.trim();
+      const userId = auditUserFilter?.value;
+      const action = auditActionFilter?.value;
+      const after = parseDateInput(auditStart?.value);
+      const endOfDay = parseDateInput(auditEnd?.value, true);
+      let before = endOfDay;
+      if (auditNextBefore && !reset) {
+        before = before ? Math.min(before, auditNextBefore) : auditNextBefore;
+      }
+      if (search) params.set('search', search);
+      if (userId) params.set('userId', userId);
+      if (action) params.set('action', action);
+      if (after) params.set('after', String(after));
+      if (before) params.set('before', String(before));
+      params.set('limit', '200');
+      try {
+        const res = await fetch(`/api/audit?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load audit log');
+        const logs = data.logs || [];
+        auditNextBefore = data.nextBefore || null;
+        auditLogs = reset ? logs : auditLogs.concat(logs);
+        renderAuditActionOptions(auditLogs.map(log => log.action).filter(Boolean));
+        renderAuditUserOptions();
+        renderAuditLogs();
+      } catch (err) {
+        auditList.textContent = err.message || 'Failed to load audit log';
+        if (auditSummary) auditSummary.textContent = 'Unable to load audit data.';
+      } finally {
+        auditLoading = false;
+      }
+    }
+
+    function clearAuditFilters() {
+      if (auditSearch) auditSearch.value = '';
+      if (auditUserFilter) auditUserFilter.value = '';
+      if (auditActionFilter) auditActionFilter.value = '';
+      if (auditStart) auditStart.value = '';
+      if (auditEnd) auditEnd.value = '';
+      loadAuditLogs({ reset: true });
+    }
+
+    if (auditActionFilter) renderAuditActionOptions();
+    auditRefreshBtn?.addEventListener('click', () => loadAuditLogs({ reset: true }));
+    auditLoadMoreBtn?.addEventListener('click', () => loadAuditLogs({ reset: false }));
+    auditClearBtn?.addEventListener('click', clearAuditFilters);
+    auditSearch?.addEventListener('input', () => {
+      if (auditSearchTimer) clearTimeout(auditSearchTimer);
+      auditSearchTimer = setTimeout(() => loadAuditLogs({ reset: true }), 250);
+    });
+    [auditUserFilter, auditActionFilter, auditStart, auditEnd].forEach((el) => {
+      el?.addEventListener('change', () => loadAuditLogs({ reset: true }));
+    });
 
     async function syncTrackingAutoRefreshFromServer() {
       try {
@@ -3805,6 +4051,9 @@ function fetchOrderDetails(configHint) {
       if (currentUser?.permissions?.canManageUsers) {
         tabs.push('users', 'roles');
       }
+      if (currentUser?.permissions?.canViewAuditLog) {
+        tabs.push('audit');
+      }
       if (currentUser?.permissions?.canEditTrackingSettings) {
         tabs.push('tracking');
       }
@@ -3821,6 +4070,7 @@ function fetchOrderDetails(configHint) {
       const allowed = allowedAdminTabs();
       if (adminTabUsers) adminTabUsers.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
       if (adminTabRoles) adminTabRoles.style.display = currentUser?.permissions?.canManageUsers ? 'inline-flex' : 'none';
+      if (adminTabAudit) adminTabAudit.style.display = currentUser?.permissions?.canViewAuditLog ? 'inline-flex' : 'none';
       if (adminTabTracking) adminTabTracking.style.display = currentUser?.permissions?.canEditTrackingSettings ? 'inline-flex' : 'none';
       if (adminTabVendors) adminTabVendors.style.display = currentUser?.permissions?.canManageVendors ? 'inline-flex' : 'none';
       if (adminTabGoogle) adminTabGoogle.style.display = currentUser?.permissions?.canManageGoogleCredentials ? 'inline-flex' : 'none';
@@ -3829,6 +4079,7 @@ function fetchOrderDetails(configHint) {
       }
       if (adminUsersSection) adminUsersSection.style.display = 'none';
       if (adminRolesSection) adminRolesSection.style.display = 'none';
+      if (adminAuditSection) adminAuditSection.style.display = 'none';
       if (adminTrackingSection) adminTrackingSection.style.display = 'none';
       if (adminVendorsSection) adminVendorsSection.style.display = 'none';
       if (adminGoogleSection) adminGoogleSection.style.display = 'none';
@@ -3841,21 +4092,27 @@ function fetchOrderDetails(configHint) {
       activeAdminTab = which;
       adminUsersSection.style.display = which === 'users' ? 'block' : 'none';
       if (adminRolesSection) adminRolesSection.style.display = which === 'roles' ? 'block' : 'none';
+      if (adminAuditSection) adminAuditSection.style.display = which === 'audit' ? 'block' : 'none';
       adminTrackingSection.style.display = which === 'tracking' ? 'block' : 'none';
       adminVendorsSection.style.display = which === 'vendors' ? 'block' : 'none';
       if (adminGoogleSection) adminGoogleSection.style.display = which === 'google' ? 'block' : 'none';
+      if (which === 'audit' && currentUser?.permissions?.canViewAuditLog) {
+        loadAuditLogs({ reset: true });
+      }
       if (which === 'google' && currentUser?.permissions?.canManageGoogleCredentials) {
         loadGoogleCredentials();
       }
-      [adminTabUsers, adminTabRoles, adminTabTracking, adminTabVendors, adminTabGoogle].forEach(btn => btn?.classList.remove('primary'));
+      [adminTabUsers, adminTabRoles, adminTabAudit, adminTabTracking, adminTabVendors, adminTabGoogle].forEach(btn => btn?.classList.remove('primary'));
       if (which === 'users') adminTabUsers?.classList.add('primary');
       if (which === 'roles') adminTabRoles?.classList.add('primary');
+      if (which === 'audit') adminTabAudit?.classList.add('primary');
       if (which === 'tracking') adminTabTracking?.classList.add('primary');
       if (which === 'vendors') adminTabVendors?.classList.add('primary');
       if (which === 'google') adminTabGoogle?.classList.add('primary');
     }
     adminTabUsers?.addEventListener('click', () => showAdminSection('users'));
     adminTabRoles?.addEventListener('click', () => { showAdminSection('roles'); loadRoles(); });
+    adminTabAudit?.addEventListener('click', () => showAdminSection('audit'));
     adminTabTracking?.addEventListener('click', () => showAdminSection('tracking'));
     adminTabVendors?.addEventListener('click', () => { showAdminSection('vendors'); loadVendors(); });
     adminTabGoogle?.addEventListener('click', () => { showAdminSection('google'); loadGoogleCredentials(); });
@@ -3925,6 +4182,9 @@ function fetchOrderDetails(configHint) {
       reimbursements = [];
       currentOrderInvoices = [];
       renderReimbursementsTable();
+      auditLogs = [];
+      auditNextBefore = null;
+      if (auditList) auditList.innerHTML = '';
       showOrdersView();
     });
 

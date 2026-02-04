@@ -88,7 +88,8 @@ function defaultPermissions(role) {
     canManageGoogleCredentials: false,
     canSubmitInvoices: false,
     canViewInvoices: false,
-    canManageInvoices: false
+    canManageInvoices: false,
+    canViewAuditLog: false
   };
   switch ((role || '').toLowerCase()) {
     case 'admin':
@@ -109,7 +110,8 @@ function defaultPermissions(role) {
         canSubmitInvoices: true,
         canViewInvoices: true,
         canManageInvoices: true,
-        canManageGoogleCredentials: true
+        canManageGoogleCredentials: true,
+        canViewAuditLog: true
       };
     case 'mentor':
       return {
@@ -129,7 +131,8 @@ function defaultPermissions(role) {
         canSubmitInvoices: true,
         canViewInvoices: false,
         canManageInvoices: false,
-        canManageGoogleCredentials: false
+        canManageGoogleCredentials: false,
+        canViewAuditLog: false
       };
     case 'student':
       return {
@@ -339,6 +342,190 @@ async function requireAuth(req, res, permission) {
   return user;
 }
 
+const AUDIT_REDACT_KEYS = new Set([
+  'password',
+  'passwordHash',
+  'oldPassword',
+  'newPassword',
+  'credentialsJson',
+  'serviceAccount',
+  'privateKey',
+  'token'
+]);
+const AUDIT_MAX_STRING = 400;
+const AUDIT_MAX_ARRAY = 20;
+const AUDIT_MAX_DEPTH = 2;
+
+function getRequestIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || req.ip || undefined;
+}
+
+function sanitizeAuditValue(value, depth = 0) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    if (value.length > AUDIT_MAX_STRING) return `${value.slice(0, AUDIT_MAX_STRING)}...`;
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Buffer.isBuffer(value)) return `[buffer ${value.length}]`;
+  if (Array.isArray(value)) {
+    return value.slice(0, AUDIT_MAX_ARRAY).map(item => sanitizeAuditValue(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    if (depth >= AUDIT_MAX_DEPTH) return '[object]';
+    const out = {};
+    Object.entries(value).forEach(([key, val]) => {
+      if (AUDIT_REDACT_KEYS.has(key)) {
+        out[key] = '[redacted]';
+      } else {
+        out[key] = sanitizeAuditValue(val, depth + 1);
+      }
+    });
+    return out;
+  }
+  return String(value);
+}
+
+function buildAuditMetadata(req) {
+  const metadata = {};
+  if (req.params && Object.keys(req.params).length) {
+    metadata.params = sanitizeAuditValue(req.params);
+  }
+  if (req.query && Object.keys(req.query).length) {
+    metadata.query = sanitizeAuditValue(req.query);
+  }
+  if (req.body && Object.keys(req.body).length) {
+    metadata.body = sanitizeAuditValue(req.body);
+  }
+  if (req.files && Array.isArray(req.files) && req.files.length) {
+    metadata.files = {
+      count: req.files.length,
+      names: req.files.slice(0, 5).map(file => file.originalname)
+    };
+  }
+  return Object.keys(metadata).length ? metadata : undefined;
+}
+
+const AUDIT_ROUTE_MAP = [
+  { method: 'POST', regex: /^\/api\/auth\/login$/, action: ({ statusCode }) => (statusCode < 400 ? 'auth.login' : 'auth.login_failed') },
+  { method: 'POST', regex: /^\/api\/auth\/logout$/, action: 'auth.logout' },
+  { method: 'PATCH', regex: /^\/api\/auth\/password$/, action: 'auth.password_change' },
+  { method: 'POST', regex: /^\/api\/users$/, action: 'users.create', entityType: 'user', labelFrom: req => req.body?.username || req.body?.name },
+  { method: 'PATCH', regex: /^\/api\/users\/.+$/, action: 'users.update', entityType: 'user', entityIdParam: 'id', labelFrom: req => req.body?.username || req.body?.name },
+  { method: 'DELETE', regex: /^\/api\/users\/.+$/, action: 'users.delete', entityType: 'user', entityIdParam: 'id' },
+  { method: 'PATCH', regex: /^\/api\/roles\/.+$/, action: 'roles.update', entityType: 'role', entityIdParam: 'role' },
+  { method: 'POST', regex: /^\/api\/catalog\/categories$/, action: 'catalog.category.create', entityType: 'catalogCategory', labelFrom: req => req.body?.name },
+  { method: 'PATCH', regex: /^\/api\/catalog\/categories\/.+$/, action: 'catalog.category.update', entityType: 'catalogCategory', entityIdParam: 'id', labelFrom: req => req.body?.name },
+  { method: 'DELETE', regex: /^\/api\/catalog\/categories\/.+$/, action: 'catalog.category.delete', entityType: 'catalogCategory', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/catalog\/items$/, action: 'catalog.item.create', entityType: 'catalogItem', labelFrom: req => req.body?.name },
+  { method: 'PATCH', regex: /^\/api\/catalog\/items\/.+$/, action: 'catalog.item.update', entityType: 'catalogItem', entityIdParam: 'id', labelFrom: req => req.body?.name },
+  { method: 'DELETE', regex: /^\/api\/catalog\/items\/.+$/, action: 'catalog.item.delete', entityType: 'catalogItem', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/stock\/subteams$/, action: 'stock.subteam.create', entityType: 'stockSubteam', labelFrom: req => req.body?.name },
+  { method: 'PATCH', regex: /^\/api\/stock\/subteams\/.+$/, action: 'stock.subteam.update', entityType: 'stockSubteam', entityIdParam: 'id', labelFrom: req => req.body?.name },
+  { method: 'DELETE', regex: /^\/api\/stock\/subteams\/.+$/, action: 'stock.subteam.delete', entityType: 'stockSubteam', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/stock$/, action: 'stock.item.create', entityType: 'stockItem', labelFrom: req => req.body?.name },
+  { method: 'PATCH', regex: /^\/api\/stock\/.+$/, action: 'stock.item.update', entityType: 'stockItem', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/stock\/[^/]+\/adjust$/, action: 'stock.item.adjust', entityType: 'stockItem', entityIdParam: 'id' },
+  { method: 'DELETE', regex: /^\/api\/stock\/.+$/, action: 'stock.item.delete', entityType: 'stockItem', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/orders$/, action: 'orders.create', entityType: 'order', labelFrom: req => req.body?.partName || req.body?.orderNumber },
+  { method: 'PATCH', regex: /^\/api\/orders\/[^/]+\/status$/, action: 'orders.status', entityType: 'order', entityIdParam: 'id' },
+  { method: 'PATCH', regex: /^\/api\/orders\/[^/]+\/approval$/, action: 'orders.approval', entityType: 'order', entityIdParam: 'id' },
+  { method: 'PATCH', regex: /^\/api\/orders\/[^/]+\/group$/, action: 'orders.group', entityType: 'order', entityIdParam: 'id' },
+  { method: 'PATCH', regex: /^\/api\/orders\/.+$/, action: 'orders.update', entityType: 'order', entityIdParam: 'id' },
+  { method: 'DELETE', regex: /^\/api\/orders\/.+$/, action: 'orders.delete', entityType: 'order', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/order-groups$/, action: 'orderGroups.create', entityType: 'orderGroup', labelFrom: req => req.body?.title },
+  { method: 'PATCH', regex: /^\/api\/order-groups\/.+$/, action: 'orderGroups.update', entityType: 'orderGroup', entityIdParam: 'id' },
+  { method: 'DELETE', regex: /^\/api\/order-groups\/.+$/, action: 'orderGroups.delete', entityType: 'orderGroup', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/invoices$/, action: 'invoices.create', entityType: 'invoice' },
+  { method: 'PATCH', regex: /^\/api\/invoices\/.+$/, action: 'invoices.update', entityType: 'invoice', entityIdParam: 'id' },
+  { method: 'DELETE', regex: /^\/api\/invoices\/.+$/, action: 'invoices.delete', entityType: 'invoice', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/invoices\/restore$/, action: 'invoices.restore', entityType: 'invoice' },
+  { method: 'POST', regex: /^\/api\/invoices\/preview$/, action: 'invoices.preview', entityType: 'invoice' },
+  { method: 'POST', regex: /^\/api\/tags$/, action: 'tags.create', entityType: 'tag', labelFrom: req => req.body?.label },
+  { method: 'PATCH', regex: /^\/api\/tags\/.+$/, action: 'tags.update', entityType: 'tag', entityIdParam: 'id', labelFrom: req => req.body?.label },
+  { method: 'DELETE', regex: /^\/api\/tags\/.+$/, action: 'tags.delete', entityType: 'tag', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/reimbursement-tags$/, action: 'reimbursementTags.create', entityType: 'reimbursementTag', labelFrom: req => req.body?.label },
+  { method: 'PATCH', regex: /^\/api\/reimbursement-tags\/.+$/, action: 'reimbursementTags.update', entityType: 'reimbursementTag', entityIdParam: 'id', labelFrom: req => req.body?.label },
+  { method: 'DELETE', regex: /^\/api\/reimbursement-tags\/.+$/, action: 'reimbursementTags.delete', entityType: 'reimbursementTag', entityIdParam: 'id' },
+  { method: 'POST', regex: /^\/api\/vendors\/configs$/, action: 'vendors.config.create', entityType: 'vendorConfig', labelFrom: req => req.body?.vendor },
+  { method: 'PATCH', regex: /^\/api\/vendors\/configs\/.+$/, action: 'vendors.config.update', entityType: 'vendorConfig', entityIdParam: 'id' },
+  { method: 'DELETE', regex: /^\/api\/vendors\/configs\/.+$/, action: 'vendors.config.delete', entityType: 'vendorConfig', entityIdParam: 'id' },
+  { method: 'PATCH', regex: /^\/api\/vendors\/integrations\/.+$/, action: 'vendors.integration.update', entityType: 'vendorIntegration', entityIdParam: 'key' },
+  { method: 'POST', regex: /^\/api\/vendors\/resolve$/, action: 'vendors.resolve' },
+  { method: 'POST', regex: /^\/api\/vendors\/shareacart$/, action: 'vendors.shareacart' },
+  { method: 'POST', regex: /^\/api\/vendors\/extract$/, action: 'vendors.extract' },
+  { method: 'PATCH', regex: /^\/api\/tracking\/settings$/, action: 'tracking.settings.update', entityType: 'trackingSettings' },
+  { method: 'POST', regex: /^\/api\/tracking\/refresh$/, action: 'tracking.refresh', entityType: 'trackingSettings' },
+  { method: 'POST', regex: /^\/api\/google\/credentials$/, action: 'google.credentials.update', entityType: 'googleCredentials' }
+];
+
+function resolveAuditDescriptor(req, statusCode) {
+  const method = req.method.toUpperCase();
+  const path = req.path;
+  for (const route of AUDIT_ROUTE_MAP) {
+    if (route.method && route.method !== method) continue;
+    if (!route.regex.test(path)) continue;
+    const action = typeof route.action === 'function'
+      ? route.action({ statusCode, req })
+      : route.action;
+    const entityId = route.entityIdParam ? req.params?.[route.entityIdParam] : undefined;
+    const entityLabel = route.labelFrom ? route.labelFrom(req) : undefined;
+    return { action, entityType: route.entityType, entityId, entityLabel };
+  }
+  return { action: `api.${method.toLowerCase()}`, entityType: undefined };
+}
+
+function buildAuditUser(req) {
+  const user = req.auditUser || req.user;
+  if (user) {
+    return {
+      userId: user._id?.toString?.() || user._id,
+      userName: user.name || user.username || user.userName,
+      userRole: user.role
+    };
+  }
+  if (req.body?.username) {
+    return { userName: String(req.body.username) };
+  }
+  return {};
+}
+
+function queueAuditLog(entry) {
+  if (!entry || !entry.action) return;
+  client.mutation('audit:log', entry).catch(err => {
+    logger.warn(err, 'Failed to record audit log');
+  });
+}
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (req.path.startsWith('/api/audit')) return next();
+  if (req.method.toUpperCase() === 'GET') return next();
+  res.on('finish', () => {
+    const descriptor = resolveAuditDescriptor(req, res.statusCode);
+    const auditUser = buildAuditUser(req);
+    queueAuditLog({
+      action: descriptor.action,
+      entityType: descriptor.entityType,
+      entityId: descriptor.entityId,
+      entityLabel: descriptor.entityLabel,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      ip: getRequestIp(req),
+      userAgent: req.headers['user-agent'],
+      metadata: buildAuditMetadata(req),
+      ...auditUser
+    });
+  });
+  next();
+});
+
 function setSessionCookie(res, token) {
   const maxAge = config.sessionDays * 24 * 60 * 60 * 1000;
   res.cookie(config.sessionCookie, token, {
@@ -509,6 +696,39 @@ app.patch('/api/roles/:role', async (req, res) => {
   }
 });
 
+app.get('/api/audit', async (req, res) => {
+  const user = await requireAuth(req, res, 'canViewAuditLog');
+  if (!user) return;
+  const parseNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : undefined;
+  };
+  const limit = parseNumber(req.query.limit);
+  const before = parseNumber(req.query.before);
+  const after = parseNumber(req.query.after);
+  const action = typeof req.query.action === 'string' ? req.query.action : undefined;
+  const entityType = typeof req.query.entityType === 'string' ? req.query.entityType : undefined;
+  const entityId = typeof req.query.entityId === 'string' ? req.query.entityId : undefined;
+  const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+  try {
+    const data = await client.query('audit:list', {
+      limit,
+      before,
+      after,
+      action,
+      entityType,
+      entityId,
+      userId,
+      search
+    });
+    res.json(data);
+  } catch (error) {
+    logger.error(error, 'Failed to load audit logs');
+    res.status(500).json({ error: 'Unable to load audit logs' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
@@ -531,6 +751,12 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     setSessionCookie(res, token);
+    req.auditUser = {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      role: user.role
+    };
     // Return effective permissions (role policy + defaults)
     const sessionUser = await getSessionUser(token);
     res.json({ user: sessionUser });
@@ -542,6 +768,16 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/logout', async (req, res) => {
   const token = req.cookies[config.sessionCookie] || req.headers['x-session-token'];
+  if (token) {
+    try {
+      const sessionUser = await getSessionUser(token);
+      if (sessionUser) {
+        req.auditUser = sessionUser;
+      }
+    } catch (e) {
+      logger.warn(e, 'Unable to resolve session user for logout');
+    }
+  }
   if (token) {
     try {
       await client.mutation('auth:deleteSession', { token });
@@ -559,6 +795,17 @@ app.get('/api/auth/me', async (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  queueAuditLog({
+    action: 'app.visit',
+    method: req.method,
+    path: req.path,
+    status: 200,
+    ip: getRequestIp(req),
+    userAgent: req.headers['user-agent'],
+    userId: user._id?.toString?.() || user._id,
+    userName: user.name || user.username,
+    userRole: user.role
+  });
   res.json({ user });
 });
 

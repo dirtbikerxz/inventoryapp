@@ -14,7 +14,8 @@ const DEFAULT_PERMISSIONS = {
   canManageStock: false,
   canEditStock: false,
   notesNotRequired: false,
-  canImportBulkOrders: false
+  canImportBulkOrders: false,
+  canViewAuditLog: false
 };
 
 function permissionsForRole(role: string) {
@@ -34,7 +35,8 @@ function permissionsForRole(role: string) {
         canManageStock: true,
         canEditStock: true,
         notesNotRequired: true,
-        canImportBulkOrders: true
+        canImportBulkOrders: true,
+        canViewAuditLog: true
       };
     case "mentor":
       return {
@@ -50,7 +52,8 @@ function permissionsForRole(role: string) {
         canManageStock: true,
         canEditStock: true,
         notesNotRequired: true,
-        canImportBulkOrders: false
+        canImportBulkOrders: false,
+        canViewAuditLog: false
       };
     case "student":
       return { ...DEFAULT_PERMISSIONS };

@@ -1113,6 +1113,7 @@
         <div class="flex-between" style="gap:6px;">
           <button class="btn ghost" id="admin-tab-users" style="padding:6px 12px;">Users</button>
           <button class="btn ghost" id="admin-tab-roles" style="padding:6px 12px;">Roles</button>
+          <button class="btn ghost" id="admin-tab-audit" style="padding:6px 12px;">Audit</button>
           <button class="btn ghost" id="admin-tab-tracking" style="padding:6px 12px;">Tracking</button>
           <button class="btn ghost" id="admin-tab-vendors" style="padding:6px 12px;">Vendors</button>
           <button class="btn ghost" id="admin-tab-google" style="padding:6px 12px;">Google</button>
@@ -1135,6 +1136,50 @@
           <div class="subtitle">Toggle what each role can do.</div>
           <div id="role-list" style="margin-top:8px;"></div>
           <div id="role-message" class="small" style="margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <div id="admin-audit-section" style="display:none;">
+        <div class="card" style="background:var(--panel-2); margin-top:12px;">
+          <div class="flex-between" style="align-items:center; gap:8px; flex-wrap:wrap;">
+            <div>
+              <div class="page-title" style="font-size:18px;">Audit Log</div>
+              <div class="subtitle">Track logins, changes, and admin activity.</div>
+            </div>
+            <button class="btn ghost" id="audit-refresh">Refresh</button>
+          </div>
+          <div class="filters" style="align-items:flex-end; margin-top:10px;">
+            <div style="min-width:220px;">
+              <label class="small">Search</label>
+              <input id="audit-search" class="input" placeholder="Search user, action, or entity..." />
+            </div>
+            <div>
+              <label class="small">User</label>
+              <select id="audit-user-filter" class="input"></select>
+            </div>
+            <div>
+              <label class="small">Action</label>
+              <select id="audit-action-filter" class="input"></select>
+            </div>
+            <div>
+              <label class="small">From</label>
+              <input id="audit-start" class="input" type="date" />
+            </div>
+            <div>
+              <label class="small">To</label>
+              <input id="audit-end" class="input" type="date" />
+            </div>
+          </div>
+          <div class="flex-between" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+            <div id="audit-summary" class="small"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn ghost" id="audit-clear">Clear filters</button>
+            </div>
+          </div>
+          <div id="audit-list" class="card" style="background:var(--panel); margin-top:10px; padding:10px; max-height:420px; overflow:auto;"></div>
+          <div class="flex-between" style="margin-top:10px;">
+            <button class="btn ghost" id="audit-load-more" style="display:none;">Load more</button>
+          </div>
         </div>
       </div>
 
