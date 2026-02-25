@@ -2067,16 +2067,25 @@ function renderWcpStockBadge(order) {
   if (!stock) return "";
   const status = stock.label || stock.status || "Unknown";
   const qty = Number(stock.inStockQty);
-  const qtyLabel = Number.isFinite(qty) ? `${qty} in stock` : "qty unavailable";
+  const hasQty = Number.isFinite(qty) && qty >= 0;
   const checkedText = stock.checkedAt ? formatDateMaybe(stock.checkedAt) : "";
   const statusKey = (stock.status || "").toLowerCase();
   let color = "var(--muted)";
   if (statusKey === "in_stock") color = "var(--success)";
   else if (statusKey === "backordered") color = "var(--gold)";
   else if (statusKey === "sold_out") color = "var(--danger)";
-  const titleParts = [status, qtyLabel];
+  let badgeText = `Stock: ${status}`;
+  if (statusKey === "in_stock") {
+    badgeText = hasQty ? `Stock: ${qty} in stock` : "Stock: In Stock";
+  } else if (statusKey === "backordered") {
+    badgeText = "Stock: Backordered";
+  } else if (statusKey === "sold_out") {
+    badgeText = "Stock: Sold Out";
+  }
+  const titleParts = [status];
+  if (statusKey === "in_stock" && hasQty) titleParts.push(`${qty} in stock`);
   if (checkedText) titleParts.push(`Updated ${checkedText}`);
-  return `<span class="tag" style="border-color:${color}; color:${color};" title="${escapeHtml(titleParts.join(" · "))}">Stock: ${escapeHtml(status)} · ${escapeHtml(qtyLabel)}</span>`;
+  return `<span class="tag" style="border-color:${color}; color:${color};" title="${escapeHtml(titleParts.join(" · "))}">${escapeHtml(badgeText)}</span>`;
 }
 
 function setUsedStockTracking(enabled) {
