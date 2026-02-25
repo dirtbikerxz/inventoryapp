@@ -409,11 +409,106 @@ export const bulkUpdateWcpStock = mutation({
   }
 });
 
+export const recordWcpStockHistory = mutation({
+  args: {
+    entries: v.array(
+      v.object({
+        orderId: v.string(),
+        sku: v.string(),
+        status: v.optional(v.string()),
+        label: v.optional(v.string()),
+        inStockQty: v.optional(v.number()),
+        checkedAt: v.number(),
+        statusSource: v.optional(v.string()),
+        quantitySource: v.optional(v.string()),
+        error: v.optional(v.string())
+      })
+    )
+  },
+  handler: async (ctx, args) => {
+    let inserted = 0;
+    const now = Date.now();
+    for (const entry of args.entries || []) {
+      const orderId = ctx.db.normalizeId("orders", entry.orderId);
+      if (!orderId) continue;
+      const order = await ctx.db.get(orderId);
+      if (!order) continue;
+      const checkedAtRaw = Number(entry.checkedAt);
+      const checkedAt = Number.isFinite(checkedAtRaw) ? checkedAtRaw : now;
+      const requestedAtRaw = Number(order.requestedAt);
+      const requestedAt = Number.isFinite(requestedAtRaw) ? requestedAtRaw : 0;
+      const effectiveCheckedAt = Math.max(requestedAt, checkedAt);
+      const qtyRaw = Number(entry.inStockQty);
+      const inStockQty = Number.isFinite(qtyRaw)
+        ? Math.max(0, Math.round(qtyRaw))
+        : undefined;
+      await ctx.db.insert("wcpStockHistory", {
+        orderId,
+        sku: String(entry.sku || "").trim().toUpperCase(),
+        status: entry.status || undefined,
+        label: entry.label || undefined,
+        inStockQty,
+        checkedAt: effectiveCheckedAt,
+        statusSource: entry.statusSource || undefined,
+        quantitySource: entry.quantitySource || undefined,
+        error: entry.error || undefined,
+        createdAt: now
+      });
+      inserted += 1;
+    }
+    return { inserted };
+  }
+});
+
+export const listWcpStockHistory = query({
+  args: {
+    orderId: v.string(),
+    limit: v.optional(v.number())
+  },
+  handler: async (ctx, args) => {
+    const orderId = ctx.db.normalizeId("orders", args.orderId);
+    if (!orderId) return { history: [] };
+    const order = await ctx.db.get(orderId);
+    if (!order) return { history: [] };
+    const rows = await ctx.db
+      .query("wcpStockHistory")
+      .withIndex("by_orderId_checkedAt", (q) => q.eq("orderId", orderId))
+      .collect();
+    const sorted = rows.sort((a, b) => (a.checkedAt ?? 0) - (b.checkedAt ?? 0));
+    const limit = Number(args.limit);
+    const capped =
+      Number.isFinite(limit) && limit > 0
+        ? sorted.slice(-Math.round(limit))
+        : sorted;
+    return {
+      history: capped.map((row) => ({
+        _id: row._id,
+        orderId: row.orderId,
+        sku: row.sku,
+        status: row.status,
+        label: row.label,
+        inStockQty: row.inStockQty,
+        checkedAt: row.checkedAt,
+        statusSource: row.statusSource,
+        quantitySource: row.quantitySource,
+        error: row.error
+      }))
+    };
+  }
+});
+
 export const deleteOrder = mutation({
   args: { orderId: v.string() },
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("orders", args.orderId);
     if (!id) throw new Error("Invalid order id");
+    const history = await ctx.db
+      .query("wcpStockHistory")
+      .withIndex("by_orderId_checkedAt", (q) => q.eq("orderId", id))
+      .collect();
+    for (const row of history) {
+      await ctx.db.delete(row._id);
+    }
     await ctx.db.delete(id);
     return { orderId: args.orderId };
   }

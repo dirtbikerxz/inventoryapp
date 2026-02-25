@@ -239,6 +239,20 @@ class WcpStockStatusService {
     };
   }
 
+  shouldPersistHistory(previousSnapshot, nextSnapshot) {
+    if (!nextSnapshot) return false;
+    if (!previousSnapshot) return true;
+    const previousCheckedAt = this.stockCheckedAtMs(previousSnapshot);
+    const nextCheckedAt = this.stockCheckedAtMs(nextSnapshot);
+    const previousStatus = String(previousSnapshot.status || "").toLowerCase();
+    const nextStatus = String(nextSnapshot.status || "").toLowerCase();
+    const previousQty = normalizeComparableQty(previousSnapshot.inStockQty);
+    const nextQty = normalizeComparableQty(nextSnapshot.inStockQty);
+    if (nextCheckedAt !== previousCheckedAt) return true;
+    if (nextStatus !== previousStatus) return true;
+    return nextQty !== previousQty;
+  }
+
   buildSnapshotFromVariantQty(
     sku,
     variantId,
@@ -440,6 +454,7 @@ class WcpStockStatusService {
 
     const activeOrderIds = new Set();
     const persistedEntries = [];
+    const historyEntries = [];
     let qtyChecks = 0;
     let qtyChanges = 0;
     let statusChanges = 0;
@@ -447,11 +462,17 @@ class WcpStockStatusService {
       activeOrderIds.add(entry.orderId);
       const snapshot = skuSnapshots.get(entry.sku);
       if (!snapshot) return;
+      const snapshotCheckedAtMs = this.stockCheckedAtMs(snapshot);
+      const effectiveCheckedAtMs = force ? now : snapshotCheckedAtMs;
+      const snapshotForOrder =
+        force && effectiveCheckedAtMs !== snapshotCheckedAtMs
+          ? { ...snapshot, checkedAt: new Date(effectiveCheckedAtMs).toISOString() }
+          : snapshot;
       const previousSnapshot =
         this.orderCache.get(entry.orderId) || entry.persistedSnapshot || null;
-      const change = this.describeSnapshotChange(previousSnapshot, snapshot);
+      const change = this.describeSnapshotChange(previousSnapshot, snapshotForOrder);
       const previousQty = normalizeComparableQty(previousSnapshot?.inStockQty);
-      const nextQty = normalizeComparableQty(snapshot.inStockQty);
+      const nextQty = normalizeComparableQty(snapshotForOrder.inStockQty);
       if (previousQty !== null || nextQty !== null) {
         qtyChecks += 1;
         const qtyChanged = previousQty !== nextQty;
@@ -470,10 +491,10 @@ class WcpStockStatusService {
                 : null,
             qtyChanged,
             previousStatus: change?.previousStatus || null,
-            status: change?.nextStatus || String(snapshot.status || "").toLowerCase() || "unknown",
-            statusSource: snapshot.statusSource || null,
-            quantitySource: snapshot.quantitySource || null,
-            checkedAt: snapshot.checkedAt || null,
+            status: change?.nextStatus || String(snapshotForOrder.status || "").toLowerCase() || "unknown",
+            statusSource: snapshotForOrder.statusSource || null,
+            quantitySource: snapshotForOrder.quantitySource || null,
+            checkedAt: snapshotForOrder.checkedAt || null,
           },
           `WCP qty refreshed for ${entry.sku}: ${previousQtyLabel} -> ${nextQtyLabel}${qtyChanged ? " (changed)" : " (unchanged)"}`,
         );
@@ -488,31 +509,47 @@ class WcpStockStatusService {
             status: change.nextStatus,
             previousInStockQty: change.previousQty,
             inStockQty: change.nextQty,
-            statusSource: snapshot.statusSource || null,
-            quantitySource: snapshot.quantitySource || null,
-            checkedAt: snapshot.checkedAt || null,
+            statusSource: snapshotForOrder.statusSource || null,
+            quantitySource: snapshotForOrder.quantitySource || null,
+            checkedAt: snapshotForOrder.checkedAt || null,
           },
           `WCP stock status updated for ${entry.sku}: ${change.previousStatus || "unknown"} -> ${change.nextStatus || "unknown"}`,
         );
       }
       this.orderCache.set(entry.orderId, {
-        ...snapshot,
+        ...snapshotForOrder,
         orderId: entry.orderId,
       });
       persistedEntries.push({
         orderId: entry.orderId,
-        wcpStockStatus: snapshot.status || "unknown",
-        wcpStockLabel: snapshot.label || stockLabel(snapshot.status || "unknown"),
+        wcpStockStatus: snapshotForOrder.status || "unknown",
+        wcpStockLabel: snapshotForOrder.label || stockLabel(snapshotForOrder.status || "unknown"),
         wcpInStockQty:
-          Number.isFinite(Number(snapshot.inStockQty))
-            ? Math.max(0, Math.round(Number(snapshot.inStockQty)))
+          Number.isFinite(Number(snapshotForOrder.inStockQty))
+            ? Math.max(0, Math.round(Number(snapshotForOrder.inStockQty)))
             : undefined,
-        wcpVariantId: snapshot.variantId ? String(snapshot.variantId) : undefined,
-        wcpStockCheckedAt: this.stockCheckedAtMs(snapshot),
-        wcpStockStatusSource: snapshot.statusSource || undefined,
-        wcpStockQuantitySource: snapshot.quantitySource || undefined,
-        wcpStockError: snapshot.error || undefined,
+        wcpVariantId: snapshotForOrder.variantId ? String(snapshotForOrder.variantId) : undefined,
+        wcpStockCheckedAt: effectiveCheckedAtMs,
+        wcpStockStatusSource: snapshotForOrder.statusSource || undefined,
+        wcpStockQuantitySource: snapshotForOrder.quantitySource || undefined,
+        wcpStockError: snapshotForOrder.error || undefined,
       });
+      if (force || this.shouldPersistHistory(previousSnapshot, snapshotForOrder)) {
+        historyEntries.push({
+          orderId: entry.orderId,
+          sku: entry.sku,
+          status: snapshotForOrder.status || undefined,
+          label: snapshotForOrder.label || undefined,
+          inStockQty:
+            Number.isFinite(Number(snapshotForOrder.inStockQty))
+              ? Math.max(0, Math.round(Number(snapshotForOrder.inStockQty)))
+              : undefined,
+          checkedAt: effectiveCheckedAtMs,
+          statusSource: snapshotForOrder.statusSource || undefined,
+          quantitySource: snapshotForOrder.quantitySource || undefined,
+          error: snapshotForOrder.error || undefined,
+        });
+      }
     });
     Array.from(this.orderCache.keys()).forEach((orderId) => {
       if (!activeOrderIds.has(orderId)) this.orderCache.delete(orderId);
@@ -524,6 +561,15 @@ class WcpStockStatusService {
         });
       } catch (error) {
         this.logger.warn({ error }, "Failed to persist WCP stock snapshots");
+      }
+    }
+    if (historyEntries.length) {
+      try {
+        await this.client.mutation("orders:recordWcpStockHistory", {
+          entries: historyEntries,
+        });
+      } catch (error) {
+        this.logger.warn({ error }, "Failed to persist WCP stock history");
       }
     }
     return {

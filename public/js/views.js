@@ -1496,6 +1496,12 @@ ${renderShareACartItems(order)}
       openInvoiceModal(order);
     });
   });
+  card.querySelectorAll('button[data-action="stock-history"]').forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openWcpStockHistoryModal(order);
+    });
+  });
   card.querySelectorAll('button[data-action="delete"]').forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -2114,7 +2120,208 @@ function renderWcpStockBadge(order) {
   const titleParts = [status];
   if (statusKey === "in_stock" && hasQty) titleParts.push(`${qty} in stock`);
   if (checkedText) titleParts.push(`Updated ${checkedText}`);
-  return `<span class="tag" style="border-color:${color}; color:${color};" title="${escapeHtml(titleParts.join(" · "))}">${escapeHtml(badgeText)}</span>`;
+  return `<button type="button" class="tag wcp-stock-badge" data-action="stock-history" style="border-color:${color}; color:${color};" title="${escapeHtml(titleParts.join(" · "))}">${escapeHtml(badgeText)}</button>`;
+}
+
+function closeWcpStockHistoryModal() {
+  if (stockHistoryModal) stockHistoryModal.style.display = "none";
+}
+
+function normalizeWcpHistoryRows(rows = []) {
+  return (rows || [])
+    .map((row) => {
+      const checkedAtRaw = Number(row?.checkedAt);
+      const checkedAt = Number.isFinite(checkedAtRaw)
+        ? checkedAtRaw
+        : Date.parse(row?.checkedAt || "");
+      if (!Number.isFinite(checkedAt)) return null;
+      const qtyRaw = Number(row?.inStockQty);
+      const inStockQty = Number.isFinite(qtyRaw)
+        ? Math.max(0, Math.round(qtyRaw))
+        : null;
+      return {
+        checkedAt,
+        inStockQty,
+        status: row?.status || null,
+        label: row?.label || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.checkedAt - b.checkedAt);
+}
+
+function renderWcpHistorySummary(order, rows = []) {
+  if (!stockHistorySummary) return;
+  const qtyRows = rows.filter((row) => row.inStockQty !== null);
+  const qtyValues = qtyRows.map((row) => row.inStockQty);
+  const latestRow = rows.length ? rows[rows.length - 1] : null;
+  const currentQtyRaw = Number(order?.wcpStock?.inStockQty);
+  const currentQty = Number.isFinite(currentQtyRaw)
+    ? Math.max(0, Math.round(currentQtyRaw))
+    : latestRow?.inStockQty ?? null;
+  const minQty = qtyValues.length ? Math.min(...qtyValues) : null;
+  const maxQty = qtyValues.length ? Math.max(...qtyValues) : null;
+  const firstChecked = rows.length ? rows[0].checkedAt : null;
+  const lastChecked = latestRow?.checkedAt || null;
+  const stat = (label, value) => `
+    <div class="stock-history-stat">
+      <div class="stock-history-stat-label">${escapeHtml(label)}</div>
+      <div class="stock-history-stat-value">${escapeHtml(value)}</div>
+    </div>
+  `;
+  stockHistorySummary.innerHTML = [
+    stat("Current Qty", currentQty !== null ? String(currentQty) : "N/A"),
+    stat("Lowest Qty", minQty !== null ? String(minQty) : "N/A"),
+    stat("Highest Qty", maxQty !== null ? String(maxQty) : "N/A"),
+    stat("Checks", String(rows.length)),
+    stat("First Check", firstChecked ? fmtDate(firstChecked) : "N/A"),
+    stat("Last Check", lastChecked ? fmtDate(lastChecked) : "N/A"),
+  ].join("");
+}
+
+function renderWcpHistoryChart(rows = []) {
+  if (!stockHistoryChart) return;
+  const points = rows.filter((row) => row.inStockQty !== null);
+  if (!points.length) {
+    stockHistoryChart.innerHTML =
+      '<text x="50%" y="50%" text-anchor="middle" fill="var(--muted)" font-size="14">No tracked quantity points yet.</text>';
+    return;
+  }
+  const width = 840;
+  const height = 280;
+  const left = 52;
+  const right = 18;
+  const top = 16;
+  const bottom = 34;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const minTs = points[0].checkedAt;
+  const maxTs = points[points.length - 1].checkedAt;
+  const minQty = Math.min(...points.map((point) => point.inStockQty));
+  const maxQtyRaw = Math.max(...points.map((point) => point.inStockQty));
+  const maxQty = Math.max(1, maxQtyRaw);
+  const yRange = Math.max(1, maxQty - Math.min(0, minQty));
+  const xRange = Math.max(1, maxTs - minTs);
+  const xAt = (ts) => left + ((ts - minTs) / xRange) * chartWidth;
+  const yAt = (qty) =>
+    top +
+    chartHeight -
+    ((qty - Math.min(0, minQty)) / yRange) * chartHeight;
+  const linePoints = points
+    .map(
+      (point) => `${xAt(point.checkedAt).toFixed(2)},${yAt(point.inStockQty).toFixed(2)}`,
+    )
+    .join(" ");
+  const yTicks = 4;
+  const yGrid = [];
+  for (let index = 0; index <= yTicks; index += 1) {
+    const ratio = index / yTicks;
+    const y = top + chartHeight * ratio;
+    const value = Math.round(
+      Math.max(0, maxQty - ratio * (maxQty - Math.min(0, minQty))),
+    );
+    yGrid.push(
+      `<line x1="${left}" y1="${y.toFixed(2)}" x2="${(left + chartWidth).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(253,208,35,0.2)" stroke-width="1" />`,
+    );
+    yGrid.push(
+      `<text x="${left - 8}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="var(--muted)" font-size="11">${value}</text>`,
+    );
+  }
+  const circles = points
+    .map((point, index) => {
+      const cx = xAt(point.checkedAt).toFixed(2);
+      const cy = yAt(point.inStockQty).toFixed(2);
+      const radius = index === points.length - 1 ? 4 : 3;
+      const fill = index === points.length - 1 ? "var(--gold)" : "var(--success)";
+      return `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}">
+        <title>${fmtDate(point.checkedAt)} · Qty ${point.inStockQty}</title>
+      </circle>`;
+    })
+    .join("");
+  const minDateLabel = formatDateMaybe(minTs);
+  const maxDateLabel = formatDateMaybe(maxTs);
+  stockHistoryChart.innerHTML = `
+    <rect x="${left}" y="${top}" width="${chartWidth}" height="${chartHeight}" fill="transparent" stroke="rgba(253,208,35,0.25)" stroke-width="1"></rect>
+    ${yGrid.join("")}
+    <polyline fill="none" stroke="var(--success)" stroke-width="2.5" points="${linePoints}"></polyline>
+    ${circles}
+    <text x="${left}" y="${height - 10}" text-anchor="start" fill="var(--muted)" font-size="11">${escapeHtml(minDateLabel)}</text>
+    <text x="${left + chartWidth}" y="${height - 10}" text-anchor="end" fill="var(--muted)" font-size="11">${escapeHtml(maxDateLabel)}</text>
+  `;
+}
+
+function renderWcpHistoryList(rows = []) {
+  if (!stockHistoryList) return;
+  if (!rows.length) {
+    stockHistoryList.innerHTML =
+      '<div class="small" style="padding:10px;">No stock checks recorded yet.</div>';
+    return;
+  }
+  const recent = rows.slice(-60).reverse();
+  stockHistoryList.innerHTML = recent
+    .map((row) => {
+      const qtyLabel = row.inStockQty !== null ? `${row.inStockQty}` : "N/A";
+      const statusLabel = row.label || row.status || "Unknown";
+      return `<div class="stock-history-row">
+        <span>${escapeHtml(fmtDate(row.checkedAt))}</span>
+        <span>${escapeHtml(statusLabel)}</span>
+        <span>Qty ${escapeHtml(qtyLabel)}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+async function openWcpStockHistoryModal(order) {
+  if (!stockHistoryModal || !order?._id) return;
+  const orderId =
+    order._id && order._id.toString ? order._id.toString() : String(order._id);
+  if (!orderId) return;
+  if (stockHistoryTitle) {
+    const labelPart = order.vendorPartNumber || order.productCode || "WCP Part";
+    stockHistoryTitle.textContent = `WCP Stock History · ${labelPart}`;
+  }
+  if (stockHistorySubtitle)
+    stockHistorySubtitle.textContent = "Loading stock history…";
+  if (stockHistorySummary) stockHistorySummary.innerHTML = "";
+  if (stockHistoryList)
+    stockHistoryList.innerHTML = '<div class="small" style="padding:10px;">Loading…</div>';
+  if (stockHistoryChart) stockHistoryChart.innerHTML = "";
+  if (stockHistoryMessage) {
+    stockHistoryMessage.textContent = "";
+    stockHistoryMessage.className = "small";
+  }
+  stockHistoryModal.style.display = "flex";
+  try {
+    const res = await fetch(
+      `/api/orders/${encodeURIComponent(orderId)}/stock-history?limit=800`,
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Failed to load stock history");
+    const rows = normalizeWcpHistoryRows(data?.history || []);
+    renderWcpHistorySummary(order, rows);
+    renderWcpHistoryChart(rows);
+    renderWcpHistoryList(rows);
+    if (stockHistorySubtitle) {
+      const requestedText = data?.requestedAt
+        ? fmtDate(data.requestedAt)
+        : fmtDate(order.requestedAt);
+      stockHistorySubtitle.textContent = `Tracking since request: ${requestedText}`;
+    }
+    if (stockHistoryMessage) {
+      const qtySamples = rows.filter((row) => row.inStockQty !== null).length;
+      stockHistoryMessage.textContent = `Showing ${rows.length} checks (${qtySamples} with qty).`;
+    }
+  } catch (error) {
+    if (stockHistoryMessage) {
+      stockHistoryMessage.textContent =
+        error?.message || "Failed to load stock history.";
+      stockHistoryMessage.className = "small error";
+    }
+    if (stockHistoryList) {
+      stockHistoryList.innerHTML =
+        '<div class="small" style="padding:10px;">Unable to load stock history.</div>';
+    }
+  }
 }
 
 function setUsedStockTracking(enabled) {

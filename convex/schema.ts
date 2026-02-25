@@ -280,6 +280,19 @@ export default defineSchema({
     updatedAt: v.number()
   })
   ,
+  wcpStockHistory: defineTable({
+    orderId: v.id("orders"),
+    sku: v.string(),
+    status: v.optional(v.string()),
+    label: v.optional(v.string()),
+    inStockQty: v.optional(v.number()),
+    checkedAt: v.number(),
+    statusSource: v.optional(v.string()),
+    quantitySource: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number()
+  }).index("by_orderId_checkedAt", ["orderId", "checkedAt"])
+  ,
   catalogCategories: defineTable({
     name: v.string(),
     slug: v.string(),

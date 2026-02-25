@@ -1285,6 +1285,48 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
+app.get('/api/orders/:id/stock-history', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const order = await client.query('orders:getOne', { orderId: req.params.id });
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  const hasGlobal = user.permissions?.canManagePartRequests;
+  const hasOrders = user.permissions?.canManageOrders;
+  const hasOwn = user.permissions?.canManageOwnPartRequests && isOwnOrder(order, user);
+  const canViewRequests = Boolean(user.permissions?.canPlacePartRequests);
+  if (!hasGlobal && !hasOwn && !hasOrders && !canViewRequests) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const requestedAt = Number(order.requestedAt);
+    const since = Number.isFinite(requestedAt) ? requestedAt : 0;
+    const limitRaw = Number(req.query?.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(2000, Math.round(limitRaw))
+      : 500;
+    const data = await client.query('orders:listWcpStockHistory', {
+      orderId: req.params.id,
+      limit
+    });
+    const history = Array.isArray(data?.history)
+      ? data.history
+          .filter((row) => Number(row?.checkedAt) >= since)
+          .sort((a, b) => Number(a?.checkedAt || 0) - Number(b?.checkedAt || 0))
+      : [];
+    res.json({
+      orderId: req.params.id,
+      sku: order.vendorPartNumber || order.productCode || null,
+      requestedAt: since || null,
+      history
+    });
+  } catch (error) {
+    logger.error(error, 'Failed to load WCP stock history');
+    res.status(500).json({ error: 'Unable to load WCP stock history' });
+  }
+});
+
 app.get('/api/invoices', async (req, res) => {
   const user = await requireAuth(req, res, null);
   if (!user) return;
@@ -1724,6 +1766,33 @@ app.post('/api/orders', async (req, res) => {
     const result = await client.mutation('orders:create', {
       ...payload
     });
+    if (
+      (payload.wcpStockStatus || Number.isFinite(Number(payload.wcpInStockQty))) &&
+      (payload.vendorPartNumber || payload.productCode)
+    ) {
+      const checkedAtRaw = Number(payload.wcpStockCheckedAt);
+      try {
+        await client.mutation('orders:recordWcpStockHistory', {
+          entries: [
+            {
+              orderId: result.orderId?.toString ? result.orderId.toString() : String(result.orderId),
+              sku: String(payload.vendorPartNumber || payload.productCode || '').trim().toUpperCase(),
+              status: payload.wcpStockStatus || undefined,
+              label: payload.wcpStockLabel || undefined,
+              inStockQty: Number.isFinite(Number(payload.wcpInStockQty))
+                ? Math.max(0, Math.round(Number(payload.wcpInStockQty)))
+                : undefined,
+              checkedAt: Number.isFinite(checkedAtRaw) ? checkedAtRaw : Date.now(),
+              statusSource: payload.wcpStockStatusSource || undefined,
+              quantitySource: payload.wcpStockQuantitySource || undefined,
+              error: payload.wcpStockError || undefined,
+            },
+          ],
+        });
+      } catch (historyError) {
+        logger.warn({ historyError }, 'Failed to record initial WCP stock history');
+      }
+    }
     if (tracking.length) {
       await trackingService.ensureCacheEntries(tracking, true);
     }
@@ -3043,10 +3112,13 @@ async function scrapeWcpQuantitiesViaCartBatch(variantIds = [], requestedQty = W
         const normalizedVariantId = String(variantId);
         const snapshot = batchSnapshots.get(normalizedVariantId);
         if (!snapshot) return;
+        const checkedAt = Date.now();
         snapshots.set(normalizedVariantId, {
           requestedQty: quantity,
           inStockQty: snapshot.inStockQty,
-          rawMessage: snapshot.rawMessage
+          rawMessage: snapshot.rawMessage,
+          checkedAt,
+          quantitySource: 'wcp_cart_page'
         });
       });
       await clearWcpCart(cookieJar);

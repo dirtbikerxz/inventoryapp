@@ -3224,6 +3224,8 @@ function fetchOrderDetails(configHint) {
       }
     });
     closeVendorExport?.addEventListener('click', () => closeVendorExportModal());
+    closeStockHistoryModalBtn?.addEventListener('click', () => closeWcpStockHistoryModal());
+    attachBackdropClose(stockHistoryModal, closeWcpStockHistoryModal);
 
     vendorImportSelect?.addEventListener('change', () => {
       if (!canUseVendorImport()) return;

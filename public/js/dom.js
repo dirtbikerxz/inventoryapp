@@ -473,6 +473,16 @@ const vendorExportCopy = document.getElementById("vendor-export-copy");
 const vendorExportDownload = document.getElementById("vendor-export-download");
 const vendorExportMessage = document.getElementById("vendor-export-message");
 const closeVendorExport = document.getElementById("close-vendor-export");
+const stockHistoryModal = document.getElementById("stock-history-modal");
+const closeStockHistoryModalBtn = document.getElementById(
+  "close-stock-history-modal",
+);
+const stockHistoryTitle = document.getElementById("stock-history-title");
+const stockHistorySubtitle = document.getElementById("stock-history-subtitle");
+const stockHistorySummary = document.getElementById("stock-history-summary");
+const stockHistoryChart = document.getElementById("stock-history-chart");
+const stockHistoryList = document.getElementById("stock-history-list");
+const stockHistoryMessage = document.getElementById("stock-history-message");
 const actionOverlay = document.getElementById("action-overlay");
 const actionOverlayText = document.getElementById("action-overlay-text");
 const catalogBackBtn = document.getElementById("catalog-back");

@@ -265,6 +265,17 @@
     .tag-manager-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .admin-inline-form { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .tag-modal-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; max-width:720px; width:100%; box-shadow:var(--card-shadow); padding:18px; max-height:90vh; overflow:auto; }
+    .stock-history-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; }
+    .stock-history-stat { border:1px solid var(--border); border-radius:10px; background:var(--panel-2); padding:8px 10px; min-height:62px; }
+    .stock-history-stat-label { font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); }
+    .stock-history-stat-value { margin-top:4px; font-size:18px; font-weight:700; color:var(--text); }
+    .stock-history-chart-wrap { border:1px solid var(--border); border-radius:12px; background:var(--panel-2); padding:10px; }
+    .stock-history-chart { width:100%; height:280px; display:block; }
+    .stock-history-list { border:1px solid var(--border); border-radius:12px; max-height:220px; overflow:auto; background:var(--panel-2); }
+    .stock-history-row { display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid rgba(253,208,35,0.18); font-size:12px; color:var(--muted); }
+    .stock-history-row:last-child { border-bottom:none; }
+    .tag.wcp-stock-badge { appearance:none; -webkit-appearance:none; background:transparent; cursor:pointer; font:inherit; }
+    .tag.wcp-stock-badge:hover { box-shadow:0 0 0 1px rgba(253,208,35,0.45); }
     .inline-color { width:40px; height:40px; padding:0; border:none; border-radius:50%; background:transparent; cursor:pointer; }
     .card-footer {
       display: flex;
