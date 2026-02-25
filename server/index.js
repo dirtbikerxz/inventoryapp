@@ -44,7 +44,19 @@ const trackingService = new TrackingService({ client, logger });
 const stockStatusService = new WcpStockStatusService({
   client,
   logger,
-  lookupWcpPart: (partNumber) => lookupWcpPart(partNumber)
+  lookupWcpPart: (partNumber) => lookupWcpPart(partNumber),
+  lookupWcpPartsBatch: (partNumbers, options) =>
+    lookupWcpPartsBatch(partNumbers, options),
+  lookupWcpQuantitiesByVariantBatch: (variantIds, options = {}) =>
+    scrapeWcpQuantitiesViaCartBatch(
+      variantIds,
+      Number.isFinite(Number(options.requestedQty))
+        ? Math.max(1, Math.round(Number(options.requestedQty)))
+        : WCP_QTY_PROBE,
+      Number.isFinite(Number(options.chunkSize))
+        ? Math.max(1, Math.round(Number(options.chunkSize)))
+        : 20
+    )
 });
 const digikeyService = new DigiKeyService({ logger });
 const mouserService = new MouserService({ logger });
@@ -1231,8 +1243,31 @@ app.get('/api/orders', async (req, res) => {
       const requested = invoices.filter(i => i.reimbursementRequested);
       const latest = requested[0] || invoices[0] || null;
       const statuses = Array.from(new Set(requested.map(i => i.reimbursementStatus).filter(Boolean)));
+      const checkedAtRaw = Number(order.wcpStockCheckedAt);
+      const persistedWcpStock =
+        order.wcpStockStatus ||
+        order.wcpStockLabel ||
+        Number.isFinite(Number(order.wcpInStockQty)) ||
+        (order.wcpVariantId !== undefined && order.wcpVariantId !== null)
+          ? {
+              status: order.wcpStockStatus || "unknown",
+              label: order.wcpStockLabel || null,
+              inStockQty: Number.isFinite(Number(order.wcpInStockQty))
+                ? Math.max(0, Math.round(Number(order.wcpInStockQty)))
+                : null,
+              variantId:
+                order.wcpVariantId !== undefined && order.wcpVariantId !== null
+                  ? String(order.wcpVariantId)
+                  : null,
+              statusSource: order.wcpStockStatusSource || null,
+              quantitySource: order.wcpStockQuantitySource || null,
+              checkedAt: Number.isFinite(checkedAtRaw) ? checkedAtRaw : null,
+              error: order.wcpStockError || null
+            }
+          : null;
       return {
         ...order,
+        wcpStock: persistedWcpStock || order.wcpStock || undefined,
         invoices,
         reimbursementSummary: {
           count: invoices.length,
@@ -1242,11 +1277,6 @@ app.get('/api/orders', async (req, res) => {
         }
       };
     });
-    try {
-      await stockStatusService.runCycle(false);
-    } catch (stockError) {
-      logger.warn(stockError, 'WCP stock refresh during orders fetch failed');
-    }
     const withStock = stockStatusService.applySnapshotsToOrders(ordersWithInvoices);
     res.json({ ...data, orders: withStock });
   } catch (error) {
@@ -1667,12 +1697,15 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ error: 'Order payload is required' });
   }
   const notesRequired = !user.permissions?.notesNotRequired;
-  const rawNotes = typeof req.body.notes === 'string' ? req.body.notes.trim() : '';
-  if (notesRequired && !rawNotes) {
+  const rawNotes = typeof req.body.notes === 'string' ? req.body.notes : '';
+  const sanitizedNotes = typeof rawNotes === 'string'
+    ? sanitizeVendorImportNotes(rawNotes.trim())
+    : '';
+  if (notesRequired && !sanitizedNotes) {
     return res.status(400).json({ error: 'Notes/justification are required for this part request.' });
   }
   if (typeof req.body.notes === 'string') {
-    req.body.notes = rawNotes || undefined;
+    req.body.notes = sanitizedNotes || undefined;
   }
 
   try {
@@ -2389,6 +2422,28 @@ function deriveSelector(el) {
   return cls ? `${tag}${cls}` : tag;
 }
 
+function sanitizeVendorImportNotes(rawNotes) {
+  if (typeof rawNotes !== 'string') return rawNotes;
+  const segments = rawNotes
+    .split('·')
+    .map((segment) => String(segment || '').trim())
+    .filter(Boolean);
+  if (!segments.length) return '';
+  const hasVendorImportSegment = segments.some(
+    (segment) => /^vendor\s+import$/i.test(segment) || /vendor\s+import/i.test(segment),
+  );
+  if (!hasVendorImportSegment) {
+    return segments.join(' · ');
+  }
+  const filtered = segments.filter((segment) => {
+    const lower = segment.toLowerCase();
+    if (lower.startsWith('stock:')) return false;
+    if (lower.startsWith('in stock')) return false;
+    return true;
+  });
+  return filtered.join(' · ');
+}
+
 function collectCandidates($) {
   const titleCandidates = [];
   const priceCandidates = [];
@@ -2877,6 +2932,42 @@ function parseWcpCartQuantity(html, variantId, requestedQty) {
   };
 }
 
+function parseWcpCartQuantities(html) {
+  const results = new Map();
+  if (!html) return results;
+  const $ = cheerio.load(html);
+  $('.tt-backorder_qua').each((_, element) => {
+    const node = $(element);
+    const currentQtyRaw = Number(node.attr('data-current-qty'));
+    const currentQty = Number.isFinite(currentQtyRaw)
+      ? Math.max(0, Math.round(currentQtyRaw))
+      : null;
+    const rawMessage = node.text().replace(/\s+/g, ' ').trim() || null;
+    const link =
+      node.closest('tr').find('a[href*="variant="]').first().attr('href') ||
+      node.closest('td').find('a[href*="variant="]').first().attr('href') ||
+      node.parent().find('a[href*="variant="]').first().attr('href') ||
+      '';
+    const match = String(link).match(/[?&]variant=(\d+)/i);
+    const variantId = match?.[1] ? String(match[1]) : null;
+    if (!variantId) return;
+    results.set(variantId, {
+      inStockQty: currentQty,
+      rawMessage
+    });
+  });
+  return results;
+}
+
+function chunkArray(values = [], chunkSize = 20) {
+  const safeSize = Math.max(1, Math.round(Number(chunkSize) || 1));
+  const chunks = [];
+  for (let i = 0; i < values.length; i += safeSize) {
+    chunks.push(values.slice(i, i + safeSize));
+  }
+  return chunks;
+}
+
 async function clearWcpCart(cookieJar) {
   try {
     await fetch('https://wcproducts.com/cart/clear.js', {
@@ -2886,6 +2977,87 @@ async function clearWcpCart(cookieJar) {
   } catch (error) {
     logger.warn(error, 'Failed to clear WCP cart after qty scrape');
   }
+}
+
+async function scrapeWcpQuantitiesViaCartBatch(variantIds = [], requestedQty = WCP_QTY_PROBE, chunkSize = 20) {
+  const uniqueVariantIds = Array.from(
+    new Set(
+      (variantIds || [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+  const snapshots = new Map();
+  if (!uniqueVariantIds.length) return snapshots;
+  const quantity = Math.max(1, Math.round(Number(requestedQty) || 1));
+  const cookieJar = new Map();
+  try {
+    const chunks = chunkArray(uniqueVariantIds, chunkSize);
+    for (const chunk of chunks) {
+      const addResp = await fetch('https://wcproducts.com/cart/add.js', {
+        method: 'POST',
+        headers: withCookieHeader(
+          {
+            ...wcpRequestHeaders(),
+            Accept: 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/json',
+            Origin: 'https://wcproducts.com',
+            Referer: 'https://wcproducts.com/cart'
+          },
+          cookieJar
+        ),
+        body: JSON.stringify({
+          items: chunk.map((variantId) => ({
+            id: Number.isFinite(Number(variantId)) ? Number(variantId) : variantId,
+            quantity
+          }))
+        }),
+        redirect: 'follow'
+      });
+      updateCookieJarFromHeaders(cookieJar, addResp.headers);
+      if (!addResp.ok) {
+        logger.warn(
+          { status: addResp.status, batchSize: chunk.length },
+          'WCP cart add failed during batch qty scrape'
+        );
+        await clearWcpCart(cookieJar);
+        continue;
+      }
+      const cartResp = await fetch('https://wcproducts.com/cart', {
+        method: 'GET',
+        headers: withCookieHeader(wcpRequestHeaders(), cookieJar),
+        redirect: 'follow'
+      });
+      updateCookieJarFromHeaders(cookieJar, cartResp.headers);
+      if (!cartResp.ok) {
+        logger.warn(
+          { status: cartResp.status, batchSize: chunk.length },
+          'WCP cart page fetch failed during batch qty scrape'
+        );
+        await clearWcpCart(cookieJar);
+        continue;
+      }
+      const cartHtml = await cartResp.text();
+      const batchSnapshots = parseWcpCartQuantities(cartHtml);
+      chunk.forEach((variantId) => {
+        const normalizedVariantId = String(variantId);
+        const snapshot = batchSnapshots.get(normalizedVariantId);
+        if (!snapshot) return;
+        snapshots.set(normalizedVariantId, {
+          requestedQty: quantity,
+          inStockQty: snapshot.inStockQty,
+          rawMessage: snapshot.rawMessage
+        });
+      });
+      await clearWcpCart(cookieJar);
+      await sleep(100);
+    }
+  } catch (error) {
+    logger.warn(error, 'WCP cart batch quantity scrape failed');
+  } finally {
+    await clearWcpCart(cookieJar);
+  }
+  return snapshots;
 }
 
 async function scrapeWcpQuantityViaCart(variantId, requestedQty = WCP_QTY_PROBE) {
@@ -2968,18 +3140,20 @@ async function resolveWcpProductUrl(rawUrl) {
   };
 }
 
-async function lookupWcpPart(partNumber) {
+async function lookupWcpPart(partNumber, options = {}) {
   const normalizedPartNumber = normalizeWcpSku(partNumber);
   if (!normalizedPartNumber) {
     throw new Error('WCP part number is required.');
   }
+  const includeQty = options?.includeQty !== false;
+  const useQueue = options?.useQueue !== false;
   const cached = readWcpCacheEntry(normalizedPartNumber);
   if (cached && (Date.now() - cached.cachedAt) <= WCP_LOOKUP_CACHE_TTL_MS) {
     return cached.result;
   }
 
   try {
-    const fresh = await queueWcpLookup(async () => {
+    const lookupTask = async () => {
       const warmCache = readWcpCacheEntry(normalizedPartNumber);
       if (warmCache && (Date.now() - warmCache.cachedAt) <= WCP_LOOKUP_CACHE_TTL_MS) {
         return warmCache.result;
@@ -3019,7 +3193,7 @@ async function lookupWcpPart(partNumber) {
         productVariants[0] ||
         null;
 
-      const qtySnapshot = preferredProductVariant?.id
+      const qtySnapshot = includeQty && preferredProductVariant?.id
         ? await scrapeWcpQuantityViaCart(preferredProductVariant.id, WCP_QTY_PROBE)
         : null;
       const inStockQty = Number.isFinite(qtySnapshot?.inStockQty) ? qtySnapshot.inStockQty : null;
@@ -3107,9 +3281,14 @@ async function lookupWcpPart(partNumber) {
             meta,
             stock
           };
-      storeWcpCacheEntry(normalizedPartNumber, result);
+      if (includeQty || !warmCache) {
+        storeWcpCacheEntry(normalizedPartNumber, result);
+      }
       return result;
-    });
+    };
+    const fresh = useQueue
+      ? await queueWcpLookup(lookupTask)
+      : await lookupTask();
     return deepCloneWcpLookup(fresh);
   } catch (error) {
     const staleCandidate = readWcpCacheEntry(normalizedPartNumber) || cached;
@@ -3122,6 +3301,104 @@ async function lookupWcpPart(partNumber) {
     }
     throw error;
   }
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
+  const workerCount = Math.max(1, Math.min(list.length, Math.round(Number(concurrency) || 1)));
+  const results = new Array(list.length);
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= list.length) return;
+      results[index] = await mapper(list[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+async function lookupWcpPartsBatch(partNumbers = [], options = {}) {
+  const includeQty = options?.includeQty !== false;
+  const uniqueParts = Array.from(
+    new Set(
+      (partNumbers || [])
+        .map((value) => normalizeWcpSku(value))
+        .filter(Boolean)
+    )
+  );
+  if (!uniqueParts.length) return [];
+  const baseLookups = await mapWithConcurrency(uniqueParts, 2, async (part) => {
+    try {
+      const details = await lookupWcpPart(part, {
+        includeQty: false,
+        useQueue: false
+      });
+      return { partNumber: part, ok: true, details };
+    } catch (error) {
+      return {
+        partNumber: part,
+        ok: false,
+        error: error?.message || 'WCP lookup failed'
+      };
+    }
+  });
+
+  if (!includeQty) return baseLookups;
+
+  const variantToPart = new Map();
+  baseLookups.forEach((entry) => {
+    if (!entry?.ok) return;
+    const variantId = entry.details?.meta?.variantId;
+    if (!variantId) return;
+    variantToPart.set(String(variantId), entry.partNumber);
+  });
+  const qtySnapshots = await scrapeWcpQuantitiesViaCartBatch(
+    Array.from(variantToPart.keys()),
+    WCP_QTY_PROBE,
+    20
+  );
+
+  return baseLookups.map((entry) => {
+    if (!entry?.ok) return entry;
+    const variantId = entry.details?.meta?.variantId;
+    if (!variantId) return entry;
+    const qtySnapshot = qtySnapshots.get(String(variantId));
+    if (!qtySnapshot) return entry;
+    const inStockQty = Number.isFinite(qtySnapshot.inStockQty)
+      ? Math.max(0, Math.round(qtySnapshot.inStockQty))
+      : null;
+    const nextDetails = {
+      ...entry.details,
+      stock: {
+        ...(entry.details?.stock || {}),
+        inStockQty,
+        quantitySource: 'wcp_cart_page',
+        checkedAt: new Date().toISOString()
+      },
+      meta: {
+        ...(entry.details?.meta || {}),
+        stockInStockQty: inStockQty
+      }
+    };
+    const statusKey = String(nextDetails.stock?.status || '').toLowerCase();
+    const available = nextDetails.stock?.availableForSale;
+    if (statusKey === 'in_stock' && available === true && Number.isFinite(inStockQty) && inStockQty <= 0) {
+      nextDetails.stock.status = 'backordered';
+      nextDetails.stock.label = wcpStockLabel('backordered');
+      nextDetails.stock.statusSource = 'wcp_cart_page';
+      nextDetails.meta.stockStatus = 'backordered';
+      nextDetails.meta.stockLabel = wcpStockLabel('backordered');
+    }
+    storeWcpCacheEntry(entry.partNumber, nextDetails);
+    return {
+      ...entry,
+      details: nextDetails
+    };
+  });
 }
 
 const AMAZON_ASIN_REGEX = /^[A-Z0-9]{10}$/i;
@@ -3911,6 +4188,89 @@ app.post('/api/vendors/shareacart', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Share-A-Cart import failed');
     res.status(500).json({ error: error.message || 'Share-A-Cart import failed.' });
+  }
+});
+
+app.post('/api/vendors/extract/batch', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const vendorKey = typeof req.body?.vendorKey === 'string' ? req.body.vendorKey.toLowerCase() : '';
+  const rawPartNumbers = Array.isArray(req.body?.partNumbers) ? req.body.partNumbers : [];
+  if (!vendorKey) return res.status(400).json({ error: 'vendorKey is required' });
+  if (!rawPartNumbers.length) return res.status(400).json({ error: 'partNumbers must be a non-empty array' });
+  const def = getBuiltinVendor(vendorKey);
+  if (!def) return res.status(404).json({ error: 'Unknown vendor integration' });
+  if (def.key !== 'wcp') {
+    return res.status(400).json({ error: 'Batch extract currently supports WCP only.' });
+  }
+  const includeQty = req.body?.includeQty === undefined ? true : parseBoolean(req.body.includeQty);
+  const partNumbers = rawPartNumbers
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .slice(0, 250);
+  if (!partNumbers.length) return res.status(400).json({ error: 'No valid part numbers supplied' });
+  try {
+    const results = await lookupWcpPartsBatch(partNumbers, { includeQty });
+    return res.json({
+      vendor: def.vendor,
+      vendorKey: def.key,
+      count: results.length,
+      results
+    });
+  } catch (error) {
+    logger.error(error, `Failed built-in vendor batch lookup ${vendorKey}`);
+    return res.status(500).json({ error: error?.message || 'Vendor batch lookup failed' });
+  }
+});
+
+app.post('/api/vendors/wcp/stock/batch', async (req, res) => {
+  const user = await requireAuth(req, res, null);
+  if (!user) return;
+  const rawVariantIds = Array.isArray(req.body?.variantIds) ? req.body.variantIds : [];
+  if (!rawVariantIds.length) {
+    return res.status(400).json({ error: 'variantIds must be a non-empty array' });
+  }
+  const variantIds = Array.from(
+    new Set(
+      rawVariantIds
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 250);
+  if (!variantIds.length) {
+    return res.status(400).json({ error: 'No valid variantIds supplied' });
+  }
+  try {
+    const requestedQty = Number.isFinite(Number(req.body?.requestedQty))
+      ? Math.max(1, Math.round(Number(req.body.requestedQty)))
+      : WCP_QTY_PROBE;
+    const chunkSize = Number.isFinite(Number(req.body?.chunkSize))
+      ? Math.max(1, Math.round(Number(req.body.chunkSize)))
+      : 20;
+    const snapshots = await scrapeWcpQuantitiesViaCartBatch(variantIds, requestedQty, chunkSize);
+    const checkedAt = Date.now();
+    const results = variantIds.map((variantId) => {
+      const snapshot = snapshots.get(String(variantId));
+      return {
+        variantId: String(variantId),
+        inStockQty: Number.isFinite(Number(snapshot?.inStockQty))
+          ? Math.max(0, Math.round(Number(snapshot.inStockQty)))
+          : null,
+        requestedQty,
+        rawMessage: snapshot?.rawMessage || null,
+        quantitySource: snapshot ? 'wcp_cart_page' : null,
+        checkedAt
+      };
+    });
+    return res.json({
+      vendor: 'WCP',
+      vendorKey: 'wcp',
+      count: results.length,
+      results
+    });
+  } catch (error) {
+    logger.error(error, 'WCP variant stock batch lookup failed');
+    return res.status(500).json({ error: error?.message || 'WCP variant stock lookup failed' });
   }
 });
 

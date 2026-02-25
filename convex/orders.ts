@@ -163,7 +163,15 @@ export const create = mutation({
     approvalStatus: v.optional(v.string()),
     approvedBy: v.optional(v.string()),
     approvedAt: v.optional(v.number()),
-    tags: v.optional(v.array(v.string()))
+    tags: v.optional(v.array(v.string())),
+    wcpStockStatus: v.optional(v.string()),
+    wcpStockLabel: v.optional(v.string()),
+    wcpInStockQty: v.optional(v.number()),
+    wcpVariantId: v.optional(v.string()),
+    wcpStockCheckedAt: v.optional(v.number()),
+    wcpStockStatusSource: v.optional(v.string()),
+    wcpStockQuantitySource: v.optional(v.string()),
+    wcpStockError: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -306,13 +314,21 @@ export const update = mutation({
     approvalStatus: v.optional(v.string()),
     approvedBy: v.optional(v.string()),
     approvedAt: v.optional(v.number()),
-    tags: v.optional(v.array(v.string()))
+    tags: v.optional(v.array(v.string())),
+    wcpStockStatus: v.optional(v.string()),
+    wcpStockLabel: v.optional(v.string()),
+    wcpInStockQty: v.optional(v.number()),
+    wcpVariantId: v.optional(v.string()),
+    wcpStockCheckedAt: v.optional(v.number()),
+    wcpStockStatusSource: v.optional(v.string()),
+    wcpStockQuantitySource: v.optional(v.string()),
+    wcpStockError: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("orders", args.orderId);
     if (!id) throw new Error("Invalid order id");
     const updates: Record<string, any> = {};
-    ["partName","quantityRequested","priority","supplier","vendor","partLink","shareACartItems","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","productCode","notes","approvalStatus","approvedBy","approvedAt","tags"].forEach(k => {
+    ["partName","quantityRequested","priority","supplier","vendor","partLink","shareACartItems","vendorPartNumber","trackingNumber","status","unitCost","fetchedPrice","productCode","notes","approvalStatus","approvedBy","approvedAt","tags","wcpStockStatus","wcpStockLabel","wcpInStockQty","wcpVariantId","wcpStockCheckedAt","wcpStockStatusSource","wcpStockQuantitySource","wcpStockError"].forEach(k => {
       const val = (args as any)[k];
       if (val !== undefined) updates[k] = val;
     });
@@ -345,6 +361,51 @@ export const update = mutation({
     if (Object.keys(updates).length === 0) return { orderId: id };
     await ctx.db.patch(id, updates);
     return { orderId: id };
+  }
+});
+
+export const bulkUpdateWcpStock = mutation({
+  args: {
+    entries: v.array(
+      v.object({
+        orderId: v.string(),
+        wcpStockStatus: v.optional(v.string()),
+        wcpStockLabel: v.optional(v.string()),
+        wcpInStockQty: v.optional(v.number()),
+        wcpVariantId: v.optional(v.string()),
+        wcpStockCheckedAt: v.optional(v.number()),
+        wcpStockStatusSource: v.optional(v.string()),
+        wcpStockQuantitySource: v.optional(v.string()),
+        wcpStockError: v.optional(v.string())
+      })
+    )
+  },
+  handler: async (ctx, args) => {
+    let updated = 0;
+    for (const entry of args.entries || []) {
+      const id = ctx.db.normalizeId("orders", entry.orderId);
+      if (!id) continue;
+      const order = await ctx.db.get(id);
+      if (!order) continue;
+      const patch: Record<string, any> = {};
+      [
+        "wcpStockStatus",
+        "wcpStockLabel",
+        "wcpInStockQty",
+        "wcpVariantId",
+        "wcpStockCheckedAt",
+        "wcpStockStatusSource",
+        "wcpStockQuantitySource",
+        "wcpStockError"
+      ].forEach((key) => {
+        const value = (entry as any)[key];
+        if (value !== undefined) patch[key] = value;
+      });
+      if (!Object.keys(patch).length) continue;
+      await ctx.db.patch(id, patch);
+      updated += 1;
+    }
+    return { updated };
   }
 });
 

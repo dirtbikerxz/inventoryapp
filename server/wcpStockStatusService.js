@@ -25,11 +25,24 @@ function stockLabel(status) {
   return "Unknown";
 }
 
+function normalizeComparableQty(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : null;
+}
+
 class WcpStockStatusService {
-  constructor({ client, logger, lookupWcpPart }) {
+  constructor({
+    client,
+    logger,
+    lookupWcpPart,
+    lookupWcpPartsBatch,
+    lookupWcpQuantitiesByVariantBatch,
+  }) {
     this.client = client;
     this.logger = logger;
     this.lookupWcpPart = lookupWcpPart;
+    this.lookupWcpPartsBatch = lookupWcpPartsBatch;
+    this.lookupWcpQuantitiesByVariantBatch = lookupWcpQuantitiesByVariantBatch;
     this.refreshMinutes = 30;
     this.timer = null;
     this.running = false;
@@ -62,7 +75,7 @@ class WcpStockStatusService {
 
   async init() {
     await this.loadSettings();
-    await this.runCycle(true);
+    await this.runCycle(false);
     this.start();
   }
 
@@ -92,13 +105,69 @@ class WcpStockStatusService {
   async collectActiveOrders() {
     const data = await this.client.query("orders:list", { status: "Requested" });
     const orders = Array.isArray(data?.orders) ? data.orders : [];
-    return orders
+    const now = Date.now();
+    const entries = orders
       .filter((order) => this.isActiveWcpOrder(order))
       .map((order) => ({
         orderId: normalizeId(order._id || order.id || order.orderId),
         sku: normalizeSku(order.vendorPartNumber || order.productCode),
+        variantId:
+          order.wcpVariantId !== undefined && order.wcpVariantId !== null
+            ? String(order.wcpVariantId)
+            : "",
+        persistedSnapshot: this.snapshotFromPersistedOrder(order, now),
       }))
       .filter((entry) => entry.orderId && entry.sku);
+    entries.forEach((entry) => {
+      if (!entry.persistedSnapshot) return;
+      const checkedAtMs = this.stockCheckedAtMs(entry.persistedSnapshot);
+      this.orderCache.set(entry.orderId, {
+        ...entry.persistedSnapshot,
+        orderId: entry.orderId,
+      });
+      const existing = this.skuCache.get(entry.sku);
+      const existingCheckedAt = existing
+        ? this.stockCheckedAtMs(existing.snapshot)
+        : -1;
+      if (!existing || checkedAtMs >= existingCheckedAt) {
+        this.skuCache.set(entry.sku, {
+          snapshot: entry.persistedSnapshot,
+          nextRefreshAt: checkedAtMs + this.intervalMs(),
+        });
+      }
+    });
+    return entries;
+  }
+
+  snapshotFromPersistedOrder(order, now) {
+    if (!order) return null;
+    const hasPersisted =
+      order.wcpStockStatus ||
+      order.wcpStockLabel ||
+      Number.isFinite(Number(order.wcpInStockQty)) ||
+      (order.wcpVariantId !== undefined && order.wcpVariantId !== null);
+    if (!hasPersisted) return null;
+    const checkedAtRaw = Number(order.wcpStockCheckedAt);
+    const checkedAtMs = Number.isFinite(checkedAtRaw) ? checkedAtRaw : now;
+    const checkedAt = new Date(checkedAtMs).toISOString();
+    const status = order.wcpStockStatus || "unknown";
+    const inStockQtyRaw = Number(order.wcpInStockQty);
+    return {
+      sku: normalizeSku(order.vendorPartNumber || order.productCode),
+      status,
+      label: order.wcpStockLabel || stockLabel(status),
+      inStockQty: Number.isFinite(inStockQtyRaw)
+        ? Math.max(0, Math.round(inStockQtyRaw))
+        : null,
+      variantId:
+        order.wcpVariantId !== undefined && order.wcpVariantId !== null
+          ? String(order.wcpVariantId)
+          : null,
+      statusSource: order.wcpStockStatusSource || null,
+      quantitySource: order.wcpStockQuantitySource || null,
+      checkedAt,
+      error: order.wcpStockError || null,
+    };
   }
 
   normalizeStockSnapshot(sku, details, now) {
@@ -113,6 +182,13 @@ class WcpStockStatusService {
       status,
       label: stock.label || details?.meta?.stockLabel || stockLabel(status),
       inStockQty,
+      variantId:
+        stock.variantId !== undefined && stock.variantId !== null
+          ? String(stock.variantId)
+          : details?.meta?.variantId !== undefined &&
+              details?.meta?.variantId !== null
+            ? String(details.meta.variantId)
+            : null,
       statusSource: stock.statusSource || null,
       quantitySource: stock.quantitySource || null,
       checkedAt: stock.checkedAt || new Date(now).toISOString(),
@@ -120,7 +196,84 @@ class WcpStockStatusService {
     };
   }
 
-  async getSkuSnapshot(sku, force = false) {
+  stockCheckedAtMs(snapshot) {
+    if (!snapshot) return Date.now();
+    const asNumber = Number(snapshot.checkedAt);
+    if (Number.isFinite(asNumber)) return asNumber;
+    const parsed = Date.parse(snapshot.checkedAt || "");
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }
+
+  fallbackSnapshotForSku(sku, now, errorMessage = null) {
+    const normalized = normalizeSku(sku);
+    const cached = this.skuCache.get(normalized)?.snapshot;
+    return cached || {
+      sku: normalized,
+      status: "unknown",
+      label: "Unknown",
+      inStockQty: null,
+      variantId: null,
+      statusSource: null,
+      quantitySource: null,
+      checkedAt: new Date(now).toISOString(),
+      error: errorMessage,
+    };
+  }
+
+  describeSnapshotChange(previousSnapshot, nextSnapshot) {
+    if (!nextSnapshot) return null;
+    const previousStatus = String(previousSnapshot?.status || "").toLowerCase() || null;
+    const nextStatus = String(nextSnapshot?.status || "").toLowerCase() || "unknown";
+    const previousQty = normalizeComparableQty(previousSnapshot?.inStockQty);
+    const nextQty = normalizeComparableQty(nextSnapshot?.inStockQty);
+    const qtyChanged = previousQty !== nextQty;
+    const statusChanged = previousStatus !== nextStatus;
+    if (!qtyChanged && !statusChanged) return null;
+    return {
+      previousStatus,
+      nextStatus,
+      previousQty,
+      nextQty,
+      qtyChanged,
+      statusChanged,
+    };
+  }
+
+  buildSnapshotFromVariantQty(
+    sku,
+    variantId,
+    qtySnapshot,
+    now,
+    baselineSnapshot = null,
+  ) {
+    const inStockQtyRaw = Number(qtySnapshot?.inStockQty);
+    if (!Number.isFinite(inStockQtyRaw)) return null;
+    const inStockQty = Math.max(0, Math.round(inStockQtyRaw));
+    const baselineStatus = String(baselineSnapshot?.status || "").toLowerCase();
+    const status =
+      inStockQty > 0
+        ? "in_stock"
+        : baselineStatus === "sold_out"
+          ? "sold_out"
+          : "backordered";
+    return {
+      sku,
+      status,
+      label: stockLabel(status),
+      inStockQty,
+      variantId: variantId ? String(variantId) : baselineSnapshot?.variantId || null,
+      statusSource:
+        status === "sold_out"
+          ? baselineSnapshot?.statusSource || "shopify_product_json"
+          : "wcp_cart_page",
+      quantitySource: qtySnapshot?.quantitySource || "wcp_cart_page",
+      checkedAt:
+        qtySnapshot?.checkedAt || baselineSnapshot?.checkedAt || new Date(now).toISOString(),
+      error: null,
+    };
+  }
+
+  async getSkuSnapshot(sku, force = false, preferredVariantId = null) {
     const normalized = normalizeSku(sku);
     if (!normalized) return null;
     const now = Date.now();
@@ -131,6 +284,9 @@ class WcpStockStatusService {
     try {
       const details = await this.lookupWcpPart(normalized);
       const snapshot = this.normalizeStockSnapshot(normalized, details, now);
+      if (!snapshot.variantId && preferredVariantId) {
+        snapshot.variantId = String(preferredVariantId);
+      }
       this.skuCache.set(normalized, {
         snapshot,
         nextRefreshAt: now + this.intervalMs(),
@@ -144,6 +300,7 @@ class WcpStockStatusService {
         status: "unknown",
         label: "Unknown",
         inStockQty: null,
+        variantId: preferredVariantId ? String(preferredVariantId) : null,
         statusSource: null,
         quantitySource: null,
         checkedAt: new Date(now).toISOString(),
@@ -160,26 +317,221 @@ class WcpStockStatusService {
   async refreshEntries(entries, force = false) {
     const uniqueSkus = Array.from(new Set(entries.map((entry) => entry.sku)));
     const skuSnapshots = new Map();
+    const now = Date.now();
+    const entryMap = new Map();
+    entries.forEach((entry) => {
+      const sku = normalizeSku(entry.sku);
+      if (!sku) return;
+      const variantId = entry.variantId ? String(entry.variantId).trim() : "";
+      const row = entryMap.get(sku) || {
+        sku,
+        orderIds: [],
+        variantIds: new Set(),
+      };
+      row.orderIds.push(entry.orderId);
+      if (variantId) row.variantIds.add(variantId);
+      const cachedVariant = this.skuCache.get(sku)?.snapshot?.variantId;
+      if (cachedVariant) row.variantIds.add(String(cachedVariant));
+      if (entry.persistedSnapshot?.variantId) {
+        row.variantIds.add(String(entry.persistedSnapshot.variantId));
+      }
+      entryMap.set(sku, row);
+    });
+
+    uniqueSkus.forEach((sku) => {
+      const cached = this.skuCache.get(sku);
+      if (!force && cached?.nextRefreshAt && cached.nextRefreshAt > now) {
+        skuSnapshots.set(sku, cached.snapshot);
+      }
+    });
+
+    const unresolvedSkus = uniqueSkus.filter((sku) => !skuSnapshots.has(sku));
+    if (
+      unresolvedSkus.length &&
+      typeof this.lookupWcpQuantitiesByVariantBatch === "function"
+    ) {
+      const variantToSkuMap = new Map();
+      unresolvedSkus.forEach((sku) => {
+        const row = entryMap.get(sku);
+        (row?.variantIds || []).forEach((variantId) => {
+          const normalizedVariant = String(variantId || "").trim();
+          if (!normalizedVariant) return;
+          const skusForVariant = variantToSkuMap.get(normalizedVariant) || new Set();
+          skusForVariant.add(sku);
+          variantToSkuMap.set(normalizedVariant, skusForVariant);
+        });
+      });
+      if (variantToSkuMap.size) {
+        try {
+          const qtySnapshots = await this.lookupWcpQuantitiesByVariantBatch(
+            Array.from(variantToSkuMap.keys()),
+            { requestedQty: 1, chunkSize: 20 },
+          );
+          variantToSkuMap.forEach((skus, variantId) => {
+            const qtySnapshot = qtySnapshots?.get
+              ? qtySnapshots.get(variantId)
+              : null;
+            if (!qtySnapshot) return;
+            skus.forEach((sku) => {
+              if (skuSnapshots.has(sku)) return;
+              const baseline = this.skuCache.get(sku)?.snapshot || null;
+              const snapshot = this.buildSnapshotFromVariantQty(
+                sku,
+                variantId,
+                qtySnapshot,
+                now,
+                baseline,
+              );
+              if (!snapshot) return;
+              skuSnapshots.set(sku, snapshot);
+              this.skuCache.set(sku, {
+                snapshot,
+                nextRefreshAt: now + this.intervalMs(),
+              });
+            });
+          });
+        } catch (error) {
+          this.logger.warn({ error }, "WCP variant stock batch lookup failed");
+        }
+      }
+    }
+
+    const remainingSkus = uniqueSkus.filter((sku) => !skuSnapshots.has(sku));
+    if (
+      remainingSkus.length > 1 &&
+      typeof this.lookupWcpPartsBatch === "function"
+    ) {
+      try {
+        const batchResults = await this.lookupWcpPartsBatch(remainingSkus, {
+          includeQty: true,
+        });
+        (batchResults || []).forEach((result) => {
+          const sku = normalizeSku(result?.partNumber || result?.details?.meta?.sku);
+          if (!sku || skuSnapshots.has(sku)) return;
+          if (result?.ok && result?.details) {
+            const snapshot = this.normalizeStockSnapshot(sku, result.details, now);
+            skuSnapshots.set(sku, snapshot);
+            this.skuCache.set(sku, {
+              snapshot,
+              nextRefreshAt: now + this.intervalMs(),
+            });
+            return;
+          }
+          const errorMessage = result?.error || "WCP batch lookup failed";
+          this.lastError = errorMessage;
+          const fallback = this.fallbackSnapshotForSku(sku, now, errorMessage);
+          skuSnapshots.set(sku, fallback);
+          this.skuCache.set(sku, {
+            snapshot: fallback,
+            nextRefreshAt: now + Math.max(this.intervalMs(), 10 * 60 * 1000),
+          });
+        });
+      } catch (error) {
+        this.logger.warn({ error }, "WCP batch stock lookup failed");
+      }
+    }
+
     for (const sku of uniqueSkus) {
-      const snapshot = await this.getSkuSnapshot(sku, force);
+      if (skuSnapshots.has(sku)) continue;
+      const preferredVariantId = Array.from(entryMap.get(sku)?.variantIds || [])[0] || null;
+      const snapshot = await this.getSkuSnapshot(sku, force, preferredVariantId);
       if (snapshot) skuSnapshots.set(sku, snapshot);
     }
+
     const activeOrderIds = new Set();
+    const persistedEntries = [];
+    let qtyChecks = 0;
+    let qtyChanges = 0;
+    let statusChanges = 0;
     entries.forEach((entry) => {
       activeOrderIds.add(entry.orderId);
       const snapshot = skuSnapshots.get(entry.sku);
       if (!snapshot) return;
+      const previousSnapshot =
+        this.orderCache.get(entry.orderId) || entry.persistedSnapshot || null;
+      const change = this.describeSnapshotChange(previousSnapshot, snapshot);
+      const previousQty = normalizeComparableQty(previousSnapshot?.inStockQty);
+      const nextQty = normalizeComparableQty(snapshot.inStockQty);
+      if (previousQty !== null || nextQty !== null) {
+        qtyChecks += 1;
+        const qtyChanged = previousQty !== nextQty;
+        if (qtyChanged) qtyChanges += 1;
+        const previousQtyLabel = previousQty === null ? "unknown" : String(previousQty);
+        const nextQtyLabel = nextQty === null ? "unknown" : String(nextQty);
+        this.logger.info(
+          {
+            orderId: entry.orderId,
+            sku: entry.sku,
+            previousInStockQty: previousQty,
+            inStockQty: nextQty,
+            qtyDelta:
+              previousQty !== null && nextQty !== null
+                ? nextQty - previousQty
+                : null,
+            qtyChanged,
+            previousStatus: change?.previousStatus || null,
+            status: change?.nextStatus || String(snapshot.status || "").toLowerCase() || "unknown",
+            statusSource: snapshot.statusSource || null,
+            quantitySource: snapshot.quantitySource || null,
+            checkedAt: snapshot.checkedAt || null,
+          },
+          `WCP qty refreshed for ${entry.sku}: ${previousQtyLabel} -> ${nextQtyLabel}${qtyChanged ? " (changed)" : " (unchanged)"}`,
+        );
+      }
+      if (change?.statusChanged) {
+        statusChanges += 1;
+        this.logger.info(
+          {
+            orderId: entry.orderId,
+            sku: entry.sku,
+            previousStatus: change.previousStatus,
+            status: change.nextStatus,
+            previousInStockQty: change.previousQty,
+            inStockQty: change.nextQty,
+            statusSource: snapshot.statusSource || null,
+            quantitySource: snapshot.quantitySource || null,
+            checkedAt: snapshot.checkedAt || null,
+          },
+          `WCP stock status updated for ${entry.sku}: ${change.previousStatus || "unknown"} -> ${change.nextStatus || "unknown"}`,
+        );
+      }
       this.orderCache.set(entry.orderId, {
         ...snapshot,
         orderId: entry.orderId,
+      });
+      persistedEntries.push({
+        orderId: entry.orderId,
+        wcpStockStatus: snapshot.status || "unknown",
+        wcpStockLabel: snapshot.label || stockLabel(snapshot.status || "unknown"),
+        wcpInStockQty:
+          Number.isFinite(Number(snapshot.inStockQty))
+            ? Math.max(0, Math.round(Number(snapshot.inStockQty)))
+            : undefined,
+        wcpVariantId: snapshot.variantId ? String(snapshot.variantId) : undefined,
+        wcpStockCheckedAt: this.stockCheckedAtMs(snapshot),
+        wcpStockStatusSource: snapshot.statusSource || undefined,
+        wcpStockQuantitySource: snapshot.quantitySource || undefined,
+        wcpStockError: snapshot.error || undefined,
       });
     });
     Array.from(this.orderCache.keys()).forEach((orderId) => {
       if (!activeOrderIds.has(orderId)) this.orderCache.delete(orderId);
     });
+    if (persistedEntries.length) {
+      try {
+        await this.client.mutation("orders:bulkUpdateWcpStock", {
+          entries: persistedEntries,
+        });
+      } catch (error) {
+        this.logger.warn({ error }, "Failed to persist WCP stock snapshots");
+      }
+    }
     return {
       orderCount: entries.length,
       skuCount: uniqueSkus.length,
+      qtyChecks,
+      qtyChanges,
+      statusChanges,
     };
   }
 
@@ -189,7 +541,19 @@ class WcpStockStatusService {
     try {
       await this.loadSettings();
       const entries = await this.collectActiveOrders();
-      return await this.refreshEntries(entries, force);
+      const result = await this.refreshEntries(entries, force);
+      this.logger.info(
+        {
+          force,
+          orderCount: result.orderCount || 0,
+          skuCount: result.skuCount || 0,
+          qtyChecks: result.qtyChecks || 0,
+          qtyChanges: result.qtyChanges || 0,
+          statusChanges: result.statusChanges || 0,
+        },
+        "WCP stock refresh completed",
+      );
+      return result;
     } finally {
       this.running = false;
     }

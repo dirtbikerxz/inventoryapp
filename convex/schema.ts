@@ -99,7 +99,15 @@ export default defineSchema({
     csvFileLink: v.optional(v.string()),
     groupId: v.optional(v.id("orderGroups")),
     trackingNumber: v.optional(v.string()),
-    tracking: v.optional(v.array(trackingEntry))
+    tracking: v.optional(v.array(trackingEntry)),
+    wcpStockStatus: v.optional(v.string()),
+    wcpStockLabel: v.optional(v.string()),
+    wcpInStockQty: v.optional(v.number()),
+    wcpVariantId: v.optional(v.string()),
+    wcpStockCheckedAt: v.optional(v.number()),
+    wcpStockStatusSource: v.optional(v.string()),
+    wcpStockQuantitySource: v.optional(v.string()),
+    wcpStockError: v.optional(v.string())
   })
     .index("by_orderNumber", ["orderNumber"])
     .index("by_groupId", ["groupId"])

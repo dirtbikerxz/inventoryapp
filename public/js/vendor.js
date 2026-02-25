@@ -477,12 +477,16 @@ function normalizeStockQty(value) {
 
 function resolveStockSnapshot(payload) {
   if (!payload) return null;
-  const stock = payload.stock || payload.meta || {};
-  const status = (stock.status || stock.stockStatus || "").toString().trim();
+  const stock = payload.stock || {};
+  const meta = payload.meta || {};
+  const status = (stock.status || stock.stockStatus || meta.stockStatus || "")
+    .toString()
+    .trim();
   if (!status) return null;
   const label =
     stock.label ||
     stock.stockLabel ||
+    meta.stockLabel ||
     (status === "in_stock"
       ? "In Stock"
       : status === "backordered"
@@ -493,7 +497,19 @@ function resolveStockSnapshot(payload) {
   return {
     status,
     label,
-    inStockQty: normalizeStockQty(stock.inStockQty ?? stock.stockInStockQty),
+    inStockQty: normalizeStockQty(
+      stock.inStockQty ?? stock.stockInStockQty ?? meta.stockInStockQty,
+    ),
+    variantId:
+      stock.variantId !== undefined && stock.variantId !== null
+        ? String(stock.variantId)
+        : meta.variantId !== undefined && meta.variantId !== null
+          ? String(meta.variantId)
+        : null,
+    checkedAt: stock.checkedAt || stock.stockCheckedAt || null,
+    statusSource: stock.statusSource || null,
+    quantitySource: stock.quantitySource || null,
+    error: stock.error || null,
   };
 }
 
@@ -593,13 +609,6 @@ function renderVendorImportPreview() {
           entry.wcpSku ||
           (entry.vendorKey === "wcp" ? entry.productCode || entry.sku : "");
         if (wcpSku) vendorTags.push(`WCP SKU: ${escapeHtml(wcpSku)}`);
-        if (entry.stockLabel || entry.stockStatus) {
-          const stockParts = [entry.stockLabel || entry.stockStatus];
-          if (entry.inStockQty !== undefined && entry.inStockQty !== null) {
-            stockParts.push(`in stock ${entry.inStockQty}`);
-          }
-          vendorTags.push(`Stock: ${escapeHtml(stockParts.join(" · "))}`);
-        }
         if (entry.shareACartId)
           vendorTags.push(`Share-A-Cart: ${escapeHtml(entry.shareACartId)}`);
         if (entry.manufacturerPartNumber && !wcpSku)
@@ -1315,13 +1324,6 @@ function buildImportPayload(entry, vendor) {
   if (vendorKey === "wcp" && vendorSku) {
     noteParts.push(`WCP SKU: ${vendorSku}`);
   }
-  if (entry.stockLabel || entry.stockStatus) {
-    const stockParts = [entry.stockLabel || entry.stockStatus];
-    if (entry.inStockQty !== undefined && entry.inStockQty !== null) {
-      stockParts.push(`in stock: ${entry.inStockQty}`);
-    }
-    noteParts.push(`Stock: ${stockParts.join(" · ")}`);
-  }
   if (vendorKey === "shareacart" || entry.shareACartId) {
     if (entry.shareACartId) {
       noteParts.push(`Share-A-Cart ID: ${entry.shareACartId}`);
@@ -1334,6 +1336,13 @@ function buildImportPayload(entry, vendor) {
   }
   if (entry.customerReference)
     noteParts.push(`Ref: ${entry.customerReference}`);
+  const checkedAtNumber = Number(entry.stockCheckedAt);
+  const checkedAtParsed = Number.isFinite(checkedAtNumber)
+    ? checkedAtNumber
+    : Date.parse(entry.stockCheckedAt || "");
+  const stockCheckedAtMs = Number.isFinite(checkedAtParsed)
+    ? checkedAtParsed
+    : Date.now();
   return {
     vendor: vendorName,
     supplier: vendorName,
@@ -1349,6 +1358,30 @@ function buildImportPayload(entry, vendor) {
     shareACartItems: Array.isArray(entry.shareACartItems)
       ? entry.shareACartItems
       : undefined,
+    wcpStockStatus:
+      vendorKey === "wcp" && entry.stockStatus ? entry.stockStatus : undefined,
+    wcpStockLabel:
+      vendorKey === "wcp" && entry.stockLabel ? entry.stockLabel : undefined,
+    wcpInStockQty:
+      vendorKey === "wcp" && Number.isFinite(Number(entry.inStockQty))
+        ? Number(entry.inStockQty)
+        : undefined,
+    wcpVariantId:
+      vendorKey === "wcp" && entry.stockVariantId !== undefined && entry.stockVariantId !== null
+        ? String(entry.stockVariantId)
+        : undefined,
+    wcpStockCheckedAt:
+      vendorKey === "wcp" && entry.stockStatus ? stockCheckedAtMs : undefined,
+    wcpStockStatusSource:
+      vendorKey === "wcp" && entry.stockStatusSource
+        ? entry.stockStatusSource
+        : undefined,
+    wcpStockQuantitySource:
+      vendorKey === "wcp" && entry.stockQuantitySource
+        ? entry.stockQuantitySource
+        : undefined,
+    wcpStockError:
+      vendorKey === "wcp" && entry.stockError ? entry.stockError : undefined,
   };
 }
 
@@ -1370,6 +1403,91 @@ async function fetchVendorProductDetails(vendorKey, partNumber) {
   } catch (err) {
     console.warn("Vendor lookup failed", err);
     return null;
+  }
+}
+
+function normalizeVendorLookupPart(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+async function fetchVendorProductDetailsBatch(vendorKey, partNumbers, options = {}) {
+  if (!vendorKey || !Array.isArray(partNumbers) || !partNumbers.length) {
+    return { detailsByPart: new Map(), failedByPart: new Map() };
+  }
+  const normalized = Array.from(
+    new Set(
+      partNumbers
+        .map((value) => normalizeVendorLookupPart(value))
+        .filter(Boolean)
+    )
+  );
+  if (!normalized.length) {
+    return { detailsByPart: new Map(), failedByPart: new Map() };
+  }
+  try {
+    const res = await fetch("/api/vendors/extract/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendorKey,
+        partNumbers: normalized,
+        includeQty: options.includeQty !== false,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Vendor batch lookup failed");
+    const detailsByPart = new Map();
+    const failedByPart = new Map();
+    (data.results || []).forEach((item) => {
+      const key = normalizeVendorLookupPart(item?.partNumber);
+      if (!key) return;
+      if (item?.ok && item.details) {
+        detailsByPart.set(key, item.details);
+      } else {
+        failedByPart.set(key, item?.error || "Lookup failed");
+      }
+    });
+    return { detailsByPart, failedByPart };
+  } catch (err) {
+    console.warn("Vendor batch lookup failed", err);
+    return { detailsByPart: new Map(), failedByPart: new Map() };
+  }
+}
+
+async function fetchWcpStockByVariantBatch(variantIds) {
+  if (!Array.isArray(variantIds) || !variantIds.length) {
+    return new Map();
+  }
+  const normalized = Array.from(
+    new Set(
+      variantIds
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!normalized.length) return new Map();
+  try {
+    const res = await fetch("/api/vendors/wcp/stock/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantIds: normalized }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "WCP stock batch lookup failed");
+    const snapshots = new Map();
+    (data.results || []).forEach((item) => {
+      const key = String(item?.variantId || "").trim();
+      if (!key) return;
+      snapshots.set(key, {
+        inStockQty: normalizeStockQty(item?.inStockQty),
+        checkedAt: item?.checkedAt || null,
+        quantitySource: item?.quantitySource || "wcp_cart_batch",
+      });
+    });
+    return snapshots;
+  } catch (err) {
+    console.warn("WCP stock-by-variant lookup failed", err);
+    return new Map();
   }
 }
 
@@ -1475,7 +1593,7 @@ async function parseShareACartImport(input) {
   ];
 }
 
-async function enrichVendorImportEntries(entries) {
+async function enrichVendorImportEntries(entries, options = {}) {
   if (!entries?.length || !vendorImportVendor) return;
   const vendorKey = (
     vendorImportVendor.key ||
@@ -1484,6 +1602,30 @@ async function enrichVendorImportEntries(entries) {
     ""
   ).toLowerCase();
   if (!vendorKey || !["digikey", "mouser", "wcp"].includes(vendorKey)) return;
+  const includeQtyForWcp = options.includeQtyForWcp === true;
+  let wcpDetailsByPart = null;
+  if (vendorKey === "wcp") {
+    const wcpParts = entries
+      .map(
+        (entry) =>
+          entry.productCode ||
+          entry.wcpSku ||
+          entry.sku ||
+          entry.manufacturerPartNumber,
+      )
+      .map((value) => normalizeVendorLookupPart(value))
+      .filter(Boolean);
+    if (wcpParts.length) {
+      const batch = await fetchVendorProductDetailsBatch(vendorKey, wcpParts, {
+        includeQty: includeQtyForWcp,
+      });
+      wcpDetailsByPart = batch.detailsByPart;
+      if (batch.failedByPart.size && vendorImportMessage) {
+        vendorImportMessage.textContent = `Parsed items. Looked up ${wcpDetailsByPart.size} WCP part(s); ${batch.failedByPart.size} failed lookup.`;
+        vendorImportMessage.className = "small";
+      }
+    }
+  }
   for (const entry of entries) {
     const candidatePart =
       entry.productCode ||
@@ -1493,7 +1635,11 @@ async function enrichVendorImportEntries(entries) {
       entry.mouserPartNumber ||
       entry.manufacturerPartNumber;
     if (!candidatePart) continue;
-    const details = await fetchVendorProductDetails(vendorKey, candidatePart);
+    const normalizedCandidatePart = normalizeVendorLookupPart(candidatePart);
+    const details =
+      vendorKey === "wcp"
+        ? wcpDetailsByPart?.get(normalizedCandidatePart) || null
+        : await fetchVendorProductDetails(vendorKey, candidatePart);
     if (!details) continue;
     if (!entry.description && details.picks?.name)
       entry.description = details.picks.name;
@@ -1539,8 +1685,50 @@ async function enrichVendorImportEntries(entries) {
       entry.stockStatus = stockSnapshot.status;
       entry.stockLabel = stockSnapshot.label;
       entry.inStockQty = stockSnapshot.inStockQty;
+      entry.stockVariantId = stockSnapshot.variantId;
+      entry.stockCheckedAt = stockSnapshot.checkedAt;
+      entry.stockStatusSource = stockSnapshot.statusSource;
+      entry.stockQuantitySource = stockSnapshot.quantitySource;
+      entry.stockError = stockSnapshot.error;
     }
   }
+}
+
+function applyWcpQtySnapshotToEntry(entry, snapshot) {
+  if (!entry || !snapshot) return;
+  const qty = normalizeStockQty(snapshot.inStockQty);
+  if (qty === null) return;
+  const priorStatus = String(entry.stockStatus || "").toLowerCase();
+  let nextStatus = qty > 0 ? "in_stock" : "backordered";
+  if (qty <= 0 && priorStatus === "sold_out") nextStatus = "sold_out";
+  entry.inStockQty = qty;
+  entry.stockStatus = nextStatus;
+  entry.stockLabel =
+    nextStatus === "in_stock"
+      ? "In Stock"
+      : nextStatus === "sold_out"
+        ? "Sold Out"
+        : "Backordered";
+  entry.stockCheckedAt = snapshot.checkedAt || new Date().toISOString();
+  entry.stockQuantitySource = snapshot.quantitySource || "wcp_cart_batch";
+  if (nextStatus !== priorStatus || !entry.stockStatusSource) {
+    entry.stockStatusSource =
+      nextStatus === "sold_out" ? entry.stockStatusSource || "shopify_product_json" : "wcp_cart_page";
+  }
+}
+
+async function refreshWcpImportStockViaVariant(entries) {
+  const variantIds = entries
+    .map((entry) => String(entry?.stockVariantId || "").trim())
+    .filter(Boolean);
+  const snapshotsByVariant = await fetchWcpStockByVariantBatch(variantIds);
+  entries.forEach((entry) => {
+    const variantId = String(entry?.stockVariantId || "").trim();
+    if (!variantId) return;
+    const snapshot = snapshotsByVariant.get(variantId);
+    if (!snapshot) return;
+    applyWcpQtySnapshotToEntry(entry, snapshot);
+  });
 }
 
 async function handleVendorImportParse() {
@@ -1597,7 +1785,9 @@ async function handleVendorImportParse() {
         "Parsed items. Looking up product details...";
       vendorImportMessage.className = "small";
     }
-    await enrichVendorImportEntries(vendorImportEntries);
+    await enrichVendorImportEntries(vendorImportEntries, {
+      includeQtyForWcp: false,
+    });
     if (vendorImportMessage) {
       vendorImportMessage.textContent = `Parsed ${parsed.length} item(s).`;
       vendorImportMessage.className = "small success";
@@ -1650,6 +1840,27 @@ async function submitVendorImportEntries() {
     "vendor";
   let success = 0;
   const failed = [];
+  const submitVendorKey = (
+    vendorImportVendor.key ||
+    vendorImportVendor.slug ||
+    vendorImportVendor.vendor ||
+    ""
+  ).toLowerCase();
+  if (submitVendorKey === "wcp") {
+    if (vendorImportMessage) {
+      vendorImportMessage.textContent = "Adding items... refreshing WCP stock qty first.";
+      vendorImportMessage.className = "small";
+    }
+    await refreshWcpImportStockViaVariant(vendorImportEntries);
+    const missingVariantEntries = vendorImportEntries.filter(
+      (entry) => !String(entry?.stockVariantId || "").trim(),
+    );
+    if (missingVariantEntries.length) {
+      await enrichVendorImportEntries(missingVariantEntries, {
+        includeQtyForWcp: true,
+      });
+    }
+  }
   for (const entry of vendorImportEntries) {
     const payload = buildImportPayload(entry, vendorImportVendor);
     try {

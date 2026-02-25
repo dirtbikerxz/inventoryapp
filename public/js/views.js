@@ -1622,10 +1622,38 @@ function withScrollRestoration(fn) {
   });
 }
 
+function captureBoardDropScrollPositions() {
+  const positions = {};
+  if (!boardEl) return positions;
+  boardEl.querySelectorAll(".column[data-status]").forEach((column) => {
+    const status = column.dataset.status;
+    const drop = column.querySelector(".board-drop");
+    if (!status || !drop) return;
+    positions[status] = {
+      top: drop.scrollTop,
+      left: drop.scrollLeft,
+    };
+  });
+  return positions;
+}
+
+function restoreBoardDropScrollPositions(positions = {}) {
+  if (!boardEl || !positions) return;
+  boardEl.querySelectorAll(".column[data-status]").forEach((column) => {
+    const status = column.dataset.status;
+    const drop = column.querySelector(".board-drop");
+    const saved = status ? positions[status] : null;
+    if (!drop || !saved) return;
+    drop.scrollTop = saved.top || 0;
+    drop.scrollLeft = saved.left || 0;
+  });
+}
+
 function renderBoard() {
   const savedScrollY = window.scrollY;
   const savedScrollX = window.scrollX;
   const savedBoardScroll = boardEl ? boardEl.scrollTop : null;
+  const savedDropScrollPositions = captureBoardDropScrollPositions();
   const fo = filteredOrders();
   const groupedByStatus = {};
   const groupMap = {};
@@ -2025,6 +2053,7 @@ function renderBoard() {
     });
   }
   window.requestAnimationFrame(() => {
+    restoreBoardDropScrollPositions(savedDropScrollPositions);
     if (boardEl && savedBoardScroll !== null)
       boardEl.scrollTop = savedBoardScroll;
     window.scrollTo(savedScrollX, savedScrollY);
@@ -2901,6 +2930,8 @@ async function searchStockCatalog(term) {
 }
 
 function renderTable() {
+  const savedTableScrollTop = tableContainer?.scrollTop ?? 0;
+  const savedTableScrollLeft = tableContainer?.scrollLeft ?? 0;
   const rows = filteredOrders();
   if (!rows.length) {
     tableContainer.innerHTML = '<div class="empty">No orders found.</div>';
@@ -2985,6 +3016,12 @@ function renderTable() {
       refreshBoardSelectionUI();
       updateSelectionBar();
     });
+  });
+  window.requestAnimationFrame(() => {
+    if (tableContainer) {
+      tableContainer.scrollTop = savedTableScrollTop;
+      tableContainer.scrollLeft = savedTableScrollLeft;
+    }
   });
   resizeColumns();
 }
