@@ -31,6 +31,8 @@
     let vendorImportVendor = null;
     let orderSource = 'manual';
     let manualVendorOverride = null;
+    let fetchedWcpStockSnapshot = null;
+    let fetchedWcpStockSku = null;
     let vendorExportData = null;
     let xlsxLoaderPromise = null;
     renderVendorImportPreview();
@@ -197,6 +199,64 @@
       actionOverlay.style.display = busy ? 'flex' : 'none';
       if (actionOverlayText) actionOverlayText.textContent = text || 'Working…';
     }
+
+    function normalizeWcpSkuValue(value) {
+      return String(value || '').trim().toUpperCase();
+    }
+
+    function clearFetchedWcpStockSnapshot() {
+      fetchedWcpStockSnapshot = null;
+      fetchedWcpStockSku = null;
+    }
+
+    function setFetchedWcpStockSnapshot(snapshot, sku) {
+      if (!snapshot || !snapshot.status) {
+        clearFetchedWcpStockSnapshot();
+        return;
+      }
+      fetchedWcpStockSnapshot = { ...snapshot };
+      fetchedWcpStockSku = normalizeWcpSkuValue(sku);
+    }
+
+    function shouldAttachWcpStockToPayload(payload) {
+      const vendorName = payload?.vendor || payload?.supplier || '';
+      if (typeof isWcpVendorName === 'function' && isWcpVendorName(vendorName)) return true;
+      const detected = typeof detectVendor === 'function'
+        ? detectVendor(payload?.vendorPartNumber, payload?.partLink)
+        : null;
+      const key = (detected?.key || detected?.slug || '').toLowerCase();
+      return key === 'wcp';
+    }
+
+    function applyFetchedWcpStockToPayload(payload) {
+      if (!payload || !shouldAttachWcpStockToPayload(payload)) return;
+      const payloadSku = normalizeWcpSkuValue(payload.vendorPartNumber || payload.productCode);
+      if (!payloadSku || !fetchedWcpStockSnapshot || !fetchedWcpStockSku) return;
+      if (fetchedWcpStockSku !== payloadSku) return;
+
+      const snapshot = fetchedWcpStockSnapshot;
+      const checkedAtNumber = Number(snapshot.checkedAt);
+      const checkedAtParsed = Number.isFinite(checkedAtNumber)
+        ? checkedAtNumber
+        : Date.parse(snapshot.checkedAt || '');
+      const checkedAtMs = Number.isFinite(checkedAtParsed) ? checkedAtParsed : Date.now();
+      const qtyValue = Number(snapshot.inStockQty);
+
+      payload.wcpStockStatus = snapshot.status || undefined;
+      payload.wcpStockLabel = snapshot.label || undefined;
+      payload.wcpInStockQty = Number.isFinite(qtyValue)
+        ? Math.max(0, Math.round(qtyValue))
+        : undefined;
+      payload.wcpVariantId =
+        snapshot.variantId !== undefined && snapshot.variantId !== null
+          ? String(snapshot.variantId)
+          : undefined;
+      payload.wcpStockCheckedAt = checkedAtMs;
+      payload.wcpStockStatusSource = snapshot.statusSource || undefined;
+      payload.wcpStockQuantitySource = snapshot.quantitySource || undefined;
+      payload.wcpStockError = snapshot.error || undefined;
+    }
+
     function setAuthenticated(authenticated) {
       if (appShell) appShell.style.display = authenticated ? '' : 'none';
       if (loginPage) loginPage.style.display = authenticated ? 'none' : 'flex';
@@ -925,6 +985,7 @@ deleteSelectedBtn?.addEventListener('click', async () => {
 document.getElementById('new-order-btn').addEventListener('click', () => {
   editingOrderId = null;
   orderForm.reset();
+  clearFetchedWcpStockSnapshot();
   orderForm.elements.quantityRequested.value = 1;
   resetManualVendorOverride();
   renderTagOptions([]);
@@ -940,7 +1001,7 @@ document.getElementById('new-order-btn').addEventListener('click', () => {
   if (orderTrackingList) orderTrackingList.style.display = 'none';
   modal.style.display = 'flex';
 });
-cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; resetCatalogLookup(); resetCatalogSavePanel(); resetVendorImportState(false); updateVendorImportInstructions(); resetManualVendorOverride(); setOrderSource('manual'); });
+cancelOrder.addEventListener('click', () => { modal.style.display = 'none'; clearFetchedWcpStockSnapshot(); resetCatalogLookup(); resetCatalogSavePanel(); resetVendorImportState(false); updateVendorImportInstructions(); resetManualVendorOverride(); setOrderSource('manual'); });
 
 async function assignGroup(orderId, groupId) {
   return fetch(`/api/orders/${orderId}/group`, {
@@ -1085,6 +1146,7 @@ function fetchOrderDetails(configHint) {
               }
             };
         try {
+          if (vendorKey !== 'wcp') clearFetchedWcpStockSnapshot();
           const res = await fetch('/api/vendors/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1140,12 +1202,19 @@ function fetchOrderDetails(configHint) {
 
           const stockSnapshot = typeof resolveStockSnapshot === 'function' ? resolveStockSnapshot(data) : null;
           const stockText = typeof stockSummaryText === 'function' ? stockSummaryText(stockSnapshot) : '';
+          if (vendorKey === 'wcp' && stockSnapshot?.status) {
+            const stockSku = meta.sku || meta.partNumber || resolvedPN || partNum;
+            setFetchedWcpStockSnapshot(stockSnapshot, stockSku);
+          } else {
+            clearFetchedWcpStockSnapshot();
+          }
           orderMessage.textContent = stockText
             ? `Fetched. ${stockText}. Verify fields before submitting.`
             : 'Fetched. Verify fields before submitting.';
           orderMessage.className = 'success';
           await checkCatalogPresence();
         } catch (err) {
+          clearFetchedWcpStockSnapshot();
           orderMessage.textContent = err.message || 'Fetch failed. Fill manually.';
           orderMessage.className = 'error';
         }
@@ -1438,12 +1507,16 @@ function fetchOrderDetails(configHint) {
       }
     });
     orderForm?.elements?.vendorPartNumber?.addEventListener('input', () => {
+      clearFetchedWcpStockSnapshot();
       scheduleCatalogPresenceCheck();
       if (orderForm?.elements?.productCode) {
         orderForm.elements.productCode.value = '';
       }
     });
-    orderForm?.elements?.partLink?.addEventListener('input', scheduleCatalogPresenceCheck);
+    orderForm?.elements?.partLink?.addEventListener('input', () => {
+      clearFetchedWcpStockSnapshot();
+      scheduleCatalogPresenceCheck();
+    });
 
     orderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1481,6 +1554,7 @@ function fetchOrderDetails(configHint) {
         }
       }
       payload.supplier = payload.vendor || payload.supplier;
+      applyFetchedWcpStockToPayload(payload);
       orderMessage.textContent = 'Submitting...';
       orderMessage.className = 'small';
       try {
@@ -1531,6 +1605,7 @@ function fetchOrderDetails(configHint) {
         orderMessage.className = 'success';
         modal.style.display = 'none';
         orderForm.reset();
+        clearFetchedWcpStockSnapshot();
         resetManualVendorOverride();
         resetCatalogLookup();
         resetCatalogSavePanel();
@@ -3253,6 +3328,7 @@ function fetchOrderDetails(configHint) {
       renderVendorImportPreview();
     });
     manualVendorSelect?.addEventListener('change', () => {
+      clearFetchedWcpStockSnapshot();
       const value = (manualVendorSelect.value || '').toLowerCase();
       manualVendorOverride = value ? (vendorConfigs.find(v => vendorOptionValue(v) === value) || null) : null;
       if (manualVendorOverride && orderForm?.elements?.vendor) {
