@@ -457,6 +457,103 @@ function showBoardMessage(text, type = "info", timeout = 3500) {
   }, timeout);
 }
 
+function buildReorderPayload(order) {
+  if (!order) return null;
+  const source =
+    typeof sanitizeOrderForCreate === "function"
+      ? sanitizeOrderForCreate(order)
+      : order;
+  const qtyRaw = Number(source?.quantityRequested);
+  const quantityRequested =
+    Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+  const unitRaw = source?.unitCost ?? source?.fetchedPrice;
+  const unitCost =
+    unitRaw !== undefined && unitRaw !== null && unitRaw !== ""
+      ? Number(unitRaw)
+      : undefined;
+  const notes = typeof source?.notes === "string" ? source.notes.trim() : "";
+  const shareACartItems = Array.isArray(source?.shareACartItems)
+    ? source.shareACartItems
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const quantity = Number(item.quantity);
+          const unitPrice = Number(item.unitPrice);
+          return {
+            title: item.title || undefined,
+            quantity:
+              Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
+            unitPrice: Number.isFinite(unitPrice) ? unitPrice : undefined,
+            productCode: item.productCode || undefined,
+            productUrl: item.productUrl || undefined,
+          };
+        })
+        .filter(Boolean)
+    : undefined;
+  const payload = {
+    partName: source?.partName || order.partName || "Reordered part",
+    vendor: source?.vendor || source?.supplier || undefined,
+    supplier: source?.supplier || source?.vendor || undefined,
+    vendorPartNumber: source?.vendorPartNumber || undefined,
+    partLink: source?.partLink || source?.supplierLink || undefined,
+    supplierLink: source?.supplierLink || source?.partLink || undefined,
+    partCode: source?.partCode || undefined,
+    productCode: source?.productCode || undefined,
+    category: source?.category || undefined,
+    quantityRequested,
+    priority: source?.priority || defaultPriorityLabel(),
+    unitCost: Number.isFinite(unitCost) ? unitCost : undefined,
+    fetchedPrice: Number.isFinite(unitCost) ? unitCost : undefined,
+    totalCost: Number.isFinite(unitCost)
+      ? Number((unitCost * quantityRequested).toFixed(2))
+      : undefined,
+    status: "Requested",
+    notes: notes || undefined,
+    tags: Array.isArray(source?.tags) ? source.tags : [],
+    shareACartItems,
+    tracking: [],
+    trackingNumber: undefined,
+  };
+  return payload;
+}
+
+async function reorderPart(order) {
+  if (!currentUser?.permissions?.canPlacePartRequests) {
+    showBoardMessage("No permission to place part requests.", "error");
+    return;
+  }
+  if (actionBusy) return;
+  const payload = buildReorderPayload(order);
+  if (!payload?.partName) {
+    showBoardMessage("Unable to reorder this part.", "error");
+    return;
+  }
+  const notesRequired =
+    typeof requiresOrderNotes === "function" ? requiresOrderNotes() : true;
+  if (notesRequired && !payload.notes) {
+    showBoardMessage(
+      "This part is missing notes/justification. Edit it first, then reorder.",
+      "error",
+    );
+    return;
+  }
+  setActionBusy(true, "Reordering part…");
+  try {
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Failed to reorder part");
+    await fetchOrders();
+    showBoardMessage("Part reordered into requests.", "info");
+  } catch (err) {
+    showBoardMessage(err?.message || "Failed to reorder part.", "error");
+  } finally {
+    setActionBusy(false);
+  }
+}
+
 function matchesSearch(order, term) {
   if (!term) return true;
   const trackingText = (order.tracking || [])
@@ -3147,6 +3244,26 @@ function hideGroupDetailModal() {
 function openGroupDetailModal(groupInfo, items) {
   if (!groupDetailModal) return;
   const gid = groupInfo?.id;
+  const renderItemCostChips = (entry) => {
+    const qtyRaw = Number(entry?.quantityRequested);
+    const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+    const unitRaw = entry?.unitCost ?? entry?.fetchedPrice;
+    const unitNum = Number(unitRaw);
+    const totalRaw = Number(entry?.totalCost);
+    const hasUnit = Number.isFinite(unitNum);
+    const totalNum = Number.isFinite(totalRaw)
+      ? totalRaw
+      : hasUnit
+        ? Number((unitNum * qty).toFixed(2))
+        : NaN;
+    if (!hasUnit && !Number.isFinite(totalNum)) return "";
+    const unitLabel = hasUnit ? formatMoney(unitNum) : "n/a";
+    const totalLabel = Number.isFinite(totalNum) ? formatMoney(totalNum) : "n/a";
+    return `
+      <span class="tag" style="background:var(--panel-2); border-color:var(--border);">Unit: ${escapeHtml(unitLabel)}</span>
+      <span class="tag" style="background:var(--panel-2); border-color:var(--border);">Total: ${escapeHtml(totalLabel)}</span>
+    `;
+  };
   const renderShareACartItems = (entry) => {
     const list = Array.isArray(entry?.shareACartItems)
       ? entry.shareACartItems
@@ -3239,6 +3356,7 @@ function openGroupDetailModal(groupInfo, items) {
             <span class="muted" style="font-weight:700;">${o.quantityRequested ? `${o.quantityRequested}x` : ""}</span>
             <span style="font-weight:700;">${o.partName || ""}</span>
             ${o.vendorPartNumber ? `<span class="tag">${o.vendorPartNumber}</span>` : ""}
+            ${renderItemCostChips(o)}
           </div>
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             ${o.studentName ? `<span class="tag" style="background:rgba(79,180,255,0.16); color:var(--accent-2); border-color:var(--border);">${o.studentName}</span>` : ""}
@@ -3249,6 +3367,7 @@ function openGroupDetailModal(groupInfo, items) {
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-left:auto;">
           ${o.partLink || o.supplierLink ? `<a class="btn ghost" data-action="link-part" href="${escapeHtml(o.partLink || o.supplierLink)}" target="_blank" rel="noopener noreferrer" style="padding:4px 8px;">Link</a>` : ""}
+          ${currentUser?.permissions?.canPlacePartRequests ? `<button class="btn ghost" data-action="reorder-part" style="padding:4px 8px;">Reorder</button>` : ""}
           ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="edit-part" style="padding:4px 8px;">Edit</button>` : ""}
           ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="remove-part" style="padding:4px 8px;">Remove</button>` : ""}
           ${currentUser?.permissions?.canManageOrders ? `<button class="btn ghost" data-action="delete-part" style="padding:4px 8px; color:var(--danger);">Delete</button>` : ""}
@@ -3382,6 +3501,11 @@ function openGroupDetailModal(groupInfo, items) {
           if (order) {
             openEdit(order);
           }
+        } else if (action === "reorder-part") {
+          const order =
+            orders.find((o) => o._id === oid) || items.find((o) => o._id === oid);
+          if (!order) return;
+          await reorderPart(order);
         } else if (action === "remove-part") {
           openConfirm("Remove this part from the order?", async () => {
             await removePartFromGroup(oid, gid, groupInfo.status);
