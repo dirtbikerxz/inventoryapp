@@ -13,10 +13,14 @@ export const getSettings = query({
     const first = settings[0];
     if (!first) {
       return {
-        refreshMinutes: 30
+        refreshMinutes: 30,
+        wcpStockRefreshMinutes: 30
       };
     }
-    return first;
+    return {
+      ...first,
+      wcpStockRefreshMinutes: first.wcpStockRefreshMinutes ?? 30
+    };
   }
 });
 
@@ -27,18 +31,23 @@ export const saveSettings = mutation({
     uspsUserId: v.optional(v.string()),
     fedexClientId: v.optional(v.string()),
     fedexClientSecret: v.optional(v.string()),
-    refreshMinutes: v.number()
+    refreshMinutes: v.number(),
+    wcpStockRefreshMinutes: v.optional(v.number())
   },
   handler: async (ctx, args) => {
+    const settingsPatch = Object.fromEntries(
+      Object.entries(args).filter(([, value]) => value !== undefined)
+    );
     const existing = await ctx.db.query("trackingSettings").collect();
     const now = Date.now();
     if (existing.length) {
       const current = existing[0];
-      await ctx.db.patch(current._id, { ...args, updatedAt: now });
+      await ctx.db.patch(current._id, { ...settingsPatch, updatedAt: now });
       return { id: current._id };
     }
     const id = await ctx.db.insert("trackingSettings", {
-      ...args,
+      ...settingsPatch,
+      wcpStockRefreshMinutes: args.wcpStockRefreshMinutes ?? 30,
       createdAt: now,
       updatedAt: now
     });

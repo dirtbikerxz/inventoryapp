@@ -306,6 +306,7 @@ const trackingSettingsMessage = document.getElementById(
   "tracking-settings-message",
 );
 const refreshTrackingNow = document.getElementById("refresh-tracking-now");
+const refreshWcpStockNow = document.getElementById("refresh-wcp-stock-now");
 const adminTabUsers = document.getElementById("admin-tab-users");
 const adminTabRoles = document.getElementById("admin-tab-roles");
 const adminTabAudit = document.getElementById("admin-tab-audit");

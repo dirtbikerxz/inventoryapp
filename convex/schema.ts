@@ -267,6 +267,7 @@ export default defineSchema({
     fedexClientId: v.optional(v.string()),
     fedexClientSecret: v.optional(v.string()),
     refreshMinutes: v.number(),
+    wcpStockRefreshMinutes: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number()
   })

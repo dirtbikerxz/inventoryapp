@@ -470,6 +470,40 @@ function parsePrice(text) {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function normalizeStockQty(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : null;
+}
+
+function resolveStockSnapshot(payload) {
+  if (!payload) return null;
+  const stock = payload.stock || payload.meta || {};
+  const status = (stock.status || stock.stockStatus || "").toString().trim();
+  if (!status) return null;
+  const label =
+    stock.label ||
+    stock.stockLabel ||
+    (status === "in_stock"
+      ? "In Stock"
+      : status === "backordered"
+        ? "Backordered"
+        : status === "sold_out"
+          ? "Sold Out"
+          : "Unknown");
+  return {
+    status,
+    label,
+    inStockQty: normalizeStockQty(stock.inStockQty ?? stock.stockInStockQty),
+  };
+}
+
+function stockSummaryText(snapshot) {
+  if (!snapshot) return "";
+  const parts = [snapshot.label || snapshot.status];
+  if (snapshot.inStockQty !== null) parts.push(`in stock: ${snapshot.inStockQty}`);
+  return parts.join(" · ");
+}
+
 function generateId(prefix = "id") {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
 }
@@ -559,6 +593,13 @@ function renderVendorImportPreview() {
           entry.wcpSku ||
           (entry.vendorKey === "wcp" ? entry.productCode || entry.sku : "");
         if (wcpSku) vendorTags.push(`WCP SKU: ${escapeHtml(wcpSku)}`);
+        if (entry.stockLabel || entry.stockStatus) {
+          const stockParts = [entry.stockLabel || entry.stockStatus];
+          if (entry.inStockQty !== undefined && entry.inStockQty !== null) {
+            stockParts.push(`in stock ${entry.inStockQty}`);
+          }
+          vendorTags.push(`Stock: ${escapeHtml(stockParts.join(" · "))}`);
+        }
         if (entry.shareACartId)
           vendorTags.push(`Share-A-Cart: ${escapeHtml(entry.shareACartId)}`);
         if (entry.manufacturerPartNumber && !wcpSku)
@@ -1274,6 +1315,13 @@ function buildImportPayload(entry, vendor) {
   if (vendorKey === "wcp" && vendorSku) {
     noteParts.push(`WCP SKU: ${vendorSku}`);
   }
+  if (entry.stockLabel || entry.stockStatus) {
+    const stockParts = [entry.stockLabel || entry.stockStatus];
+    if (entry.inStockQty !== undefined && entry.inStockQty !== null) {
+      stockParts.push(`in stock: ${entry.inStockQty}`);
+    }
+    noteParts.push(`Stock: ${stockParts.join(" · ")}`);
+  }
   if (vendorKey === "shareacart" || entry.shareACartId) {
     if (entry.shareACartId) {
       noteParts.push(`Share-A-Cart ID: ${entry.shareACartId}`);
@@ -1482,6 +1530,15 @@ async function enrichVendorImportEntries(entries) {
     if (!entry.productCode) {
       entry.productCode =
         entry.digiKeyPartNumber || entry.mouserPartNumber || undefined;
+    }
+    if (vendorKey === "wcp" && !entry.productCode) {
+      entry.productCode = details.meta?.sku || details.meta?.partNumber || undefined;
+    }
+    const stockSnapshot = resolveStockSnapshot(details);
+    if (stockSnapshot) {
+      entry.stockStatus = stockSnapshot.status;
+      entry.stockLabel = stockSnapshot.label;
+      entry.inStockQty = stockSnapshot.inStockQty;
     }
   }
 }

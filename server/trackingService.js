@@ -83,7 +83,9 @@ class TrackingService {
       uspsUserId: payload.uspsUserId ?? this.settings.uspsUserId,
       fedexClientId: payload.fedexClientId ?? this.settings.fedexClientId,
       fedexClientSecret: payload.fedexClientSecret ?? this.settings.fedexClientSecret,
-      refreshMinutes
+      refreshMinutes,
+      wcpStockRefreshMinutes:
+        payload.wcpStockRefreshMinutes ?? this.settings.wcpStockRefreshMinutes
     });
     await this.loadSettings();
     this.start();

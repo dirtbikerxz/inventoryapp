@@ -1212,10 +1212,15 @@
             <label class="small">Tracking Refresh Interval (minutes)</label>
             <input name="refreshMinutes" class="input" type="number" min="1" value="30" />
           </div>
+          <div>
+            <label class="small">WCP Stock Refresh Interval (minutes)</label>
+            <input name="wcpStockRefreshMinutes" class="input" type="number" min="1" value="30" />
+          </div>
         </form>
         <div class="flex-between" style="grid-column: span 2; margin-top:8px; flex-wrap:wrap; gap:8px;">
           <div id="tracking-settings-message" class="small"></div>
           <div class="flex-between" style="gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn ghost" id="refresh-wcp-stock-now">Refresh WCP stock now</button>
             <button type="button" class="btn ghost" id="refresh-tracking-now">Manual refresh</button>
             <button type="submit" form="tracking-settings-form" class="btn primary">Save settings</button>
           </div>

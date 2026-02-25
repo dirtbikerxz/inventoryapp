@@ -72,6 +72,19 @@
         fetchOrders();
       }, ms);
     }
+    const DEFAULT_WCP_STOCK_POLL_MINUTES = 30;
+    let wcpStockPollTimer = null;
+    let wcpStockPollMinutes = DEFAULT_WCP_STOCK_POLL_MINUTES;
+    function startWcpStockAutoRefresh(minutes = wcpStockPollMinutes) {
+      const next = Math.max(1, Number(minutes) || DEFAULT_WCP_STOCK_POLL_MINUTES);
+      wcpStockPollMinutes = next;
+      const ms = next * 60 * 1000;
+      if (wcpStockPollTimer) clearInterval(wcpStockPollTimer);
+      wcpStockPollTimer = setInterval(() => {
+        if (!currentUser) return;
+        fetchOrders();
+      }, ms);
+    }
 
     setTrackingRows(orderTrackingList, []);
     setTrackingRows(groupModalTrackingList, []);
@@ -1118,12 +1131,18 @@ function fetchOrderDetails(configHint) {
               productCodeInput.value = meta.asin || meta.partNumber || resolvedPN || '';
             } else if (vendorKey === 'revrobotics') {
               productCodeInput.value = meta.sku || meta.partNumber || resolvedPN || '';
+            } else if (vendorKey === 'wcp') {
+              productCodeInput.value = meta.sku || meta.partNumber || resolvedPN || '';
             } else {
               productCodeInput.value = '';
             }
           }
 
-          orderMessage.textContent = 'Fetched. Verify fields before submitting.';
+          const stockSnapshot = typeof resolveStockSnapshot === 'function' ? resolveStockSnapshot(data) : null;
+          const stockText = typeof stockSummaryText === 'function' ? stockSummaryText(stockSnapshot) : '';
+          orderMessage.textContent = stockText
+            ? `Fetched. ${stockText}. Verify fields before submitting.`
+            : 'Fetched. Verify fields before submitting.';
           orderMessage.className = 'success';
           await checkCatalogPresence();
         } catch (err) {
@@ -3962,9 +3981,13 @@ function fetchOrderDetails(configHint) {
         const res = await fetch('/api/tracking/settings');
         if (!res.ok) return;
         const data = await res.json();
-        const minutes = Number(data.settings?.refreshMinutes);
-        if (Number.isFinite(minutes) && minutes > 0) {
-          startTrackingAutoRefresh(minutes);
+        const trackingMinutes = Number(data.settings?.refreshMinutes);
+        if (Number.isFinite(trackingMinutes) && trackingMinutes > 0) {
+          startTrackingAutoRefresh(trackingMinutes);
+        }
+        const stockMinutes = Number(data.settings?.wcpStockRefreshMinutes);
+        if (Number.isFinite(stockMinutes) && stockMinutes > 0) {
+          startWcpStockAutoRefresh(stockMinutes);
         }
       } catch (_) {
         // ignore - auto refresh will keep existing cadence
@@ -3988,8 +4011,14 @@ function fetchOrderDetails(configHint) {
         if (trackingSettingsForm.elements.refreshMinutes) {
           trackingSettingsForm.elements.refreshMinutes.value = settings.refreshMinutes || 30;
         }
+        if (trackingSettingsForm.elements.wcpStockRefreshMinutes) {
+          trackingSettingsForm.elements.wcpStockRefreshMinutes.value = settings.wcpStockRefreshMinutes || 30;
+        }
         if (settings.refreshMinutes) {
           startTrackingAutoRefresh(settings.refreshMinutes);
+        }
+        if (settings.wcpStockRefreshMinutes) {
+          startWcpStockAutoRefresh(settings.wcpStockRefreshMinutes);
         }
         trackingSettingsMessage.textContent = 'Tracking settings loaded.';
         trackingSettingsMessage.className = 'small';
@@ -4006,6 +4035,10 @@ function fetchOrderDetails(configHint) {
       if (!Number.isFinite(payload.refreshMinutes) || payload.refreshMinutes <= 0) {
         payload.refreshMinutes = 30;
       }
+      payload.wcpStockRefreshMinutes = Number(payload.wcpStockRefreshMinutes || 30);
+      if (!Number.isFinite(payload.wcpStockRefreshMinutes) || payload.wcpStockRefreshMinutes <= 0) {
+        payload.wcpStockRefreshMinutes = 30;
+      }
       trackingSettingsMessage.textContent = 'Saving...';
       trackingSettingsMessage.className = 'small';
       try {
@@ -4019,6 +4052,7 @@ function fetchOrderDetails(configHint) {
         trackingSettingsMessage.textContent = 'Saved tracking settings.';
         trackingSettingsMessage.className = 'success';
         startTrackingAutoRefresh(payload.refreshMinutes);
+        startWcpStockAutoRefresh(payload.wcpStockRefreshMinutes);
       } catch (err) {
         trackingSettingsMessage.textContent = err.message || 'Failed to save settings';
         trackingSettingsMessage.className = 'error';
@@ -4042,6 +4076,27 @@ function fetchOrderDetails(configHint) {
         fetchOrders();
       } catch (err) {
         trackingSettingsMessage.textContent = err.message || 'Failed to refresh tracking';
+        trackingSettingsMessage.className = 'error';
+      }
+    });
+
+    refreshWcpStockNow?.addEventListener('click', async () => {
+      trackingSettingsMessage.textContent = 'Refreshing WCP stock now...';
+      trackingSettingsMessage.className = 'small';
+      try {
+        const res = await fetch('/api/stock/requests/refresh', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to refresh WCP stock');
+        if (data.lastError) {
+          trackingSettingsMessage.textContent = `WCP stock refresh finished with error: ${data.lastError}`;
+          trackingSettingsMessage.className = 'error';
+        } else {
+          trackingSettingsMessage.textContent = `WCP stock refreshed for ${data.orderCount || 0} active request(s).`;
+          trackingSettingsMessage.className = 'success';
+        }
+        fetchOrders();
+      } catch (err) {
+        trackingSettingsMessage.textContent = err.message || 'Failed to refresh WCP stock';
         trackingSettingsMessage.className = 'error';
       }
     });
@@ -4231,5 +4286,6 @@ function fetchOrderDetails(configHint) {
 
     updateSearchPlaceholder();
     startTrackingAutoRefresh(DEFAULT_TRACKING_POLL_MINUTES);
+    startWcpStockAutoRefresh(DEFAULT_WCP_STOCK_POLL_MINUTES);
     fetchMe();
   

@@ -10,6 +10,7 @@ const multer = require('multer');
 const pino = require('pino');
 const { ConvexHttpClient } = require('convex/browser');
 const { TrackingService, buildTrackingUrl } = require('./trackingService');
+const { WcpStockStatusService } = require('./wcpStockStatusService');
 const { DigiKeyService } = require('./digikeyService');
 const { MouserService } = require('./mouserService');
 const { builtinVendors, getBuiltinVendor } = require('./builtinVendors');
@@ -40,6 +41,11 @@ if (!config.convexUrl) {
 const client = new ConvexHttpClient(config.convexUrl);
 const app = express();
 const trackingService = new TrackingService({ client, logger });
+const stockStatusService = new WcpStockStatusService({
+  client,
+  logger,
+  lookupWcpPart: (partNumber) => lookupWcpPart(partNumber)
+});
 const digikeyService = new DigiKeyService({ logger });
 const mouserService = new MouserService({ logger });
 const invoiceService = new InvoiceService({ logger });
@@ -1236,7 +1242,13 @@ app.get('/api/orders', async (req, res) => {
         }
       };
     });
-    res.json({ ...data, orders: ordersWithInvoices });
+    try {
+      await stockStatusService.runCycle(false);
+    } catch (stockError) {
+      logger.warn(stockError, 'WCP stock refresh during orders fetch failed');
+    }
+    const withStock = stockStatusService.applySnapshotsToOrders(ordersWithInvoices);
+    res.json({ ...data, orders: withStock });
   } catch (error) {
     logger.error(error, 'Failed to load orders');
     res.status(500).json({ error: 'Unable to load orders' });
@@ -2297,7 +2309,15 @@ app.get('/api/tracking/settings', async (req, res) => {
   if (!user) return;
   try {
     const settings = await client.query('tracking:getSettings', {});
-    res.json({ settings });
+    const stockRefresh = Number(settings?.wcpStockRefreshMinutes);
+    const mergedSettings = {
+      ...settings,
+      wcpStockRefreshMinutes:
+        Number.isFinite(stockRefresh) && stockRefresh > 0
+          ? stockRefresh
+          : stockStatusService.refreshMinutes || 30
+    };
+    res.json({ settings: mergedSettings });
   } catch (error) {
     logger.error(error, 'Failed to load tracking settings');
     res.status(500).json({ error: 'Unable to load tracking settings' });
@@ -2311,6 +2331,10 @@ app.patch('/api/tracking/settings', async (req, res) => {
   if (!Number.isFinite(refreshMinutes) || refreshMinutes <= 0) {
     return res.status(400).json({ error: 'refreshMinutes must be a positive number' });
   }
+  const wcpStockRefreshMinutes = Number(req.body?.wcpStockRefreshMinutes ?? 30);
+  if (!Number.isFinite(wcpStockRefreshMinutes) || wcpStockRefreshMinutes <= 0) {
+    return res.status(400).json({ error: 'wcpStockRefreshMinutes must be a positive number' });
+  }
   try {
     await trackingService.updateSettings({
       upsClientId: req.body?.upsClientId,
@@ -2318,8 +2342,11 @@ app.patch('/api/tracking/settings', async (req, res) => {
       uspsUserId: req.body?.uspsUserId,
       fedexClientId: req.body?.fedexClientId,
       fedexClientSecret: req.body?.fedexClientSecret,
-      refreshMinutes
+      refreshMinutes,
+      wcpStockRefreshMinutes
     });
+    await stockStatusService.loadSettings();
+    stockStatusService.start();
     res.json({ ok: true });
   } catch (error) {
     logger.error(error, 'Failed to save tracking settings');
@@ -2336,6 +2363,18 @@ app.post('/api/tracking/refresh', async (req, res) => {
   } catch (error) {
     logger.error(error, 'Manual tracking refresh failed');
     res.status(500).json({ error: 'Unable to refresh tracking now' });
+  }
+});
+
+app.post('/api/stock/requests/refresh', async (req, res) => {
+  const user = await requireAuth(req, res, 'canEditTrackingSettings');
+  if (!user) return;
+  try {
+    const result = await stockStatusService.refreshAllNow();
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error(error, 'Manual WCP stock refresh failed');
+    res.status(500).json({ error: 'Unable to refresh WCP stock now' });
   }
 });
 
@@ -2512,6 +2551,390 @@ function buildWcpProductUrl(partNumber) {
   return `https://wcproducts.com/products/${encodeURIComponent(partNumber)}`;
 }
 
+const WCP_STOREFRONT_API_VERSION = '2026-01';
+const WCP_QTY_PROBE = 1;
+const WCP_LOOKUP_CACHE_TTL_MS = 10 * 60 * 1000;
+const WCP_LOOKUP_STALE_TTL_MS = 6 * 60 * 60 * 1000;
+const WCP_LOOKUP_MIN_GAP_MS = 800;
+const WCP_LOOKUP_MAX_ATTEMPTS = 3;
+const WCP_LOOKUP_BASE_BACKOFF_MS = 1200;
+const wcpLookupCache = new Map();
+let wcpLookupQueue = Promise.resolve();
+let wcpNextLookupAt = 0;
+
+function sleep(ms) {
+  const safeMs = Math.max(0, Number(ms) || 0);
+  return new Promise((resolve) => setTimeout(resolve, safeMs));
+}
+
+function parseRetryAfterMs(value) {
+  if (!value) return null;
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber >= 0) return Math.round(asNumber * 1000);
+  const asDate = Date.parse(String(value));
+  if (!Number.isNaN(asDate)) {
+    const delta = asDate - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+  return null;
+}
+
+function nextBackoffMs(attempt, retryAfterHeader) {
+  const fromHeader = parseRetryAfterMs(retryAfterHeader);
+  if (fromHeader !== null) return fromHeader;
+  const base = WCP_LOOKUP_BASE_BACKOFF_MS * Math.pow(2, Math.max(0, attempt - 1));
+  const jitter = Math.floor(Math.random() * 350);
+  return base + jitter;
+}
+
+async function queueWcpLookup(task) {
+  let releaseQueue = () => {};
+  const gate = new Promise((resolve) => {
+    releaseQueue = resolve;
+  });
+  const prev = wcpLookupQueue;
+  wcpLookupQueue = prev.then(() => gate, () => gate);
+  await prev.catch(() => {});
+  try {
+    const waitMs = Math.max(0, wcpNextLookupAt - Date.now());
+    if (waitMs > 0) await sleep(waitMs);
+    return await task();
+  } finally {
+    wcpNextLookupAt = Date.now() + WCP_LOOKUP_MIN_GAP_MS;
+    releaseQueue();
+  }
+}
+
+async function fetchWcpWithRetry(url, options = {}, label = 'WCP request') {
+  let response = null;
+  for (let attempt = 1; attempt <= WCP_LOOKUP_MAX_ATTEMPTS; attempt += 1) {
+    let fetchError = null;
+    try {
+      response = await fetch(url, options);
+    } catch (error) {
+      fetchError = error;
+    }
+    if (fetchError) {
+      if (attempt >= WCP_LOOKUP_MAX_ATTEMPTS) throw fetchError;
+      const retryDelayMs = nextBackoffMs(attempt, null);
+      logger.warn(
+        {
+          url,
+          attempt,
+          retryDelayMs,
+          err: fetchError?.message || fetchError
+        },
+        `${label} network error; retrying`
+      );
+      await sleep(retryDelayMs);
+      continue;
+    }
+    if (response.ok) return response;
+    const shouldRetry = response.status === 429 || response.status >= 500;
+    if (!shouldRetry || attempt >= WCP_LOOKUP_MAX_ATTEMPTS) return response;
+    const retryDelayMs = nextBackoffMs(attempt, response.headers?.get('retry-after'));
+    logger.warn(
+      {
+        url,
+        status: response.status,
+        attempt,
+        retryDelayMs
+      },
+      `${label} failed; retrying`
+    );
+    await sleep(retryDelayMs);
+  }
+  return response;
+}
+
+function deepCloneWcpLookup(value) {
+  if (!value || typeof value !== 'object') return value;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function readWcpCacheEntry(partNumber) {
+  const key = normalizeWcpSku(partNumber);
+  if (!key) return null;
+  const entry = wcpLookupCache.get(key);
+  if (!entry || !entry.result) return null;
+  return {
+    key,
+    result: deepCloneWcpLookup(entry.result),
+    cachedAt: entry.cachedAt
+  };
+}
+
+function storeWcpCacheEntry(partNumber, result) {
+  const key = normalizeWcpSku(partNumber);
+  if (!key || !result) return;
+  wcpLookupCache.set(key, {
+    result: deepCloneWcpLookup(result),
+    cachedAt: Date.now()
+  });
+}
+
+function annotateStaleWcpResult(result, cachedAt) {
+  const stale = deepCloneWcpLookup(result) || {};
+  const checkedAt = cachedAt || Date.now();
+  stale.meta = {
+    ...(stale.meta || {}),
+    staleCache: true,
+    staleCacheAt: new Date(checkedAt).toISOString()
+  };
+  stale.stock = {
+    ...(stale.stock || {}),
+    checkedAt: stale.stock?.checkedAt || new Date(checkedAt).toISOString()
+  };
+  return stale;
+}
+
+function normalizeWcpHandle(value) {
+  if (!value) return null;
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^\//, '')
+    .replace(/^products\//, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
+}
+
+function normalizeWcpSku(value) {
+  if (!value) return null;
+  return String(value).trim().toUpperCase();
+}
+
+function wcpRequestHeaders() {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36'
+  };
+}
+
+function extractWcpStorefrontToken(html) {
+  if (!html) return null;
+  const match = html.match(/<script id="shopify-features" type="application\/json">([\s\S]*?)<\/script>/i);
+  if (!match?.[1]) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    return parsed?.accessToken || null;
+  } catch (error) {
+    logger.warn(error, 'Failed to parse WCP Shopify features');
+    return null;
+  }
+}
+
+function parseShopifyGidNumericId(gid) {
+  if (!gid) return null;
+  const match = String(gid).match(/\/(\d+)$/);
+  return match?.[1] || null;
+}
+
+function classifyWcpStockStatusFromStorefront(variant) {
+  if (!variant) return 'unknown';
+  if (variant.availableForSale === false) return 'sold_out';
+  if (variant.availableForSale === true && variant.currentlyNotInStock === true) return 'backordered';
+  if (variant.availableForSale === true) return 'in_stock';
+  return 'unknown';
+}
+
+function classifyWcpStockStatusFromProductVariant(variant) {
+  if (!variant) return 'unknown';
+  if (variant.available === false) return 'sold_out';
+  if (variant.available === true) return 'in_stock';
+  return 'unknown';
+}
+
+function classifyWcpStockStatusFromHtml(html) {
+  if (!html) return 'unknown';
+  const $ = cheerio.load(html);
+  const soldOutLabel = $('.tt-label-out-stock').first().text().trim().toLowerCase();
+  if (soldOutLabel.includes('sold out')) return 'sold_out';
+  const addToCartText = $('.btn-addtocart').first().text().trim().toLowerCase();
+  if (addToCartText.includes('preorder')) return 'backordered';
+  if (addToCartText.includes('add to cart')) return 'in_stock';
+  return 'unknown';
+}
+
+function wcpStockLabel(status) {
+  if (status === 'in_stock') return 'In Stock';
+  if (status === 'backordered') return 'Backordered';
+  if (status === 'sold_out') return 'Sold Out';
+  return 'Unknown';
+}
+
+function formatWcpVariantPrice(priceValue) {
+  const numeric = Number(priceValue);
+  if (!Number.isFinite(numeric)) return undefined;
+  return (numeric / 100).toFixed(2);
+}
+
+async function fetchWcpStorefrontVariants(handle, accessToken) {
+  if (!handle || !accessToken) return [];
+  const query = `query WcpProduct($handle: String!) {
+    productByHandle(handle: $handle) {
+      variants(first: 100) {
+        edges {
+          node {
+            id
+            sku
+            availableForSale
+            currentlyNotInStock
+          }
+        }
+      }
+    }
+  }`;
+  try {
+    const resp = await fetch(`https://wcproducts.com/api/${WCP_STOREFRONT_API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Storefront-Access-Token': accessToken
+      },
+      body: JSON.stringify({ query, variables: { handle } })
+    });
+    const payload = await resp.json();
+    if (!resp.ok) {
+      logger.warn({ status: resp.status, payload }, 'WCP storefront API request failed');
+      return [];
+    }
+    if (Array.isArray(payload?.errors) && payload.errors.length) {
+      logger.warn({ errors: payload.errors }, 'WCP storefront API returned GraphQL errors');
+    }
+    return (payload?.data?.productByHandle?.variants?.edges || [])
+      .map(edge => edge?.node)
+      .filter(Boolean);
+  } catch (error) {
+    logger.warn(error, 'WCP storefront API lookup failed');
+    return [];
+  }
+}
+
+function extractSetCookieHeaders(headers) {
+  if (!headers) return [];
+  if (typeof headers.getSetCookie === 'function') {
+    const values = headers.getSetCookie();
+    if (Array.isArray(values)) return values;
+  }
+  const single = headers.get('set-cookie');
+  return single ? [single] : [];
+}
+
+function updateCookieJarFromHeaders(cookieJar, headers) {
+  extractSetCookieHeaders(headers).forEach(rawCookie => {
+    const firstSegment = String(rawCookie || '').split(';')[0];
+    const separatorIndex = firstSegment.indexOf('=');
+    if (separatorIndex <= 0) return;
+    const key = firstSegment.slice(0, separatorIndex).trim();
+    const value = firstSegment.slice(separatorIndex + 1).trim();
+    if (!key) return;
+    cookieJar.set(key, value);
+  });
+}
+
+function buildCookieHeader(cookieJar) {
+  if (!cookieJar?.size) return '';
+  return Array.from(cookieJar.entries())
+    .map(([key, value]) => `${key}=${value}`)
+    .join('; ');
+}
+
+function withCookieHeader(baseHeaders, cookieJar) {
+  const cookieHeader = buildCookieHeader(cookieJar);
+  if (!cookieHeader) return { ...baseHeaders };
+  return { ...baseHeaders, Cookie: cookieHeader };
+}
+
+function parseWcpCartQuantity(html, variantId, requestedQty) {
+  if (!html) return null;
+  const $ = cheerio.load(html);
+  let backorderNode = null;
+  if (variantId) {
+    const variantMatch = $(`a[href*="variant=${variantId}"]`).first();
+    if (variantMatch.length) {
+      backorderNode = variantMatch.closest('tr').find('.tt-backorder_qua').first();
+      if (!backorderNode.length) {
+        backorderNode = variantMatch.closest('td').find('.tt-backorder_qua').first();
+      }
+      if (!backorderNode.length) {
+        backorderNode = variantMatch.parent().find('.tt-backorder_qua').first();
+      }
+    }
+  }
+  if (!backorderNode?.length) {
+    backorderNode = $('.tt-backorder_qua').first();
+  }
+  if (!backorderNode?.length) return null;
+  const currentQtyRaw = Number(backorderNode.attr('data-current-qty'));
+  const currentQty = Number.isFinite(currentQtyRaw) ? Math.max(0, Math.round(currentQtyRaw)) : null;
+  const text = backorderNode.text().replace(/\s+/g, ' ').trim();
+  return {
+    requestedQty: Number.isFinite(requestedQty) ? Math.round(requestedQty) : null,
+    inStockQty: currentQty,
+    rawMessage: text || null
+  };
+}
+
+async function clearWcpCart(cookieJar) {
+  try {
+    await fetch('https://wcproducts.com/cart/clear.js', {
+      method: 'GET',
+      headers: withCookieHeader(wcpRequestHeaders(), cookieJar)
+    });
+  } catch (error) {
+    logger.warn(error, 'Failed to clear WCP cart after qty scrape');
+  }
+}
+
+async function scrapeWcpQuantityViaCart(variantId, requestedQty = WCP_QTY_PROBE) {
+  if (!variantId) return null;
+  const cookieJar = new Map();
+  try {
+    const addResp = await fetch('https://wcproducts.com/cart/add.js', {
+      method: 'POST',
+      headers: withCookieHeader(
+        {
+          ...wcpRequestHeaders(),
+          Accept: 'application/json, text/javascript, */*; q=0.01',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          Origin: 'https://wcproducts.com',
+          Referer: 'https://wcproducts.com/cart'
+        },
+        cookieJar
+      ),
+      body: new URLSearchParams({
+        id: String(variantId),
+        quantity: String(Math.max(1, Math.round(requestedQty)))
+      }).toString(),
+      redirect: 'follow'
+    });
+    updateCookieJarFromHeaders(cookieJar, addResp.headers);
+    if (!addResp.ok) {
+      logger.warn({ status: addResp.status, variantId }, 'WCP cart add failed during qty scrape');
+      return null;
+    }
+    const cartResp = await fetch('https://wcproducts.com/cart', {
+      method: 'GET',
+      headers: withCookieHeader(wcpRequestHeaders(), cookieJar),
+      redirect: 'follow'
+    });
+    updateCookieJarFromHeaders(cookieJar, cartResp.headers);
+    if (!cartResp.ok) {
+      logger.warn({ status: cartResp.status, variantId }, 'WCP cart page fetch failed during qty scrape');
+      return null;
+    }
+    const cartHtml = await cartResp.text();
+    return parseWcpCartQuantity(cartHtml, variantId, requestedQty);
+  } catch (error) {
+    logger.warn(error, 'WCP cart quantity scrape failed');
+    return null;
+  } finally {
+    await clearWcpCart(cookieJar);
+  }
+}
+
 function extractWcpPartFromUrl(urlString) {
   if (!urlString) return null;
   try {
@@ -2543,6 +2966,162 @@ async function resolveWcpProductUrl(rawUrl) {
     partNumber,
     productUrl: buildWcpProductUrl(partNumber) || normalized
   };
+}
+
+async function lookupWcpPart(partNumber) {
+  const normalizedPartNumber = normalizeWcpSku(partNumber);
+  if (!normalizedPartNumber) {
+    throw new Error('WCP part number is required.');
+  }
+  const cached = readWcpCacheEntry(normalizedPartNumber);
+  if (cached && (Date.now() - cached.cachedAt) <= WCP_LOOKUP_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  try {
+    const fresh = await queueWcpLookup(async () => {
+      const warmCache = readWcpCacheEntry(normalizedPartNumber);
+      if (warmCache && (Date.now() - warmCache.cachedAt) <= WCP_LOOKUP_CACHE_TTL_MS) {
+        return warmCache.result;
+      }
+      const productUrl = buildWcpProductUrl(normalizedPartNumber);
+      const productJsUrl = `${new URL(productUrl).origin}/products/${encodeURIComponent(normalizedPartNumber)}.js`;
+      const productResp = await fetchWcpWithRetry(
+        productJsUrl,
+        {
+          method: 'GET',
+          headers: {
+            ...wcpRequestHeaders(),
+            Accept: 'application/json, text/javascript, */*; q=0.01',
+            Referer: productUrl
+          }
+        },
+        'WCP product JSON request'
+      );
+      if (!productResp.ok) {
+        throw new Error(`WCP product JSON request failed (${productResp.status}).`);
+      }
+      const productData = await productResp.json();
+      let finalUrl = productUrl;
+      const productJsFinalUrl = productResp.url || productJsUrl;
+      try {
+        const parsed = new URL(productJsFinalUrl);
+        parsed.pathname = parsed.pathname.replace(/\.js$/i, '');
+        parsed.search = '';
+        parsed.hash = '';
+        finalUrl = parsed.toString();
+      } catch (_) {
+        finalUrl = productUrl;
+      }
+      const productVariants = Array.isArray(productData?.variants) ? productData.variants : [];
+      const preferredProductVariant =
+        productVariants.find(variant => normalizeWcpSku(variant?.sku) === normalizedPartNumber) ||
+        productVariants[0] ||
+        null;
+
+      const qtySnapshot = preferredProductVariant?.id
+        ? await scrapeWcpQuantityViaCart(preferredProductVariant.id, WCP_QTY_PROBE)
+        : null;
+      const inStockQty = Number.isFinite(qtySnapshot?.inStockQty) ? qtySnapshot.inStockQty : null;
+
+      let stockStatus = classifyWcpStockStatusFromProductVariant(preferredProductVariant);
+      let stockSource = 'shopify_product_json';
+      if (
+        stockStatus === 'in_stock' &&
+        Number.isFinite(inStockQty) &&
+        inStockQty <= 0 &&
+        preferredProductVariant?.available === true
+      ) {
+        stockStatus = 'backordered';
+        stockSource = 'wcp_cart_page';
+      }
+      if (stockStatus === 'unknown') {
+        const pageResp = await fetchWcpWithRetry(
+          finalUrl,
+          {
+            method: 'GET',
+            redirect: 'follow',
+            headers: wcpRequestHeaders()
+          },
+          'WCP product page request'
+        );
+        if (pageResp.ok) {
+          finalUrl = pageResp.url || finalUrl;
+          const pageHtml = await pageResp.text();
+          const htmlStatus = classifyWcpStockStatusFromHtml(pageHtml);
+          if (htmlStatus !== 'unknown') {
+            stockStatus = htmlStatus;
+            stockSource = 'wcp_product_page';
+          }
+        } else {
+          logger.warn(
+            { status: pageResp.status, partNumber: normalizedPartNumber, url: finalUrl },
+            'WCP product page fallback failed while resolving unknown stock state'
+          );
+        }
+      }
+
+      const variantTitle = preferredProductVariant?.title;
+      const productTitle = productData?.title || '';
+      const picksName =
+        variantTitle && variantTitle !== 'Default Title'
+          ? `${productTitle} - ${variantTitle}`
+          : productTitle;
+      const picksPrice = formatWcpVariantPrice(preferredProductVariant?.price);
+      const sku = normalizeWcpSku(preferredProductVariant?.sku) || normalizedPartNumber;
+      const stock = {
+        status: stockStatus,
+        label: wcpStockLabel(stockStatus),
+        statusSource: stockSource,
+        availableForSale:
+          typeof preferredProductVariant?.available === 'boolean'
+            ? preferredProductVariant.available
+            : null,
+        currentlyNotInStock: stockStatus === 'backordered' ? true : null,
+        inStockQty,
+        quantitySource: qtySnapshot ? 'wcp_cart_page' : null,
+        checkedAt: new Date().toISOString()
+      };
+
+      const meta = {
+        partNumber: sku,
+        manufacturerPartNumber: sku,
+        sku,
+        variantId: preferredProductVariant?.id || null,
+        stockStatus: stock.status,
+        stockLabel: stock.label,
+        stockInStockQty: stock.inStockQty
+      };
+
+      const result = !picksName && !picksPrice
+        ? {
+            picks: { name: picksName, price: picksPrice },
+            productUrl: finalUrl,
+            meta,
+            stock,
+            message: 'WCP page did not return product details.'
+          }
+        : {
+            picks: { name: picksName, price: picksPrice },
+            productUrl: finalUrl,
+            meta,
+            stock
+          };
+      storeWcpCacheEntry(normalizedPartNumber, result);
+      return result;
+    });
+    return deepCloneWcpLookup(fresh);
+  } catch (error) {
+    const staleCandidate = readWcpCacheEntry(normalizedPartNumber) || cached;
+    if (staleCandidate && (Date.now() - staleCandidate.cachedAt) <= WCP_LOOKUP_STALE_TTL_MS) {
+      logger.warn(
+        { partNumber: normalizedPartNumber, err: error?.message || error },
+        'WCP lookup failed; serving stale cached value'
+      );
+      return annotateStaleWcpResult(staleCandidate.result, staleCandidate.cachedAt);
+    }
+    throw error;
+  }
 }
 
 const AMAZON_ASIN_REGEX = /^[A-Z0-9]{10}$/i;
@@ -3394,9 +3973,7 @@ app.post('/api/vendors/extract', async (req, res) => {
         if (!partNumber) {
           return res.status(400).json({ error: 'partNumber is required for WCP lookup' });
         }
-        const template = def.productUrlTemplate || `${def.baseUrl.replace(/\/$/, '')}/products/{partNumber}`;
-        const targetUrl = template.replace('{partNumber}', encodeURIComponent(partNumber));
-        const details = await extractVendorProductFromUrl({ url: targetUrl });
+        const details = await lookupWcpPart(partNumber);
         return res.json({
           ...details,
           vendor: def.vendor,
@@ -3406,7 +3983,11 @@ app.post('/api/vendors/extract', async (req, res) => {
       return res.status(501).json({ error: `Integration for ${def.vendor} is not implemented yet.` });
     } catch (error) {
       logger.error(error, `Failed built-in vendor lookup ${builtinKey}`);
-      return res.status(500).json({ error: error.message || 'Vendor integration failed' });
+      const message = error?.message || 'Vendor integration failed';
+      if (builtinKey === 'wcp' && /\(429\)/.test(message)) {
+        return res.status(503).json({ error: 'WCP returned HTTP 429 to the server request (often anti-bot protection). Please retry shortly.' });
+      }
+      return res.status(500).json({ error: message });
     }
   }
   if (!url) return res.status(400).json({ error: 'url is required' });
@@ -3431,6 +4012,7 @@ app.use((err, req, res, next) => {
 ensureAdminSeed().finally(() => {
   syncGoogleCredentialsFromStore().catch(err => logger.warn(err, 'Failed to load Google credentials on startup'));
   trackingService.init().catch(err => logger.error(err, 'Failed to start tracking service'));
+  stockStatusService.init().catch(err => logger.error(err, 'Failed to start WCP stock service'));
   app.listen(config.port, () => {
     logger.info(`Inventory app server (Convex-backed) listening on port ${config.port}`);
   });

@@ -1343,6 +1343,7 @@ ${renderShareACartItems(order)}
     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
       ${order.supplier || order.vendor ? `<span class="tag supplier">${order.supplier || order.vendor}</span>` : ""}
       ${order.vendorPartNumber ? `<span class="tag">${order.vendorPartNumber}</span>` : ""}
+      ${renderWcpStockBadge(order)}
       ${order.priority ? `<span class="tag priority" style="border-color:${getPriorityColor(order.priority)}; color:${getPriorityColor(order.priority)};">${order.priority}</span>` : ""}
       ${order.group ? `<span class="tag group">Group: ${order.group.title || order.group.supplier || "Grouped"}</span>` : ""}
       ${renderInvoiceSummary(order)}
@@ -1962,6 +1963,23 @@ function setSelectedStockCatalogItem(item) {
       ? `Using catalog: ${item.name || ""}${path ? " · " + path : ""}`
       : "Search for a catalog item to track.";
   }
+}
+
+function renderWcpStockBadge(order) {
+  const stock = order?.wcpStock;
+  if (!stock) return "";
+  const status = stock.label || stock.status || "Unknown";
+  const qty = Number(stock.inStockQty);
+  const qtyLabel = Number.isFinite(qty) ? `${qty} in stock` : "qty unavailable";
+  const checkedText = stock.checkedAt ? formatDateMaybe(stock.checkedAt) : "";
+  const statusKey = (stock.status || "").toLowerCase();
+  let color = "var(--muted)";
+  if (statusKey === "in_stock") color = "var(--success)";
+  else if (statusKey === "backordered") color = "var(--gold)";
+  else if (statusKey === "sold_out") color = "var(--danger)";
+  const titleParts = [status, qtyLabel];
+  if (checkedText) titleParts.push(`Updated ${checkedText}`);
+  return `<span class="tag" style="border-color:${color}; color:${color};" title="${escapeHtml(titleParts.join(" · "))}">Stock: ${escapeHtml(status)} · ${escapeHtml(qtyLabel)}</span>`;
 }
 
 function setUsedStockTracking(enabled) {
