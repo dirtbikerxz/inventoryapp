@@ -51,7 +51,7 @@
         <button class="btn ghost" id="logout-btn" style="display:none;">Logout</button>
       </div>
       <div class="user-status">
-        <span id="tracking-updated" class="small" style="color: var(--muted);"></span>
+        <span id="active-orders-total" class="small toolbar-readout">Total Ordered: $0.00</span>
         <span id="user-chip" class="pill" style="background: var(--panel); border:1px solid var(--border);"></span>
       </div>
     </div>
@@ -1205,6 +1205,7 @@
         <div class="card" style="background:var(--panel-2); margin-top:12px;">
         <div class="page-title" style="font-size:18px;">Tracking Settings</div>
         <div class="subtitle">Carrier API keys, refresh cadence, and manual refresh.</div>
+        <div id="tracking-runtime-status" class="small" style="margin: 2px 0 8px;"></div>
         <form id="tracking-settings-form" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:8px; margin-top:10px;">
           <div>
             <label class="small">UPS Client ID</label>

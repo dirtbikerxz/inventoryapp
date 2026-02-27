@@ -20,6 +20,7 @@ const stockActions = document.getElementById("stock-actions");
 const addStockBtn = document.getElementById("add-stock-btn");
 const manageSubteamsBtn = document.getElementById("manage-subteams-btn");
 const refreshBtn = document.getElementById("refresh-btn");
+const activeOrdersTotal = document.getElementById("active-orders-total");
 const globalSearch = document.getElementById("global-search");
 const statusFilter = document.getElementById("status-filter");
 const vendorFilter = document.getElementById("vendor-filter");
@@ -305,6 +306,7 @@ const trackingSettingsForm = document.getElementById("tracking-settings-form");
 const trackingSettingsMessage = document.getElementById(
   "tracking-settings-message",
 );
+const trackingRuntimeStatus = document.getElementById("tracking-runtime-status");
 const refreshTrackingNow = document.getElementById("refresh-tracking-now");
 const refreshWcpStockNow = document.getElementById("refresh-wcp-stock-now");
 const adminTabUsers = document.getElementById("admin-tab-users");

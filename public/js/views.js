@@ -603,6 +603,27 @@ function withinDate(order, start, end) {
   return true;
 }
 
+function orderLineTotal(order) {
+  if (!order) return 0;
+  const explicitTotal = Number(order.totalCost);
+  if (Number.isFinite(explicitTotal)) return explicitTotal;
+  const unitRaw = order.unitCost ?? order.fetchedPrice;
+  const unitCost = Number(unitRaw);
+  if (!Number.isFinite(unitCost)) return 0;
+  const qtyRaw = Number(order.quantityRequested);
+  const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+  return Number((unitCost * qty).toFixed(2));
+}
+
+function updateActiveOrdersTotalReadout() {
+  if (!activeOrdersTotal) return;
+  const grouped = (orders || []).filter((o) => Boolean(o.groupId || o.group?._id));
+  const total = grouped.reduce((sum, o) => sum + orderLineTotal(o), 0);
+  activeOrdersTotal.textContent = `Total Ordered: ${formatMoney(total)}`;
+  activeOrdersTotal.title = `${grouped.length} grouped order${grouped.length === 1 ? "" : "s"}`;
+  activeOrdersTotal.classList.toggle("is-empty", grouped.length === 0);
+}
+
 function filteredOrders() {
   const term = globalSearch.value.trim();
   const s = statusFilter.value;
@@ -661,13 +682,18 @@ async function fetchOrders() {
     .filter(
       (msg) => msg && /error|missing|invalid|unauthorized|fail/i.test(msg),
     );
-  const trackingUpdatedEl = document.getElementById("tracking-updated");
+  const trackingUpdatedEl =
+    typeof trackingRuntimeStatus !== "undefined" && trackingRuntimeStatus
+      ? trackingRuntimeStatus
+      : document.getElementById("tracking-runtime-status");
   if (trackingUpdatedEl) {
     const errText = trackingErrors.length
       ? ` · Tracking error: ${trackingErrors[0]}`
       : "";
-    trackingUpdatedEl.textContent =
+    const runtimeText =
       (lastChecked ? `Tracking updated ${fmtDate(lastChecked)}` : "") + errText;
+    trackingUpdatedEl.textContent = runtimeText;
+    trackingUpdatedEl.className = trackingErrors.length ? "error" : "small";
   }
   buildFilters();
   renderBoard();
@@ -1656,6 +1682,7 @@ function restoreBoardDropScrollPositions(positions = {}) {
 }
 
 function renderBoard() {
+  updateActiveOrdersTotalReadout();
   const savedScrollY = window.scrollY;
   const savedScrollX = window.scrollX;
   const savedBoardScroll = boardEl ? boardEl.scrollTop : null;
@@ -1786,7 +1813,7 @@ function renderBoard() {
         ""
       ).toLowerCase();
       const vendor = first.supplier || first.vendor || "";
-      const total = items.reduce((sum, o) => sum + (o.totalCost || 0), 0);
+      const total = items.reduce((sum, o) => sum + orderLineTotal(o), 0);
       const statusTagLabel = first.group?.statusTag || "";
       const statusTagColor = statusTagLabel ? getStatusTagColor(statusTagLabel) : null;
       const trackingList =

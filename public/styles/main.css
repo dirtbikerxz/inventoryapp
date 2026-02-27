@@ -92,6 +92,13 @@
       align-items: center;
       gap: 8px;
     }
+    .user-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
     .btn {
       border: 1px solid var(--border);
       background: var(--accent);
@@ -351,6 +358,20 @@
       color: var(--text);
     }
     .small { font-size: 12px; color: var(--muted); }
+    .toolbar-readout.small {
+      color: var(--gold);
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: rgba(253,208,35,0.08);
+      white-space: nowrap;
+    }
+    .toolbar-readout.small.is-empty {
+      color: var(--muted);
+      background: transparent;
+    }
     select { max-width: 100%; }
     select option { white-space: normal; }
     .empty {
